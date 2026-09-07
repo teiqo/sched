@@ -28,6 +28,13 @@
   --strip-selection-on: #fff;
   --strip-today-bg: color-mix(in srgb, var(--weekly-blue) 10%, transparent);
   --strip-today-ring: color-mix(in srgb, var(--weekly-blue) 52%, transparent);
+  --weekly-hover-fill: color-mix(in srgb, var(--weekly-fill) 58%, transparent);
+  --weekly-hover-subtle: color-mix(in srgb, var(--weekly-text) 5%, transparent);
+}
+
+:root[data-theme="light"] {
+  --weekly-hover-fill: color-mix(in srgb, var(--weekly-fill) 68%, transparent);
+  --weekly-hover-subtle: rgba(0, 0, 0, 0.04);
 }
 
 :root[data-weekly-palette="colorful"] {
@@ -176,8 +183,11 @@
 /* Пока держишь/ведёшь, цифра под пилюлей должна оставаться контрастной, а не
    сливаться с её цветом. Раньше при долгом зажатии (скрабинг без движения)
    выбранный день ещё не помечен data-under-selection и уходил в idle-цвет,
-   совпадающий с заливкой, — цифра пропадала. */
-:root .date-strip.is-pressing button[data-date-index].is-selected:not(.is-day-off),
+   совпадающий с заливкой, — цифра пропадала.
+   Добавили и фазу is-pressing: до активации вождения пилюля уже выросла над
+   нажатым днём, а его цифра ещё была серой — поэтому «выделение закрывало день». */
+:root .date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-hop, .is-releasing) button[data-date-index][data-under-selection="true"]:not(.is-day-off),
+:root .date-strip:is(.is-pressing, .is-hop, .is-releasing) button[data-date-index].is-selected:not(.is-day-off),
 :root .date-strip:is(.is-scrubbing, .is-settling) button[data-date-index][data-under-selection="true"]:not(.is-day-off),
 :root .date-strip:is(.is-scrubbing, .is-settling) button[data-date-index].is-selected:not(.is-day-off),
 :root .date-strip.is-hop button[data-date-index].is-selected:not(.is-day-off) {
@@ -208,43 +218,62 @@
 }
 
 :root .date-strip-today,
-:root[data-weekly-palette] .date-strip-today {
-  top: calc(100% + 7px);
-  right: 14px;
+:root[data-weekly-palette] .date-strip-today,
+:root #today-btn {
+  position: absolute;
+  top: calc(100% + 34px);
+  right: 4px;
+  left: auto;
   display: inline-flex !important;
   width: auto;
   height: 28px;
   min-height: 0;
-  padding: 0 11px 0 9px;
+  padding: 0 9px 0 7px;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--weekly-blue) 12%, var(--weekly-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weekly-blue) 28%, transparent);
   color: var(--weekly-blue);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
   visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
   white-space: nowrap;
+  transform: translate3d(0, -50%, 0);
+  transition: opacity 0.16s ease, transform 0.22s var(--weekly-motion-ease), background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+:root[data-weekly-schedule-view="light"] .date-strip-today,
+:root[data-weekly-schedule-view="light"] #today-btn {
+  top: calc(100% + 31px);
 }
 
 :root .date-strip-today.is-visible,
-:root[data-weekly-palette] .date-strip-today.is-visible {
+:root[data-weekly-palette] .date-strip-today.is-visible,
+:root #today-btn.is-visible {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
-  transform: translate3d(0, 0, 0);
+  transform: translate3d(0, -50%, 0);
+}
+
+:root .date-strip-today:active,
+:root #today-btn:active {
+  transform: translate3d(0, -50%, 0) scale(0.96);
 }
 
 :root .date-strip-today svg,
-:root[data-weekly-palette] .date-strip-today svg {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  stroke-width: 2;
+:root[data-weekly-palette] .date-strip-today svg,
+:root #today-btn svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  stroke-width: 2.2;
 }
 
 /* точки с количеством пар стоят в общей сетке дня и не наезжают на число */
@@ -256,17 +285,25 @@
 }
 
 :root .date-lesson-dots {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
   position: static;
   max-width: 100%;
   height: 3px;
   gap: 2.5px;
   transform: none;
+  pointer-events: none;
 }
 
 :root .date-lesson-dots i {
-  flex: 0 0 3px;
-  width: 3px;
-  height: 3px;
+  display: block !important;
+  flex: 0 0 3px !important;
+  width: 3px !important;
+  height: 3px !important;
+  border-radius: 50% !important;
+  background-color: currentColor !important;
+  box-sizing: border-box;
 }
 
 /* завершённые пары: появление такое же, как у обычной смены дня */
@@ -314,7 +351,7 @@
   }
   to {
     opacity: 1;
-    transform: none;
+    transform: translate3d(0, 0, 0);
     filter: blur(0);
   }
 }
@@ -648,7 +685,7 @@ html.weekly-page #root::-webkit-scrollbar,
     transform: translate3d(0, var(--distance-medium, 12px), 0);
   }
   to {
-    transform: none;
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -1172,7 +1209,7 @@ html.weekly-page #root::-webkit-scrollbar,
 :root[data-weekly-palette] .weekly-palette-toggle i:nth-child(3) { background: var(--palette-accent-3) !important; }
 :root[data-weekly-palette] .weekly-palette-toggle i:nth-child(4) { background: var(--palette-accent-4) !important; }
 
-/* Текст и карточки во всех палитрах повторяют базовый формат. */
+/* Текст и карточки во всех пал������трах повторяют базовый формат. */
 :root[data-weekly-palette] .agenda-list {
   overflow: hidden;
   border: 1px solid var(--weekly-separator);
@@ -1298,7 +1335,7 @@ html.weekly-page #root::-webkit-scrollbar,
 .weekly-onboarding-mark .weeqo-mark { padding: 23%; box-sizing: border-box; }
 .weekly-header-word:after { content: "weeqo"; }
 
-/* В профиле кнопка «готово» нейтральная, без тревожного красного. */
+/* В профиле кнопка «готов��» нейтральная, без тревожного красного. */
 .weekly-profile-footer button {
   background: var(--weekly-fill);
   color: var(--weekly-text);
@@ -1331,7 +1368,7 @@ html.weekly-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translateZ(0);
   }
 }
 @keyframes t-stagger-line-in {
@@ -1341,7 +1378,7 @@ html.weekly-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translateZ(0);
   }
 }
 @keyframes weekly-completed-row-in {
@@ -1351,7 +1388,7 @@ html.weekly-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translateZ(0);
   }
 }
 @keyframes weekly-live-card-in {
@@ -1419,9 +1456,56 @@ html.weekly-page #root::-webkit-scrollbar,
   backdrop-filter: none !important;
 }
 
+/* Дочерние элементы строки держим на том же GPU-слою и в покое,
+   иначе после анимации t-row-in (translate3d(0,0,0)) класс снимается и
+   элемент сваливается обратно на основной слой — текст при этом
+   «прыгает на несколько пикселей» из-за разницы субпиксельного рендера.
+   Применяем единый метод для обычных пар, окон и лёгкого режима. */
 .agenda-row,
-.live-lesson-card {
+.live-lesson-card,
+.agenda-row-time,
+.agenda-row-content,
+.agenda-row-time *,
+.agenda-row-content *,
+.agenda-row strong,
+.agenda-row span,
+.agenda-row small,
+.agenda-row .agenda-row-sub,
+.agenda-row .agenda-row-sub *,
+.agenda-row .lesson-room,
+.agenda-row.is-window-row,
+.agenda-row.is-window-row *,
+.agenda-row.is-window-row strong,
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row,
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row *,
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .lesson-room,
+:root[data-perf] .agenda-row,
+:root[data-perf] .agenda-row *,
+.weekly-day-heading,
+.weekly-day-heading *,
+.t-stagger-line,
+.weekly-day-heading-copy,
+.weekly-day-heading-copy > * {
   transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+#stage,
+.agenda-list,
+.agenda-row,
+.live-lesson-card,
+.weekly-day-heading {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- компактный заголовок дня при наезде на кнопку сегодня --- */
+.weekly-day-heading h2 {
+  white-space: nowrap;
+}
+.weekly-day-heading.is-compact-date .weekly-day-weekday {
+  display: none !important;
 }
 
 /* ---------- переключатель темы ---------- */
@@ -1468,7 +1552,7 @@ html.weekly-page #root::-webkit-scrollbar,
 }
 
 /* ---------- темы ---------- */
-:root[data-weekly-palette="accent"] {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) {
   --weekly-blue: var(--weekly-accent, #0a84ff);
   --weekly-live: var(--weekly-accent, #0a84ff);
   --palette-accent-1: var(--weekly-accent, #0a84ff);
@@ -1542,7 +1626,7 @@ html.weekly-page #root::-webkit-scrollbar,
 .weekly-replace-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 450;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1553,6 +1637,58 @@ html.weekly-page #root::-webkit-scrollbar,
      тот же стек, что у основного приложения. */
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   letter-spacing: 0;
+}
+
+/* Окно колокольчика открывается сверху вниз */
+#bell-backdrop {
+  align-items: flex-start;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+}
+#bell-backdrop .weekly-replace-sheet {
+  transform: translate3d(0, -24px, 0);
+}
+#bell-backdrop.is-open .weekly-replace-sheet {
+  transform: translate3d(0, 0, 0);
+}
+
+/* Окна настроек (уведомления, заявки/редакторы, отчёты) открываются по центру с анимацией расширения */
+#notifs-backdrop,
+#tg-backdrop,
+#reports-backdrop,
+#report-backdrop {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+#notifs-backdrop .weekly-replace-sheet,
+#tg-backdrop .weekly-replace-sheet,
+#reports-backdrop .weekly-replace-sheet,
+#report-backdrop .weekly-replace-sheet,
+#report-backdrop .weekly-report-sheet {
+  margin: auto;
+  transform-origin: center center;
+  transform: scale(0.84);
+  opacity: 0;
+  transition: transform 0.16s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.14s ease;
+}
+#notifs-backdrop.is-open .weekly-replace-sheet,
+#tg-backdrop.is-open .weekly-replace-sheet,
+#reports-backdrop.is-open .weekly-replace-sheet,
+#report-backdrop.is-open .weekly-replace-sheet,
+#report-backdrop.is-open .weekly-report-sheet {
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 0.22s cubic-bezier(0.18, 1.15, 0.32, 1), opacity 0.18s ease;
+}
+@media (max-width: 480px) {
+  #notifs-backdrop,
+  #tg-backdrop,
+  #reports-backdrop,
+  #report-backdrop {
+    padding: 12px;
+  }
 }
 
 /* Базовый бандл задаёт form-элементам font:inherit только для своих окон,
@@ -1669,10 +1805,6 @@ html.weekly-page #root::-webkit-scrollbar,
 .weekly-future-days > .weekly-day-block:nth-of-type(3) { animation-delay: 140ms; }
 .weekly-future-days > .weekly-day-block:nth-of-type(4) { animation-delay: 185ms; }
 .weekly-future-days > .weekly-day-block:nth-of-type(n + 5) { animation-delay: 225ms; }
-.weekly-days-scene.is-date-scrubbing .weekly-future-days,
-.weekly-days-scene.is-date-scrubbing .weekly-future-days > .weekly-day-block {
-  animation: none;
-}
 @media (prefers-reduced-motion: reduce) {
   .weekly-future-days,
   .weekly-future-days > .weekly-day-block { animation: none !important; }
@@ -1693,7 +1825,7 @@ html.weekly-page #root::-webkit-scrollbar,
 }
 
 /* ---------- 3. акцентная тема: любой оттенок + тонированный фон ---------- */
-:root[data-weekly-palette="accent"] {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) {
   --weekly-blue: var(--weekly-accent, #0a84ff);
   --weekly-live: var(--weekly-accent, #0a84ff);
   --weekly-live-fill: var(--weekly-accent, #0a84ff);
@@ -1714,7 +1846,7 @@ html.weekly-page #root::-webkit-scrollbar,
   --weekly-shadow: 0 10px 32px color-mix(in srgb, var(--weekly-accent, #0a84ff) 20%, transparent);
   color-scheme: dark;
 }
-:root[data-weekly-palette="accent"][data-theme="light"] {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"])[data-theme="light"] {
   --weekly-bg: color-mix(in srgb, var(--weekly-accent, #0a84ff) 10%, #ffffff);
   --weekly-surface: color-mix(in srgb, var(--weekly-accent, #0a84ff) 4%, #ffffff);
   --weekly-raised: color-mix(in srgb, var(--weekly-accent, #0a84ff) 7%, #ffffff);
@@ -1726,19 +1858,19 @@ html.weekly-page #root::-webkit-scrollbar,
   --weekly-fill: color-mix(in srgb, var(--weekly-accent, #0a84ff) 16%, rgba(118, 118, 128, 0.12));
   color-scheme: light;
 }
-:root[data-weekly-palette="accent"] html.weekly-page,
-:root[data-weekly-palette="accent"] body,
-:root[data-weekly-palette="accent"] #root,
-:root[data-weekly-palette="accent"] .weekly-app {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) html.weekly-page,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) body,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) #root,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-app {
   background: var(--weekly-bg);
 }
-:root[data-weekly-palette="accent"] .date-strip button[data-date-index].is-selected,
-:root[data-weekly-palette="accent"] .date-strip:is(.is-scrubbing, .is-settling) button[data-date-index][data-under-selection="true"],
-:root[data-weekly-palette="accent"] .weekly-header-mark,
-:root[data-weekly-palette="accent"] .weekly-freshness-done,
-:root[data-weekly-palette="accent"] .weekly-external-schedule-link,
-:root[data-weekly-palette="accent"] .weekly-theme-modes button.is-active,
-:root[data-weekly-palette="accent"] .weekly-replace-actions button.is-primary {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .date-strip button[data-date-index].is-selected,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .date-strip:is(.is-scrubbing, .is-settling) button[data-date-index][data-under-selection="true"],
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-header-mark,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-freshness-done,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-external-schedule-link,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-theme-modes button.is-active,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-replace-actions button.is-primary {
   color: var(--weekly-on-accent, #ffffff);
 }
 .weekly-theme-modes button.is-active {
@@ -1925,7 +2057,7 @@ html.weekly-page #root::-webkit-scrollbar,
 }
 
 /* ===== акцентная тема: фон, подложки и логотип идут от выбранного цвета ===== */
-:root[data-weekly-palette="accent"] {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) {
   --weekly-bg: color-mix(in srgb, var(--weekly-accent, #0a84ff) 26%, #05050a);
   --weekly-surface: color-mix(in srgb, var(--weekly-accent, #0a84ff) 30%, #101015);
   --weekly-raised: color-mix(in srgb, var(--weekly-accent, #0a84ff) 36%, #1a1a20);
@@ -1940,7 +2072,7 @@ html.weekly-page #root::-webkit-scrollbar,
   --strip-selection-on: var(--weekly-on-accent, #ffffff);
 }
 
-:root[data-weekly-palette="accent"][data-theme="light"] {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"])[data-theme="light"] {
   --weekly-bg: color-mix(in srgb, var(--weekly-accent, #0a84ff) 20%, #ffffff);
   --weekly-surface: color-mix(in srgb, var(--weekly-accent, #0a84ff) 9%, #ffffff);
   --weekly-raised: color-mix(in srgb, var(--weekly-accent, #0a84ff) 13%, #ffffff);
@@ -1950,40 +2082,40 @@ html.weekly-page #root::-webkit-scrollbar,
 }
 
 /* Прямоугольные подложки под парами тоже тонируются. */
-:root[data-weekly-palette="accent"] .agenda-list {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-list {
   border-color: var(--weekly-separator) !important;
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 14%, var(--weekly-surface)) !important;
 }
 
-:root[data-weekly-palette="accent"] .agenda-list.is-completed {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-list.is-completed {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 7%, var(--weekly-surface)) !important;
 }
 
-:root[data-weekly-palette="accent"] .agenda-row + .agenda-row {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-row + .agenda-row {
   border-top-color: var(--weekly-separator) !important;
 }
 
-:root[data-weekly-palette="accent"] .live-lesson-card:not(.is-current) {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .live-lesson-card:not(.is-current) {
   border-color: var(--weekly-separator) !important;
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 14%, var(--weekly-surface)) !important;
 }
 
-:root[data-weekly-palette="accent"] .live-card-glass {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .live-card-glass {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 18%, var(--weekly-surface)) !important;
 }
 
-:root[data-weekly-palette="accent"] .bells-grid .agenda-row.is-bell-break {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .bells-grid .agenda-row.is-bell-break {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 12%, rgba(142, 142, 147, 0.18)) !important;
 }
 
 /* Логотип и иконки: чернила подбираются под акцент, поэтому белый цвет не пропадает. */
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-header-mark,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-theme,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-palette,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-layout,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-week-scope,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-offline {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-header-mark,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-theme,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-palette,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-layout,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-week-scope,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-offline {
   background: var(--weekly-accent, #0a84ff) !important;
   color: var(--weekly-on-accent, #ffffff) !important;
   box-shadow:
@@ -1991,45 +2123,19 @@ html.weekly-page #root::-webkit-scrollbar,
     0 0 0 1px color-mix(in srgb, var(--weekly-text, #ffffff) 20%, transparent) !important;
 }
 
-:root[data-weekly-palette="accent"] .date-strip button[data-date-index].is-selected,
-:root[data-weekly-palette="accent"] .date-strip:is(.is-scrubbing, .is-settling) button[data-date-index][data-under-selection="true"],
-:root[data-weekly-palette="accent"] .weekly-freshness-done,
-:root[data-weekly-palette="accent"] .weekly-external-schedule-link,
-:root[data-weekly-palette="accent"] .weekly-theme-modes button.is-active,
-:root[data-weekly-palette="accent"] .weekly-replace-actions button.is-primary {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .date-strip button[data-date-index].is-selected,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .date-strip:is(.is-scrubbing, .is-settling) button[data-date-index][data-under-selection="true"],
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-freshness-done,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-external-schedule-link,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-theme-modes button.is-active,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-replace-actions button.is-primary {
   color: var(--weekly-on-accent, #ffffff) !important;
 }
 
-:root[data-weekly-palette="accent"] .weekly-freshness-done,
-:root[data-weekly-palette="accent"] .weekly-external-schedule-link,
-:root[data-weekly-palette="accent"] .weekly-replace-actions button.is-primary {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-freshness-done,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-external-schedule-link,
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .weekly-replace-actions button.is-primary {
   background: var(--weekly-accent, #0a84ff) !important;
-}
-
-/* ===== ведение по рулетке: следующие дни появляются так же, как при прокрутке ===== */
-.weekly-days-scene.is-date-scrubbing .weekly-active-day-scene.is-leaving,
-.weekly-days-scene.is-date-scrubbing .weekly-active-day-scene.is-entering {
-  animation-duration: var(--page-slide-dur, 0.34s) !important;
-}
-
-.weekly-days-scene.is-date-scrubbing .weekly-future-days,
-.weekly-days-scene.is-date-scrubbing .weekly-future-days > .weekly-day-block,
-.weekly-days-scene.is-date-settling .weekly-future-days,
-.weekly-days-scene.is-date-settling .weekly-future-days > .weekly-day-block {
-  animation: weekly-future-in var(--duration-medium, 0.42s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(1) { animation-delay: 30ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(2) { animation-delay: 60ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(3) { animation-delay: 90ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(4) { animation-delay: 115ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(n + 5) { animation-delay: 140ms; }
-
-@media (prefers-reduced-motion: reduce) {
-  .weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days,
-  .weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block {
-    animation: none !important;
-  }
 }
 
 /* ===== раунд 12: акцентный фон, тёмные подложки, рулетка как колесо ===== */
@@ -2037,7 +2143,7 @@ html.weekly-page #root::-webkit-scrollbar,
 /* 1. Акцентная тема реально красит фон.
    Базовые палитры объявлены как :root[data-theme="dark"][data-weekly-palette] (0-3-0),
    поэтому переменные акцента тоже должны иметь три атрибута, иначе они проигрывают. */
-:root[data-theme="dark"][data-weekly-palette="accent"] {
+:root[data-theme="dark"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) {
   --weekly-bg: color-mix(in srgb, var(--weekly-accent, #0a84ff) 18%, #05050a);
   --weekly-surface: color-mix(in srgb, var(--weekly-accent, #0a84ff) 10%, #04040a);
   --weekly-raised: color-mix(in srgb, var(--weekly-accent, #0a84ff) 14%, #08080f);
@@ -2053,7 +2159,7 @@ html.weekly-page #root::-webkit-scrollbar,
   --weekly-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 
-:root[data-theme="light"][data-weekly-palette="accent"] {
+:root[data-theme="light"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) {
   --weekly-bg: color-mix(in srgb, var(--weekly-accent, #0a84ff) 28%, #ffffff);
   --weekly-surface: color-mix(in srgb, var(--weekly-accent, #0a84ff) 6%, #ffffff);
   --weekly-raised: color-mix(in srgb, var(--weekly-accent, #0a84ff) 10%, #ffffff);
@@ -2069,48 +2175,32 @@ html.weekly-page #root::-webkit-scrollbar,
 }
 
 /* 2. Подложки под парами заметно темнее фона. */
-:root[data-theme="dark"][data-weekly-palette="accent"] .agenda-list,
-:root[data-theme="dark"][data-weekly-palette="accent"] .live-lesson-card:not(.is-current) {
+:root[data-theme="dark"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-list,
+:root[data-theme="dark"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .live-lesson-card:not(.is-current) {
   border-color: var(--weekly-separator) !important;
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 9%, #030307) !important;
 }
-:root[data-theme="dark"][data-weekly-palette="accent"] .agenda-list.is-completed {
+:root[data-theme="dark"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-list.is-completed {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 5%, #020206) !important;
 }
-:root[data-theme="dark"][data-weekly-palette="accent"] .live-card-glass {
+:root[data-theme="dark"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .live-card-glass {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 13%, #05050c) !important;
 }
-:root[data-theme="dark"][data-weekly-palette="accent"] .bells-grid .agenda-row.is-bell-break {
+:root[data-theme="dark"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .bells-grid .agenda-row.is-bell-break {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 10%, rgba(16, 16, 22, 0.92)) !important;
 }
 
-:root[data-theme="light"][data-weekly-palette="accent"] .agenda-list,
-:root[data-theme="light"][data-weekly-palette="accent"] .live-lesson-card:not(.is-current) {
+:root[data-theme="light"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-list,
+:root[data-theme="light"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .live-lesson-card:not(.is-current) {
   border-color: var(--weekly-separator) !important;
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 10%, #ffffff) !important;
 }
-:root[data-theme="light"][data-weekly-palette="accent"] .agenda-list.is-completed {
+:root[data-theme="light"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .agenda-list.is-completed {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 5%, #ffffff) !important;
 }
-:root[data-theme="light"][data-weekly-palette="accent"] .live-card-glass {
+:root[data-theme="light"]:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]) .live-card-glass {
   background: color-mix(in srgb, var(--weekly-accent, #0a84ff) 14%, #ffffff) !important;
 }
-
-/* 3. Рулетка мышью = колесо мыши: без блюра, сжатия и смещения сцены. */
-.weekly-days-scene.is-date-scrubbing,
-.weekly-days-scene.is-date-settling {
-  --scrub-scene-blur: 0px !important;
-  --scrub-scene-opacity: 1 !important;
-  --scrub-scene-scale: 1 !important;
-  --scrub-scene-x: 0px !important;
-}
-
-/* те же задержки каскада, что и при обычной смене дня */
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(1) { animation-delay: 40ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(2) { animation-delay: 90ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(3) { animation-delay: 140ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(4) { animation-delay: 185ms; }
-.weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-future-days > .weekly-day-block:nth-of-type(n + 5) { animation-delay: 225ms; }
 
 /* 4. Светлая тема: время пары чуть правее. */
 :root[data-theme="light"] .agenda-list .agenda-row-time,
@@ -2131,11 +2221,11 @@ html.weekly-page #root::-webkit-scrollbar,
   -webkit-tap-highlight-color: transparent;
 }
 .weekly-settings-row.weekly-settings-link:hover {
-  background: var(--weekly-fill);
+  background: var(--weekly-hover-fill);
 }
 :root .weekly-settings-icon.is-cool,
 :root[data-weekly-palette] .weekly-settings-icon.is-cool,
-:root[data-weekly-palette="accent"]:not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-cool {
+:root:is([data-weekly-palette="accent"], [data-weekly-palette="accent-plus"]):not([data-weekly-palette="opaque"]):not([data-weekly-palette="opaque-light"]) .weekly-settings-icon.is-cool {
   background: linear-gradient(135deg, #ffd85c, #ff9f0a) !important;
   color: #241a00 !important;
   box-shadow: none !important;
@@ -2280,37 +2370,55 @@ a.weekly-settings-row.weekly-settings-link strong {
   border-color: #2aabee;
   color: #fff;
 }
-#weeqo-toast {
+#weeqo-toast-container {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   position: fixed;
   left: 50%;
   bottom: 24px;
-  transform: translateX(-50%) translateY(20px);
-  background: #101014;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 9999;
+  max-width: 88vw;
+}
+.weeqo-toast-item,
+#weeqo-toast {
+  background: rgba(16, 16, 20, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: #fff;
   padding: 10px 18px;
   border-radius: 12px;
   font-size: 14px;
   opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  transition: opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 9999;
-  max-width: 88vw;
   text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
+.weeqo-toast-item.is-visible,
 #weeqo-toast.is-visible {
-  opacity: 0.95;
-  transform: translateX(-50%) translateY(0);
+  opacity: 0.96;
+  transform: translateY(0) scale(1);
+}
+.weeqo-toast-item.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
 }
 
 /* ---------- штамп данных: отдельной строкой слева, между бейджем чётности и рулеткой дней ---------- */
 .weekly-data-stamp {
   display: flex;
   justify-content: flex-start;
-  margin: -1px 0 3px;
-  font-size: 9.5px;
+  margin: 0 0 2px;
+  min-height: 12px;
+  font-size: 10px;
   font-weight: 550;
-  line-height: 1;
+  line-height: 12px;
   color: var(--weekly-tertiary);
   white-space: nowrap;
 }
@@ -2340,7 +2448,7 @@ a.weekly-settings-row.weekly-settings-link strong {
 
 /* ---------- лёгкий вид: ровная подложка у аудитории ---------- */
 /* Бандл в лёгком виде обнуляет padding и заливку чипа, а наша заливка с !important
-   оставалась — получалась смятая подложка без отступов. Возвращаем нормальный вид. */
+   оставалась — получалась смятая подложка без о��ступов. Возвращаем нормальный вид. */
 :root[data-weekly-schedule-view="light"] .weekly-schedule-view .lesson-room {
   min-height: 20px;
   padding: 2px 7px !important;
@@ -2402,10 +2510,6 @@ a.weekly-settings-row.weekly-settings-link strong {
   .weekly-header {
     padding-left: 12px;
     padding-right: 12px;
-  }
-  .weekly-header-word,
-  .weekly-header-spark {
-    display: none;
   }
   .weekly-header-actions {
     gap: 4px;
@@ -2891,7 +2995,7 @@ a.weekly-settings-row.weekly-settings-link strong {
   opacity: 0.55;
 }
 
-/* --- кнопка «выйти»: маленькая, справа сверху карточки профиля --- */
+/* --- кно��ка «выйти»: маленькая, справа сверху карточки профиля --- */
 .weekly-profile .weekly-profile-hero {
   position: relative;
 }
@@ -2939,24 +3043,6 @@ a.weekly-settings-row.weekly-settings-link strong {
     linear-gradient(150deg, var(--weekly-accent, #a55bff), var(--weekly-accent-readable, var(--weekly-accent, #2e9bff))) border-box;
 }
 
-/* --- полоска выбора дня: поднимается только верхушка пилюли, без overshoot --- */
-.date-strip.is-pressing .date-strip-selection:before {
-  transform-origin: center bottom;
-  transform: scaleY(1.045);
-}
-.date-strip.is-scrubbing .date-strip-selection:before,
-.date-strip.is-settling .date-strip-selection:before {
-  transform-origin: center bottom;
-  transform: scaleY(1.08);
-}
-:root[data-weekly-palette=neutral] .date-strip.is-pressing .date-strip-selection:before {
-  transform: translateY(0) rotateX(0) scaleY(1.045);
-}
-:root[data-weekly-palette=neutral] .date-strip.is-scrubbing .date-strip-selection:before,
-:root[data-weekly-palette=neutral] .date-strip.is-settling .date-strip-selection:before {
-  transform: translateY(0) rotateX(0) scaleY(1.08);
-}
-
 /* --- заявки и редакторы: раскрытие внутри профиля --- */
 .weekly-profile-notifs-panel-inner #profile-tg-inline {
   padding: 4px 2px 6px;
@@ -2968,9 +3054,27 @@ a.weekly-settings-row.weekly-settings-link strong {
 }
 
 
-/* --- профиль: больше высоты на пк и телефоне --- */
+/* --- профиль: слои диалогов и оформление кнопок --- */
+.weekly-profile-backdrop {
+  z-index: 120;
+}
 .weekly-profile {
   max-height: min(940px, calc(100dvh - 20px));
+  transform-origin: center center;
+  animation: weekly-profile-in 0.24s cubic-bezier(0.18, 1.12, 0.32, 1) both;
+}
+@keyframes weekly-profile-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.weekly-profile-group .weekly-settings-row + .weekly-settings-row {
+  border-top: 1px solid var(--weekly-separator);
 }
 @media (max-width: 640px) {
   .weekly-profile-backdrop {
@@ -2981,29 +3085,12 @@ a.weekly-settings-row.weekly-settings-link strong {
   }
 }
 
-
-/* --- раскрытый блок (уведомления/заявки) занимает всю панель профиля --- */
-.weekly-profile.is-expanded .weekly-profile-hero,
-.weekly-profile.is-expanded .weekly-profile-identity {
-  display: none;
-}
-.weekly-profile.is-expanded .weekly-profile-content > .weekly-profile-group:not(:has([aria-expanded="true"])) {
-  display: none;
-}
-
-
-/* --- заголовок шторки профиля с иконкой раскрытого раздела --- */
 .weekly-profile-header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-width: 0;
-  transition: opacity 0.13s ease, transform 0.13s ease;
-}
-.weekly-profile-header h1.is-swapping {
-  opacity: 0;
-  transform: translateY(3px);
 }
 .weekly-profile-title-icon {
   display: grid;
@@ -3198,12 +3285,13 @@ a.weekly-settings-row.weekly-settings-link strong {
   }
 }
 
-/* --- режим производительности: из анимаций только прозрачность --- */
-:root[data-perf] * {
-  animation-duration: 0.01ms !important;
+/* --- режим производительности: отключение анимаций и эффектов без влияния на логотип --- */
+:root[data-perf] *:not(.weekly-header-brand):not(.weekly-header-brand *) {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
-  transition-property: opacity !important;
-  transition-duration: 0.16s ease !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
 }
 :root[data-perf] .weekly-date-controls,
 :root[data-perf] .weekly-settings-popover,
@@ -3213,6 +3301,7 @@ a.weekly-settings-row.weekly-settings-link strong {
 :root[data-perf] .weekly-profile-backdrop {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
 }
 :root[data-perf] .weekly-date-controls {
   background: var(--weekly-bg);
@@ -3225,4 +3314,1344 @@ a.weekly-settings-row.weekly-settings-link strong {
 :root[data-perf] .weekly-days-scene.is-date-scrubbing .weekly-active-day-stage,
 :root[data-perf] .weekly-days-scene.is-date-settling .weekly-active-day-stage {
   filter: none !important;
+}
+
+/* Восстановление и гарантия полноценной анимации логотипа в режиме производительности */
+:root[data-perf] .weekly-header-brand,
+:root[data-perf] .weekly-header-brand * {
+  will-change: auto;
+}
+:root[data-perf] .weekly-header-word {
+  transition: opacity 0.3s ease, transform 0.45s cubic-bezier(0.22, 0.72, 0.16, 1),
+    clip-path 0.45s cubic-bezier(0.22, 0.72, 0.16, 1) !important;
+}
+:root[data-perf] .weekly-header-brand.is-playing .weekly-header-mark {
+  animation: weekly-header-brand-mark 3.6s cubic-bezier(0.22, 0.72, 0.16, 1) both !important;
+}
+:root[data-perf] .weekly-header-brand.is-playing .weekly-header-spark.is-first {
+  animation: weekly-header-spark-first 3.6s ease-out both !important;
+}
+:root[data-perf] .weekly-header-brand.is-playing .weekly-header-spark.is-second {
+  animation: weekly-header-spark-second 3.6s ease-out both !important;
+}
+
+/* --- интерактивные строки окон --- */
+.agenda-row.is-window-row {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.16s ease;
+}
+.agenda-row.is-window-row:hover {
+  background: color-mix(in srgb, var(--weekly-blue, #0a84ff) 7%, transparent);
+}
+.agenda-row.is-window-row:active {
+  background: color-mix(in srgb, var(--weekly-blue, #0a84ff) 12%, transparent);
+}
+.agenda-row.is-window-row:hover .lesson-swap-btn {
+  opacity: 1;
+  color: var(--weekly-blue);
+}
+
+/* ---------- форма сообщения об ошибке (увеличенные отступы) ---------- */
+#report-backdrop,
+#reports-backdrop {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.weekly-report-sheet {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 30px 28px;
+  border-radius: 24px;
+}
+
+/* анимация задана общим блоком #report-backdrop выше */
+
+#report-sheet-content {
+  display: grid;
+  gap: 28px;
+}
+
+.weekly-report-sheet .weekly-replace-head {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+.weekly-report-sheet .weekly-replace-head strong {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--weekly-text);
+  letter-spacing: -0.2px;
+}
+.weekly-report-sheet .weekly-replace-head span {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--weekly-secondary);
+}
+
+.weekly-report-sheet .weekly-replace-field {
+  display: grid;
+  gap: 14px;
+}
+.weekly-report-sheet .weekly-replace-field > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--weekly-secondary);
+  letter-spacing: 0.15px;
+}
+
+.weekly-report-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.55;
+  min-height: 120px;
+  resize: vertical;
+  padding: 15px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--weekly-separator);
+  background: var(--weekly-raised);
+  color: var(--weekly-text);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.weekly-report-textarea:focus {
+  outline: none;
+  border-color: var(--weekly-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--weekly-blue) 18%, transparent);
+}
+
+.weekly-report-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1.5px dashed var(--weekly-separator);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--weekly-fill) 45%, transparent);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+.weekly-report-dropzone:hover,
+.weekly-report-dropzone:focus,
+.weekly-report-dropzone.is-dragover {
+  border-color: var(--weekly-blue);
+  background: color-mix(in srgb, var(--weekly-blue) 12%, transparent);
+  transform: scale(1.008);
+}
+.weekly-report-dropzone-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--weekly-fill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--weekly-blue);
+}
+.weekly-report-dropzone-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.weekly-report-dropzone-text {
+  display: grid;
+  gap: 5px;
+}
+.weekly-report-dropzone-text strong {
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--weekly-text);
+}
+.weekly-report-dropzone-text small {
+  font-size: 12px;
+  color: var(--weekly-secondary);
+  line-height: 1.45;
+}
+
+.weekly-report-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--weekly-blue) 10%, var(--weekly-surface));
+  border: 1px solid color-mix(in srgb, var(--weekly-blue) 30%, transparent);
+}
+.weekly-report-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--weekly-fill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--weekly-blue);
+}
+.weekly-report-file-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.weekly-report-file-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.weekly-report-file-info strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--weekly-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.weekly-report-file-info small {
+  font-size: 12px;
+  color: var(--weekly-secondary);
+}
+.weekly-report-file-remove {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--weekly-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+.weekly-report-file-remove:hover {
+  color: var(--weekly-danger, #ff453a);
+  background: color-mix(in srgb, var(--weekly-danger, #ff453a) 12%, transparent);
+}
+.weekly-report-file-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.weekly-report-file-error,
+.weekly-report-form-error {
+  font-size: 13px;
+  color: var(--weekly-danger, #ff453a);
+  line-height: 1.45;
+  padding: 8px 2px;
+}
+
+.weekly-report-details {
+  border: 1px solid var(--weekly-separator);
+  border-radius: 15px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--weekly-fill) 28%, transparent);
+  margin-top: 6px;
+}
+.weekly-report-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--weekly-secondary);
+  user-select: none;
+}
+.weekly-report-diag-pre {
+  margin: 12px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--weekly-tertiary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.weekly-report-sheet .weekly-replace-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+}
+.weekly-report-sheet .weekly-replace-actions button {
+  flex: 1;
+  min-height: 46px;
+}
+
+@media (max-width: 640px) {
+  #report-backdrop {
+    place-items: start center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .weekly-report-sheet {
+    box-sizing: border-box;
+    width: min(100%, 520px);
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    padding: 18px 16px;
+    border-radius: 20px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #report-sheet-content {
+    gap: 20px;
+  }
+
+  .weekly-report-textarea {
+    font-size: 16px;
+    min-height: 128px;
+  }
+
+  .weekly-report-dropzone {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .weekly-report-dropzone-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .weekly-report-file-preview {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 15px;
+  }
+
+  .weekly-report-file-remove {
+    margin-left: auto;
+  }
+
+  .weekly-report-details {
+    padding: 12px 14px;
+  }
+
+  .weekly-report-diag-pre {
+    max-height: 120px;
+  }
+}
+
+@media (max-width: 430px) {
+  .weekly-report-sheet .weekly-replace-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .weekly-report-sheet .weekly-replace-actions button {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
+.weekly-report-success-view {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 20px 10px;
+}
+.weekly-report-success-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--weekly-blue) 18%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--weekly-blue);
+  margin-bottom: 4px;
+}
+.weekly-report-success-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.weekly-report-success-view strong {
+  font-size: 18px;
+  color: var(--weekly-text);
+}
+.weekly-report-success-view span {
+  font-size: 13.5px;
+  color: var(--weekly-secondary);
+}
+
+/* --- список отчетов для владельца --- */
+.weekly-reports-sheet {
+  width: min(600px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 26px 24px;
+  border-radius: 24px;
+}
+.weekly-reports-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+}
+.weekly-report-card {
+  border: 1px solid var(--weekly-separator);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: var(--weekly-raised);
+  display: grid;
+  gap: 12px;
+}
+.weekly-report-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.weekly-report-card-sender strong {
+  display: block;
+  font-size: 14px;
+  color: var(--weekly-text);
+}
+.weekly-report-card-sender span {
+  font-size: 11.5px;
+  color: var(--weekly-tertiary);
+}
+.weekly-report-card-msg {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--weekly-text);
+  white-space: pre-wrap;
+}
+.weekly-report-del-btn {
+  border: 0;
+  background: transparent;
+  color: var(--weekly-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+.weekly-report-del-btn:hover {
+  color: var(--weekly-danger, #ff453a);
+  background: color-mix(in srgb, var(--weekly-danger, #ff453a) 12%, transparent);
+}
+.weekly-report-del-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.weekly-report-card-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.weekly-report-card-thumb img {
+  max-width: 180px;
+  max-height: 120px;
+  border-radius: 10px;
+  border: 1px solid var(--weekly-separator);
+  object-fit: cover;
+}
+.weekly-report-file-link {
+  font-size: 12.5px;
+  color: var(--weekly-blue);
+  text-decoration: none;
+}
+.weekly-report-file-link:hover {
+  text-decoration: underline;
+}
+.weekly-report-card-diag {
+  border-top: 1px solid var(--weekly-separator);
+  padding-top: 8px;
+}
+.weekly-report-card-diag summary {
+  font-size: 11.5px;
+  color: var(--weekly-secondary);
+  cursor: pointer;
+}
+.weekly-report-card-diag pre {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--weekly-tertiary);
+  white-space: pre-wrap;
+}
+
+/* ---------- Интерактивная подсветка при наведении (мягкий hover на всех кликабельных элементах) ---------- */
+
+/* Группы настроек и профиля аккуратно удерживают подсветку внутри скруглений */
+.weekly-settings-group {
+  overflow: hidden;
+}
+
+/* 1. Строки меню настроек, профиля и строки с переключателями */
+button.weekly-settings-row,
+a.weekly-settings-row,
+.weekly-profile-group .weekly-settings-row,
+.weekly-settings-row:has(.weekly-setting-switch),
+.weekly-settings-row:has(.weekly-accent-input) {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.weekly-settings-row:hover,
+  a.weekly-settings-row:hover,
+  .weekly-profile-group .weekly-settings-row:hover,
+  .weekly-settings-row:has(.weekly-setting-switch):hover,
+  .weekly-settings-row:has(.weekly-accent-input):hover {
+    background: var(--weekly-hover-fill);
+  }
+}
+
+/* 2. Шапка: кнопка-логотип, обновление, колокольчик и аватар/настройки */
+.weekly-header-brand {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: opacity 0.16s ease, filter 0.16s ease;
+}
+
+.weekly-header-actions .weekly-settings-trigger,
+.weekly-header-actions .weekly-bell-btn,
+.weekly-header-actions .weekly-tg-btn,
+#refresh-btn,
+#bell-btn,
+#settings-trigger {
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, filter 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .weekly-header-brand:hover {
+    opacity: 0.85;
+    filter: brightness(1.05);
+  }
+  .weekly-header-actions .weekly-settings-trigger:not(.is-avatar):hover,
+  .weekly-header-actions .weekly-bell-btn:hover,
+  .weekly-header-actions .weekly-tg-btn:hover,
+  #refresh-btn:hover,
+  #bell-btn:hover,
+  #settings-trigger:not(.is-avatar):hover {
+    background: var(--weekly-hover-fill);
+  }
+  .weekly-settings-trigger.is-avatar:hover {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--weekly-blue) 45%, transparent);
+    filter: brightness(1.06);
+  }
+}
+
+/* 3. Рулетка дат: дни недели, стре��к�� переключения недель, кнопка «сегодня» */
+.date-strip button[data-date-index] {
+  cursor: pointer;
+  border-radius: 14px;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.date-strip-week-arrow {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+.date-strip-today {
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.16s ease, transform 0.22s var(--weekly-motion-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .date-strip button[data-date-index]:not(.is-selected):hover {
+    background: var(--weekly-hover-fill);
+  }
+  .date-strip-week-arrow:not(:disabled):hover {
+    background: var(--weekly-hover-fill);
+    color: var(--weekly-text);
+  }
+  .date-strip-today:hover {
+    background: color-mix(in srgb, var(--weekly-hover-fill) 40%, var(--weekly-raised));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weekly-blue) 40%, var(--weekly-separator));
+  }
+}
+
+/* 4. Тумблеры и сегментированные переключатели (темы) */
+.weekly-setting-switch {
+  cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.weekly-theme-modes button {
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.weekly-accent-input {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .weekly-setting-switch:hover {
+    filter: brightness(1.08);
+  }
+  .weekly-theme-modes button:not(.is-active):not([aria-pressed="true"]):hover {
+    background: var(--weekly-hover-fill);
+    color: var(--weekly-text);
+  }
+  .weekly-accent-input:hover {
+    border-color: var(--weekly-blue);
+    transform: scale(1.04);
+  }
+}
+
+/* 5. Расписание: прошедшие пары (аккордеон) и кнопки замены пар */
+.completed-lessons-toggle {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+.lesson-swap-btn {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .completed-lessons-toggle:hover {
+    background: var(--weekly-hover-fill);
+  }
+  .lesson-swap-btn:hover {
+    background: var(--weekly-hover-fill);
+  }
+}
+
+/* 6. Модальные окна, шторки, действия и кнопки профиля */
+.weekly-sheet-header-close,
+.weekly-replace-sheet button[data-act="close"],
+.weekly-replace-sheet button[data-notifs-act="close"],
+.weekly-replace-sheet button[data-tg="close"],
+.weekly-replace-sheet button[data-swap="close"],
+.weekly-replace-sheet button[data-bells="close"],
+.weekly-faculty-notice-close,
+.weekly-notifications-panel > header button,
+.schedule-request-dialog > header button {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.weekly-replace-actions button,
+.weekly-profile button.weekly-profile-mini,
+.weekly-profile button.weekly-profile-hero-id,
+.weekly-tg-copy-id,
+.weekly-onboarding-back,
+#bug-file-btn,
+#bug-file-remove,
+.weekly-tg-row-actions button {
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .weekly-sheet-header-close:hover,
+  .weekly-replace-sheet button[data-act="close"]:hover,
+  .weekly-replace-sheet button[data-notifs-act="close"]:hover,
+  .weekly-replace-sheet button[data-tg="close"]:hover,
+  .weekly-replace-sheet button[data-swap="close"]:hover,
+  .weekly-replace-sheet button[data-bells="close"]:hover,
+  .weekly-faculty-notice-close:hover,
+  .weekly-notifications-panel > header button:hover,
+  .schedule-request-dialog > header button:hover {
+    background: var(--weekly-hover-fill);
+  }
+  .weekly-replace-actions button:not(.is-primary):hover,
+  .weekly-onboarding-back:hover,
+  #bug-file-btn:hover,
+  .weekly-tg-row-actions button:hover {
+    background: var(--weekly-hover-fill);
+  }
+  .weekly-profile button.weekly-profile-hero-id:hover,
+  .weekly-tg-copy-id:hover {
+    background: var(--weekly-hover-fill);
+    border-radius: 6px;
+  }
+  .weekly-profile button.weekly-profile-mini:hover {
+    background: color-mix(in srgb, var(--weekly-fill) 85%, var(--weekly-text));
+    filter: brightness(1.08);
+  }
+  .weekly-profile-auth-btn:hover {
+    background: color-mix(in srgb, var(--weekly-blue) 14%, var(--weekly-raised));
+    border-color: color-mix(in srgb, var(--weekly-blue) 38%, var(--weekly-separator));
+  }
+  /* Акцентные/основные кнопки */
+  .weekly-replace-actions button.is-primary:hover,
+  .weekly-action-btn.is-primary:hover,
+  .weekly-primary-btn:hover,
+  .weekly-onboarding-action:hover,
+  .schedule-request-submit:hover,
+  #bug-submit:hover {
+    filter: brightness(1.07);
+  }
+  .weekly-report-card-diag summary:hover {
+    color: var(--weekly-text);
+  }
+}
+
+
+
+/* ====================================================================
+   PATCH BATCH — сентябрь 2026
+   ==================================================================== */
+
+/* ---------- 1. Шапка при открытых настройках — без серой подложки ---------- */
+.weekly-app.is-settings-open .weekly-title-row,
+.weekly-app.is-settings-open .weekly-header,
+.weekly-app.is-settings-open .date-strip {
+  background: transparent !important;
+}
+/* Мягкая тень поповера вместо жёсткой */
+.weekly-settings-popover {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--weekly-separator) !important;
+}
+
+/* ---------- 2. Уведомления: карточка пары не затемнена ---------- */
+/* Дата в шапке карточки — полная яркость */
+.weekly-notif-frag-day {
+  color: var(--weekly-text) !important;
+  opacity: 1 !important;
+}
+/* Подпись времени в карточке — нормальная */
+.weekly-notif-frag-lesson time {
+  opacity: 1;
+  color: var(--weekly-secondary);
+}
+/* Строка даты/времени уведомления (fmtDateTime) — чуть приглушена, не 0.65 */
+.weekly-notif-row .weekly-tg-row-text > span:last-child {
+  opacity: 0.5;
+  font-size: 11px;
+}
+/* Основной текст уведомления — полная яркость (не наследует opacity от .weekly-tg-row-text span) */
+.weekly-notif-row .weekly-tg-row-text > strong {
+  opacity: 1;
+}
+
+/* ---------- 3. Редакторы: имя и id сдвинуты правее ---------- */
+.weekly-tg-section.is-editors .weekly-tg-row .weekly-tg-row-text {
+  padding-left: 8px;
+}
+
+/* ---------- 4. Отступы между подсказками в разделе редакторов ---------- */
+.weekly-tg-add-hint + .weekly-tg-add-hint {
+  margin-top: 6px;
+}
+/* Оба абзаца чуть крупнее */
+.weekly-tg-add-hint {
+  line-height: 1.55 !important;
+}
+
+/* ---------- 5. «Мой id» в профиле — для всех ролей ---------- */
+.weekly-profile-hero-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.weekly-profile-hero-id b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+@media (hover: hover) and (pointer: fine) {
+  .weekly-profile-hero-id:hover {
+    background: color-mix(in srgb, var(--weekly-fill) 60%, transparent);
+  }
+}
+
+
+/* ===== v78: устойчивые жесты, компактная шапка и согласованные темы ===== */
+
+/* Только один вертикальный transform. Нижний край закреплён, верх растёт.
+   Нет perspective, translateY + clip-path и масштаба больше 1 — в том числе в WebKit. */
+:root .date-strip,
+:root .date-strip * {
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+:root .date-strip {
+  perspective: none;
+  overscroll-behavior-x: none;
+}
+:root .date-strip-selection {
+  animation: none !important;
+  filter: none !important;
+  transform-origin: center bottom;
+}
+:root #strip #selection::before {
+  inset: 0;
+  clip-path: none !important;
+  transform-origin: 50% 100% !important;
+  /* 3 / 59 — число вместо деления CSS-длин, совместимо со старым iOS Safari. */
+  transform: scaleY(0.050847458) !important;
+  border-radius: 14px;
+  box-shadow: none !important;
+  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+:root #strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-releasing, .is-hop) #selection::before,
+:root #strip #selection.is-hop::before {
+  transform: scaleY(1) !important;
+  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+:root .date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-releasing) .date-strip-selection {
+  transition: none !important;
+}
+:root .date-strip button[data-date-index]:active {
+  transform: none;
+}
+:root .weekly-days-scene:is(.is-date-scrubbing, .is-date-settling) .weekly-active-day-stage {
+  transform: none;
+  filter: none;
+  opacity: 1;
+  will-change: auto;
+}
+#stage, #day-scene, .weekly-lazy-day {
+  overflow-anchor: none;
+}
+.weekly-active-day-scene.is-leaving {
+  contain: layout style;
+}
+.weekly-active-day-scene.is-leaving .live-card-particles i,
+.weekly-active-day-scene.is-leaving .weekly-future-days,
+.weekly-active-day-scene.is-leaving .weekly-day-block {
+  animation-play-state: paused;
+}
+/* На входе сохраняем каскад контента, не раскручиваем каждую SVG-кнопку.
+   Строки, окна и текстовые элементы в покое и при смене дня удерживаем на GPU-слое
+   (translateZ(0) + backface-visibility: hidden), устраняя подёргивание текста во всех режимах. */
+#stage .agenda-row,
+#stage .agenda-row-time,
+#stage .agenda-row-content,
+#stage .agenda-row strong,
+#stage .agenda-row span,
+#stage .agenda-row small,
+#stage .agenda-row .agenda-row-sub,
+#stage .agenda-row .lesson-room,
+#stage .live-lesson-card,
+#stage .live-card-glass,
+#stage .live-card-status,
+#stage .live-card-timing,
+#stage .live-card-range,
+#stage #live-left,
+#stage #live-passed,
+#stage #live-clock,
+#stage .live-card-progress,
+#stage .agenda-row.is-window-row,
+#stage .agenda-row.is-window-row strong,
+#stage .weekly-day-block,
+#stage .weekly-day-heading,
+#stage .t-stagger-line,
+#stage .weekly-day-heading-copy,
+#stage .weekly-day-heading-copy > *,
+:root[data-weekly-schedule-view="light"] #stage .agenda-row,
+:root[data-weekly-schedule-view="light"] #stage .agenda-row-time,
+:root[data-weekly-schedule-view="light"] #stage .agenda-row-content,
+:root[data-weekly-schedule-view="light"] #stage .live-lesson-card,
+:root[data-weekly-schedule-view="light"] #stage .live-card-glass,
+:root[data-weekly-schedule-view="light"] #stage .weekly-day-heading,
+:root[data-weekly-schedule-view="light"] #stage .lesson-room,
+:root[data-weekly-schedule-view="light"] #stage .agenda-list,
+:root[data-perf] #stage .agenda-row {
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Центрирование чипа перерыва: сохраняем точный translate(-50%, -50%) на GPU-слое */
+#stage .agenda-break-chip {
+  transform: translate3d(-50%, -50%, 0) !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+#stage .agenda-break-chip * {
+  transform: none !important;
+}
+
+/* ---------- Лёгкий вид: целочисленные высоты и базовые линии ----------
+   Устраняем субпиксельные смещения шрифта (ClearType/DirectWrite) при смене дня
+   и активной паре. Все строки и заголовки попадают в чётную пиксельную сетку. */
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .weekly-day-heading {
+  min-height: 38px;
+  margin-bottom: 6px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .weekly-day-heading h2 {
+  font-size: 18px;
+  line-height: 22px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .weekly-day-heading-copy > span {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row {
+  min-height: 62px;
+  padding: 9px 0;
+  gap: 8px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row-time time {
+  font-size: 12px;
+  line-height: 15px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row-time time span {
+  font-size: 11px;
+  line-height: 14px;
+  margin-top: 2px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row-content > span {
+  font-size: 12px;
+  line-height: 15px;
+  margin-top: 3px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-row small {
+  font-size: 11px;
+  line-height: 14px;
+  margin-top: 2px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .lesson-room {
+  min-height: 20px;
+  padding: 2px 7px !important;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* ---------- Карточка активной / следующей пары: целочисленные размеры ----------
+   Исключаем дробные высоты (144.59px / 156.18px из-за line-height 1.2 на 18px
+   и 1.35 на 14px), которые сдвигали расписание на доли пикселя при наличии
+   активной или следующей пары («далее» / «сейчас»). */
+.live-lesson-card {
+  margin-bottom: 10px;
+  padding: 14px;
+}
+.live-lesson-card h3 {
+  font-size: 18px;
+  line-height: 22px;
+  margin-bottom: 4px;
+}
+.live-lesson-card .lesson-meta {
+  font-size: 14px;
+  line-height: 18px;
+}
+.live-card-status {
+  font-size: 12px;
+  line-height: 16px;
+  margin-bottom: 6px;
+}
+.live-card-timing {
+  font-size: 11px;
+  line-height: 15px;
+}
+.live-card-progress {
+  height: 4px;
+  margin: 12px 0 6px;
+}
+
+/* Метки происхождения пары («сам. работа», «сейчас», «далее») и метаданные — целочисленные строки */
+.lesson-origin-mark {
+  font-size: 11px;
+  line-height: 14px;
+}
+.lesson-meta {
+  line-height: 18px;
+}
+.lesson-advisory {
+  line-height: 14px;
+}
+
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-lesson-card {
+  margin-bottom: 8px;
+  padding: 12px 12px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-lesson-card.is-current {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-lesson-card.is-current .live-card-glass {
+  padding: 12px 13px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-lesson-card h3 {
+  font-size: 16px;
+  line-height: 20px;
+  margin-bottom: 4px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-lesson-card .lesson-meta {
+  font-size: 13px;
+  line-height: 17px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-card-status {
+  font-size: 12px;
+  line-height: 16px;
+  margin-bottom: 6px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-card-timing {
+  font-size: 11px;
+  line-height: 15px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .live-card-progress {
+  height: 4px;
+  margin: 10px 0 6px;
+}
+:root #stage,
+:root #stage * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+#stage .lesson-swap-btn,
+#stage .lesson-swap-btn svg,
+#stage .lesson-swap-btn svg * {
+  animation: none !important;
+  transform: none !important;
+  transition-property: color, background-color, opacity !important;
+}
+#stage .weekly-active-day-scene.is-entering .live-lesson-card {
+  animation: t-row-in var(--duration-fast, 0.32s) var(--ease-smooth-out) both !important;
+  animation-delay: var(--duration-stagger, 55ms) !important;
+}
+#stage .weekly-active-day-scene.is-entering .agenda-row {
+  animation: t-row-in var(--duration-fast, 0.32s) var(--ease-smooth-out) both !important;
+}
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(1) { animation-delay: calc(var(--duration-stagger, 55ms) * 2); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(2) { animation-delay: calc(var(--duration-stagger, 55ms) * 3); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(3) { animation-delay: calc(var(--duration-stagger, 55ms) * 4); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(4) { animation-delay: calc(var(--duration-stagger, 55ms) * 5); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(n+5) { animation-delay: calc(var(--duration-stagger, 55ms) * 6); }
+.weekly-future-days {
+  animation: none;
+}
+/* Новые будущие дни сохраняют собственное плавное появление; при начале/конце
+   жеста их animation-name, delay и transform больше не изменяются. */
+.weekly-future-days > .weekly-day-block {
+  animation: weekly-future-in var(--duration-medium, 0.42s) var(--ease-smooth-out) both;
+}
+
+
+.weekly-day-heading h2 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Окна темнее обычных строк, с одной надписью в геометрическом центре. */
+:root {
+  --weekly-window-bg: #111113;
+  --weekly-window-hover: #171719;
+}
+:root[data-theme="light"] {
+  --weekly-window-bg: #e4e4e8;
+  --weekly-window-hover: #dcdce2;
+}
+:root[data-theme="dark"][data-weekly-palette] {
+  --weekly-window-bg: color-mix(in srgb, var(--weekly-accent) 3%, #010104);
+  --weekly-window-hover: color-mix(in srgb, var(--weekly-accent) 6%, #08080c);
+}
+:root[data-theme="light"][data-weekly-palette] {
+  --weekly-window-bg: color-mix(in srgb, var(--weekly-accent) 12%, #dedee5);
+  --weekly-window-hover: color-mix(in srgb, var(--weekly-accent) 16%, #d8d8df);
+}
+:root #stage .agenda-row.is-window-row {
+  position: relative;
+  display: grid;
+  min-height: 75px;
+  padding: 12px 13px;
+  align-items: start;
+  cursor: pointer;
+  pointer-events: auto !important;
+  background: var(--weekly-window-bg) !important;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root[data-weekly-schedule-view="light"] #stage .agenda-row.is-window-row {
+  min-height: 62px;
+  padding: 9px 0;
+}
+/* Текст «окно» слева, как у обычных пар: не центрируем и не растягиваем
+   содержимое на всю строку. При клике на строку или текст срабатывает действие строки. */
+:root #stage .agenda-row.is-window-row .agenda-row-content {
+  position: static;
+  inset: auto;
+  display: block;
+  padding: 0;
+  place-items: start;
+  pointer-events: none;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root #stage .agenda-row.is-window-row .agenda-row-time {
+  pointer-events: none;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root #stage .agenda-row.is-window-row strong {
+  margin: 0;
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 550;
+  color: var(--weekly-secondary);
+  text-align: left;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root[data-weekly-schedule-view="light"] #stage .agenda-row.is-window-row strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+:root #stage .agenda-row.is-window-row .lesson-swap-btn {
+  top: 7px;
+  translate: 0 0;
+  pointer-events: none;
+}
+:root #stage .agenda-row.is-window-row:hover,
+:root #stage .agenda-row.is-window-row:focus-visible {
+  background: var(--weekly-window-hover) !important;
+}
+.agenda-row.is-window-row:focus-visible,
+#brand:focus-visible,
+.weekly-profile-notifs-head:focus-visible,
+.weekly-setting-switch:focus-visible {
+  outline: 2px solid var(--weekly-blue);
+  outline-offset: -2px;
+}
+
+/* Раскрытие уведомлений остаётся внутри профиля, без второго диалога. */
+.weekly-profile .weekly-profile-notifs-head {
+  max-height: none;
+  min-height: 56px;
+}
+.weekly-profile-notifs-head > svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--weekly-secondary);
+  transition: transform 300ms cubic-bezier(0.22, 0.72, 0.16, 1);
+}
+.weekly-profile-notifs-head[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.weekly-profile-notifs-head[aria-expanded="true"] { border-bottom: 0; }
+.weekly-profile-notifs-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 0.72, 0.16, 1), visibility 0s 300ms;
+}
+.weekly-profile-notifs-panel.is-open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.weekly-profile-notifs-panel-inner { min-height: 0; overflow: hidden; }
+.weekly-profile-notifs-options {
+  opacity: 0;
+  transform: translate3d(0, -6px, 0);
+  transition: opacity 220ms ease, transform 300ms cubic-bezier(0.22, 0.72, 0.16, 1);
+}
+.weekly-profile-notifs-panel.is-open .weekly-profile-notifs-options {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+.weekly-profile-notifs-options .weekly-settings-row {
+  border-top: 1px solid var(--weekly-separator);
+  padding: 12px 14px;
+  gap: 12px;
+}
+.weekly-profile-notifs-options .weekly-setting-switch { flex: 0 0 auto; }
+.weekly-profile-notifs-options .weekly-settings-copy { min-width: 0; }
+.weekly-profile-notifs-options .weekly-settings-copy span { white-space: normal; }
+
+/* Логотип работает штатно на дефолтных правилах из weekly-*.css:
+   знак сдвигается, слово «weeqo» проявляется через clip-path, искры и блик
+   проигрывают свои анимации. Специальных override-правил #brand здесь нет. */
+
+@media (max-width: 430px) {
+  .weekly-header { padding-inline: 12px; }
+  .weekly-title-row { gap: 4px; }
+  #refresh-btn { display: none !important; }
+  .weekly-header-actions { gap: 0; }
+  .weekly-header-actions .weekly-settings-trigger,
+  .weekly-header-actions .weekly-bell-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  .weekly-header-actions .weekly-theme-toggle { display: none; }
+}
+@media (max-width: 360px) {
+  .weekly-header { padding-inline: 8px; }
+  .weekly-week-switch.is-header-leading { padding-inline: 6px; }
+}
+
+/* Акцент+: выбранный оттенок, светлый блик и более глубокая тень того же цвета.
+   Фон статичен; небольшой перелив рисуется только на видимой пилюле. */
+:root[data-weekly-palette="accent-plus"] {
+  --weekly-accent-gradient: linear-gradient(135deg, var(--weekly-gradient-light), var(--weekly-accent) 42%, var(--weekly-gradient-dark) 82%, var(--weekly-gradient-light));
+  --weekly-plus-canvas: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--weekly-accent) 16%, transparent), transparent 65%),
+    linear-gradient(150deg, color-mix(in srgb, var(--weekly-accent) 13%, #020207), #030308 70%);
+}
+:root[data-theme="light"][data-weekly-palette="accent-plus"] {
+  --weekly-plus-canvas: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--weekly-accent) 14%, transparent), transparent 65%),
+    linear-gradient(150deg, color-mix(in srgb, var(--weekly-accent) 19%, #ffffff), #fbfbfd 80%);
+}
+:root[data-weekly-palette="accent-plus"] .weekly-page,
+:root[data-weekly-palette="accent-plus"] #app {
+  background: var(--weekly-plus-canvas) !important;
+}
+:root[data-weekly-palette="accent-plus"] .weekly-header {
+  background: transparent;
+}
+:root[data-weekly-palette="accent-plus"] #brand .weekly-header-mark,
+:root[data-weekly-palette="accent-plus"] .weekly-theme-modes button.is-active,
+:root[data-weekly-palette="accent-plus"] .weekly-setting-switch[aria-pressed="true"],
+:root[data-weekly-palette="accent-plus"] .weekly-settings-icon:not(.is-danger):not(.is-bug),
+:root[data-weekly-palette="accent-plus"] .weekly-replace-actions button.is-primary,
+:root[data-weekly-palette="accent-plus"] .weekly-freshness-done,
+:root[data-weekly-palette="accent-plus"] .weekly-external-schedule-link,
+:root[data-weekly-palette="accent-plus"] .weekly-profile-title-icon,
+:root[data-weekly-palette="accent-plus"] #live-progress {
+  background: var(--weekly-accent-gradient) !important;
+  color: var(--weekly-on-accent) !important;
+}
+:root[data-weekly-palette="accent-plus"] .date-strip .date-strip-selection::before {
+  background: var(--weekly-accent-gradient) !important;
+  background-size: 180% 180% !important;
+  animation: weeqo-accent-sheen 7s ease-in-out infinite;
+}
+:root[data-theme="dark"][data-weekly-palette="accent-plus"] #stage .agenda-list,
+:root[data-theme="dark"][data-weekly-palette="accent-plus"] #stage .live-lesson-card:not(.is-current) {
+  background: linear-gradient(125deg, color-mix(in srgb, var(--weekly-accent) 12%, #05050b), color-mix(in srgb, var(--weekly-accent) 4%, #040407)) !important;
+}
+:root[data-theme="light"][data-weekly-palette="accent-plus"] #stage .agenda-list,
+:root[data-theme="light"][data-weekly-palette="accent-plus"] #stage .live-lesson-card:not(.is-current) {
+  background: linear-gradient(125deg, #ffffff, color-mix(in srgb, var(--weekly-accent) 9%, #ffffff)) !important;
+}
+@keyframes weeqo-accent-sheen {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Звонки не наследуют розовый акцент домашнего задания или сетку обычных пар. */
+.bells-view,
+#aux-view {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+#aux-view .bells-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+#aux-view > .weekly-day-block { padding-top: 10px; }
+#aux-view .weekly-day-heading { margin-bottom: 14px; }
+#aux-view .weekly-day-heading h2 { font-size: 21px; }
+#aux-view .weekly-onboarding-back { min-height: 40px; padding-left: 0; }
+#aux-view .bells-section-head { min-height: 34px; margin-bottom: 8px; gap: 6px; }
+#aux-view .bells-section-head strong { font-size: 16px; }
+#aux-view .bells-section-head span { font-size: 12px; line-height: 1.25; }
+#aux-view .bells-grid .agenda-list {
+  border: 1px solid var(--weekly-separator);
+  border-radius: 12px;
+  overflow: hidden;
+}
+#aux-view .bells-grid .agenda-row {
+  display: block;
+  min-height: 0;
+  padding: 8px 10px;
+  gap: 0;
+}
+#aux-view .bells-grid .agenda-row-time { padding-left: 0; }
+#aux-view .bells-grid .agenda-row-time time { padding: 0; font-size: 11px; line-height: 1.15; font-weight: 550; }
+#aux-view .bells-grid .agenda-row-content { display: flex; flex-direction: column; min-width: 0; padding: 0; }
+#aux-view .bells-grid .agenda-row strong { margin: 2px 0 0; font-size: 14px; line-height: 1.18; white-space: nowrap; letter-spacing: -0.3px; }
+#aux-view .bells-grid .agenda-row small { margin-top: 2px; font-size: 11px; line-height: 1.1; }
+#aux-view .bells-grid .agenda-break { margin: 7px 0; border-color: var(--weekly-separator); }
+#aux-view .bells-grid .agenda-break-chip {
+  max-width: calc(100% - 12px);
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--weekly-raised);
+  color: var(--weekly-secondary);
+  font-size: 10px;
+  line-height: 1.15;
+  gap: 3px;
+  white-space: nowrap;
+}
+#aux-view .bells-grid .agenda-break-chip strong { font: inherit; font-weight: 600; }
+@media (max-width: 360px) {
+  #aux-view .bells-grid { gap: 8px; }
+  #aux-view .weekly-day-heading h2 { font-size: 20px; }
+  #aux-view .bells-grid .agenda-row { padding: 7px 8px; }
+}
+
+/* Настройки пользователя имеют приоритет над новой анимацией.
+   Бренд сюда не включаем: его анимации играют штатно из weekly-*.css. */
+@media (prefers-reduced-motion: reduce) {
+  :root #stage *,
+  :root #strip #selection::before,
+  :root .weekly-profile-notifs-panel,
+  :root .weekly-profile-notifs-options,
+  :root .weekly-profile-notifs-head > svg { animation: none !important; transition: none !important; }
+}
+:root[data-perf] #stage *,
+:root[data-perf] #strip #selection::before {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Выбранная дата читается и на тонкой линии, и внутри раскрытой пилюли. */
+:root #strip button[data-date-index].is-selected:not(.is-day-off) {
+  color: var(--weekly-blue) !important;
+}
+:root #strip:is(.is-pressing, .is-hop, .is-releasing) button[data-date-index].is-selected:not(.is-day-off),
+:root #strip:is(.is-scrubbing, .is-settling, .is-releasing) button[data-date-index][data-under-selection="true"] {
+  color: var(--strip-selection-on) !important;
+}
+
+/* Статичный бейдж недели — информация, а не недоступное действие: не бледнеет. */
+:root[data-theme="light"][data-weekly-palette] #week-switch.is-static,
+:root[data-theme="light"][data-weekly-palette] #week-number,
+:root[data-theme="light"][data-weekly-palette] #week-parity {
+  opacity: 1 !important;
+  color: var(--weekly-accent-readable, var(--weekly-blue)) !important;
+}
+
+/* Промежутки между списками пар, окнами и карточкой активной пары */
+.weekly-day-block > .agenda-list:not(:last-child) {
+  margin-bottom: 10px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .weekly-day-block > .agenda-list:not(:last-child) {
+  margin-bottom: 7px;
+}
+.agenda-list + .completed-lessons {
+  margin-top: 10px;
+}
+:root[data-weekly-schedule-view="light"] .weekly-schedule-view .agenda-list + .completed-lessons {
+  margin-top: 7px;
+}
+#live-host:empty {
+  display: none;
 }

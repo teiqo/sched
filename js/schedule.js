@@ -10,7 +10,7 @@ export const BELLS = [
   { n: 6, week: "17:45–19:20", sat: "17:45–19:20" },
 ];
 
-const TIMES = {
+export const TIMES = {
   1: { week: ["08:30", "10:05"], sat: ["08:30", "10:05"] },
   2: { week: ["10:15", "11:50"], sat: ["10:15", "11:50"] },
   3: { week: ["12:30", "14:05"], sat: ["12:10", "13:45"] },
@@ -31,15 +31,17 @@ const DAY_META = [
 
 /* Зашитых данных больше нет: всё приходит от парсера. */
 
-// окна проставляются автоматически: от первой пары до последней занятой
+// окна проставляются автоматически: все доступные пары звонков дня (1..6)
 function buildDays(rawDays) {
   return DAY_META.map((meta) => {
     const items = (rawDays[meta.id] || []).slice().sort((a, b) => a[0] - b[0]);
     const sat = meta.id === 6;
-    const last = items.length ? items[items.length - 1][0] : 0;
+    const isSunday = meta.id === 0;
+    const maxBells = isSunday ? 0 : BELLS.length;
+    const last = Math.max(maxBells, items.length ? items[items.length - 1][0] : 0);
     const slots = [];
     for (let n = 1; n <= last; n += 1) {
-      const times = sat ? TIMES[n].sat : TIMES[n].week;
+      const times = sat ? (TIMES[n] && TIMES[n].sat) : (TIMES[n] && TIMES[n].week);
       if (!times) continue;
       const hits = items.filter((it) => it[0] === n);
       if (!hits.length) {

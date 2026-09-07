@@ -41,6 +41,13 @@
         ".write": "auth != null && root.child('weeqo-users').child(auth.uid).val() === $tgId",
         ".validate": "newData.val() === null || (newData.child('name').isString() && newData.child('name').val().length <= 80 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 300000 && (!newData.child('swaps').exists() || newData.child('swaps').isBoolean()) && (!newData.child('schedule').exists() || newData.child('schedule').isBoolean()) && (!newData.child('pending').exists() || newData.child('pending').isBoolean()))"
       }
+    },
+    "weeqo-reports": {
+      ".read": "auth != null && root.child('weeqo-meta/owner').val() === root.child('weeqo-users').child(auth.uid).val()",
+      "$reportId": {
+        ".write": "auth != null",
+        ".validate": "newData.val() === null || (newData.child('createdAt').isNumber() && newData.child('message').isString() && newData.child('message').val().length <= 5000)"
+      }
     }
   }
 }
