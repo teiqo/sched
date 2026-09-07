@@ -105,7 +105,8 @@ var state = {
   nowOverride: null,
   light: false,
   /* На телефоне по умолчанию только выбранный день; «вся неделя» — тумблером. */
-  scope: (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 740px)").matches) ? "day" : "week",
+  /* «Вся неделя» по умолчанию выключена — открывается выбранный день. */
+  scope: "day",
   group: DEFAULT_GROUP,
   draftGroup: DEFAULT_GROUP,
   onboarded: false,
@@ -824,6 +825,18 @@ function setScene(html, direction) {
     if (old._weeqoHtml !== html) {
       old._weeqoHtml = html;
       old.innerHTML = html;
+      /* Мягкое проявление вместо резкой подмены (акцент+, «вся неделя», окна):
+         градиенты не «щёлкают», а коротко доезжают по прозрачности. */
+      if (!reduced) {
+        try {
+          old.animate(
+            [{ opacity: 0 }, { opacity: 1 }],
+            { duration: 240, easing: "ease-out" }
+          );
+        } catch (err) {
+          /* ignore */
+        }
+      }
     }
     old.inert = false;
     old.removeAttribute("aria-hidden");
@@ -880,7 +893,7 @@ function setScene(html, direction) {
      Ждём полного каскада и трогаем только свои WAAPI-анимации. */
   const rowDur = cssTimeMs("--duration-fast", 320);
   const rowStep = cssTimeMs("--duration-stagger", 55);
-  const total = Math.max(dur, rowDur + rowStep * 8);
+  const total = Math.max(dur + 80, rowDur + rowStep * 10 + 120);
 
   /* Уходящая неделя больше не остаётся в дереве весь каскад входящих строк. */
   sceneOutTimer = window.setTimeout(() => {
@@ -1017,7 +1030,7 @@ function render(direction) {
   lastRenderAt = performance.now();
   // быстрые переключения больше не глушат анимацию: каждый день запускает каскад заново.
   // при перемещении рулетки сцену уже меняет selectDate, здесь не дублируем
-  quietMotion = Boolean(scrub && scrub.active);
+  quietMotion = Boolean(scrub && scrub.active && scrub.isDragging && !scrub.tapGlide);
   renderHeader();
   renderStrip();
   renderTab();
@@ -1077,6 +1090,16 @@ function applyTheme() {
   // Тёмные варианты neutral/opaque больше не переключают тему сами.
   // Для белого режима используем от��ельные светлые варианты этих же палитр.
   if (!PALETTES.includes(state.palette)) state.palette = "default";
+  /* При смене палитры глушим @property-переход акцентного цвета на пару кадров:
+     иначе включение акцентной темы анимирует цвет от дефолтного синего
+     (initial #0a84ff) к выбранному — видна синяя вспышка. */
+  const prevPalette = root.dataset.weeklyPalette || "default";
+  if (prevPalette !== state.palette) {
+    root.classList.add("weeqo-no-accent-anim");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => root.classList.remove("weeqo-no-accent-anim"))
+    );
+  }
   root.dataset.theme = state.theme;
   if (state.palette === "default") root.removeAttribute("data-weekly-palette");
   else root.dataset.weeklyPalette = state.palette;
@@ -1749,7 +1772,9 @@ function bindStrip() {
       return;
     }
     const [y, m, d] = btn.dataset.date.split("-").map(Number);
-    selectDate(new Date(y, m - 1, d));
+    const newDate = new Date(y, m - 1, d);
+    const dir = newDate > state.selected ? "forward" : (newDate < state.selected ? "backward" : null);
+    selectDate(newDate, dir);
   });
 
   /* колесо мыши: шаг без задержки и без очереди — анимация перехватывается на лету */
@@ -1791,7 +1816,11 @@ function bindEvents() {
   arrow($("#prev-week"), -7);
   arrow($("#next-week"), 7);
 
-  $("#today-btn").addEventListener("click", () => selectDate(defaultSelectedDate()));
+  $("#today-btn").addEventListener("click", () => {
+    const d = defaultSelectedDate();
+    const dir = d > state.selected ? "forward" : d < state.selected ? "backward" : null;
+    selectDate(d, dir);
+  });
 
   /* завершённые пары: раскрытие с плавной анимацией высоты и проявления */
   $("#scene").addEventListener("click", (e) => {
@@ -1847,7 +1876,7 @@ function bindEvents() {
       const value = e.target.value;
       if (!/^#[0-9a-f]{6}$/i.test(value)) return;
       state.accent = value;
-      if (state.palette !== "accent") state.palette = "accent";
+      if (state.palette !== "accent" && state.palette !== "accent-plus") state.palette = "accent";
       applyTheme();
       renderHeader();
       save();
@@ -1944,16 +1973,103 @@ function bindEvents() {
     swipeStage.style.setProperty("--swipe-x", `${value.toFixed(2)}px`);
   };
 
-  const clearSwipe = (animated) => {
+  /* «Подглядывающий» соседний день: выезжает сбоку за пальцем. */
+  let peekEl = null;
+  let peekDir = 0;
+
+  const dropPeek = () => {
+    if (peekEl) peekEl.remove();
+    peekEl = null;
+    peekDir = 0;
+  };
+
+  const ensurePeek = (dir) => {
+    if (!scene) return null;
+    if (peekEl && peekDir === dir) return peekEl;
+    dropPeek();
+    const peek = document.createElement("div");
+    peek.className = "weekly-swipe-peek";
+    peek.setAttribute("aria-hidden", "true");
+    try {
+      peek.innerHTML = dayHtml(addDays(state.selected, dir), true);
+    } catch (err) {
+      peek.innerHTML = "";
+    }
+    const w0 = swipeStage && swipeStage.offsetWidth ? swipeStage.offsetWidth : window.innerWidth;
+    peek.style.transform = `translate3d(${dir > 0 ? w0 : -w0}px, 0, 0)`;
+    scene.appendChild(peek);
+    peekEl = peek;
+    peekDir = dir;
+    return peek;
+  };
+
+  /* Полоска выбора дня сверху начинает движение уже во время свайпа:
+     пилюля едет за прогрессом жеста, а не ждёт отпускания пальца. */
+  const linkStripToSwipe = (shift, width) => {
+    const strip = document.getElementById("strip");
+    const sel = document.getElementById("selection");
+    if (!strip || !sel || !width) return;
+    strip.classList.add("is-swipe-linked");
+    const idx = Number(strip.dataset.selectedIndex) || 0;
+    const progress = Math.max(-1, Math.min(1, -shift / width));
+    sel.style.transform = `translate3d(${(idx + progress) * 100}%, 0, 0)`;
+  };
+
+  const releaseStripLink = (durMs) => {
+    const strip = document.getElementById("strip");
+    const sel = document.getElementById("selection");
+    if (!strip || !sel) return;
+    strip.classList.remove("is-swipe-linked");
+    if (typeof durMs === "number") {
+      sel.style.transitionDuration = durMs + "ms";
+      window.setTimeout(() => sel.style.removeProperty("transition-duration"), durMs + 80);
+    }
+    sel.style.removeProperty("transform");
+  };
+
+  /* Если новый свайп начался, пока прошлый ещё доводится, — завершаем его
+     мгновенно: запоздалая смена дня посреди нового жеста выглядела миганием. */
+  let pendingSwipeCommit = null;
+
+  const finalizeSwipeCommit = (graceful) => {
+    const pc = pendingSwipeCommit;
+    if (!pc) return;
+    pendingSwipeCommit = null;
+    window.clearTimeout(pc.timer);
+    scene.classList.remove("is-swipe-commit");
+    scene.style.removeProperty("--swipe-anim-dur");
+    if (swipeStage) swipeStage.style.removeProperty("--swipe-x");
+    const oldScene = document.getElementById("day-scene");
+    if (oldScene) oldScene.remove();
+    selectDate(addDays(state.selected, pc.dir), pc.dir > 0 ? "forward" : "backward");
+    releaseStripLink();
+    if (peekEl) {
+      if (graceful) {
+        const fading = peekEl;
+        fading.classList.add("is-fading");
+        window.setTimeout(() => fading.remove(), 180);
+      } else {
+        peekEl.remove();
+      }
+    }
+    peekEl = null;
+    peekDir = 0;
+    if (!graceful) {
+      scene.querySelectorAll(".weekly-swipe-peek").forEach((node) => node.remove());
+    }
+  };
+
+  const clearSwipe = (animated, durMs) => {
     if (!swipeStage) return;
     scene.classList.remove("is-swiping");
     if (animated) {
+      const wait = typeof durMs === "number" ? durMs + 30 : 220;
       scene.classList.add("is-swipe-return");
       swipeStage.style.setProperty("--swipe-x", "0px");
       window.setTimeout(() => {
         scene.classList.remove("is-swipe-return");
         swipeStage.style.removeProperty("--swipe-x");
-      }, 220);
+      }, wait);
       return;
     }
     scene.classList.remove("is-swipe-return");
@@ -1977,6 +2093,12 @@ function bindEvents() {
         swipe = null;
         return;
       }
+      /* Быстрые свайпы подряд: прошлая доводка завершается мгновенно, а
+         затухающие «подглядывающие» слои убираются — иначе сцена мигает. */
+      finalizeSwipeCommit(false);
+      scene.querySelectorAll(".weekly-swipe-peek").forEach((node) => node.remove());
+      releaseStripLink();
+      scene.classList.remove("is-swipe-commit");
       swipe = { x: t.clientX, y: t.clientY, dx: 0, axis: null };
     },
     { passive: true }
@@ -1997,14 +2119,20 @@ function bindEvents() {
           scene.classList.add("is-swiping");
         }
       }
+      if (swipe.axis === "x" && e.cancelable) e.preventDefault();
       if (swipe.axis !== "x") return;
-      swipe.dx = dx;
-      /* резинка: сцена идёт мягче пальца и не улетает за край */
-      const eased = Math.sign(dx) * Math.min(Math.abs(dx) * 0.42, 52);
-      setSwipeShift(eased);
-    },
-    { passive: true }
-  );
+      /* Ограничение: дальше одного дня утащить нельзя — на краю жёсткий стоп,
+         поэтому «перепрыгнуть» через день одним жестом не получится. */
+      const w = swipeStage && swipeStage.offsetWidth ? swipeStage.offsetWidth : window.innerWidth;
+      const limited = Math.sign(dx) * Math.min(Math.abs(dx), w);
+      swipe.dx = limited;
+      /* Сцена идёт за пальцем 1:1, соседний день выезжает сбоку. */
+      const dir = limited < 0 ? 1 : -1;
+      const peek = ensurePeek(dir);
+      setSwipeShift(limited);
+      if (peek) peek.style.transform = `translate3d(${dir > 0 ? w + limited : limited - w}px, 0, 0)`;
+      linkStripToSwipe(limited, w);
+    }, { passive: false });
 
   const endSwipe = (commit) => {
     if (!swipe) return;
@@ -2013,14 +2141,46 @@ function bindEvents() {
     swipe = null;
     if (axis !== "x") {
       clearSwipe(false);
+      dropPeek();
+      releaseStripLink();
       return;
     }
-    if (commit && Math.abs(dx) >= 40) {
-      clearSwipe(false);
-      shiftDay(dx < 0 ? 1 : -1);
+    const w = swipeStage && swipeStage.offsetWidth ? swipeStage.offsetWidth : window.innerWidth;
+    const threshold = Math.max(64, Math.min(110, w * 0.22));
+    if (commit && Math.abs(dx) >= threshold) {
+      const dir = dx < 0 ? 1 : -1;
+      /* Доводим жест до конца: текущий день уезжает, соседний встаёт на место.
+         Длительность зависит от оставшегося пути — отпускание плавное. */
+      const rest = w - Math.abs(dx);
+      const commitDur = Math.round(Math.min(340, Math.max(170, 140 + rest * 0.45)));
+      scene.style.setProperty("--swipe-anim-dur", commitDur + "ms");
+      scene.classList.remove("is-swiping", "is-swipe-return");
+      scene.classList.add("is-swipe-commit");
+      setSwipeShift(dir > 0 ? -w : w);
+      if (peekEl) peekEl.style.transform = "translate3d(0px, 0, 0)";
+      /* Доводку держим отменяемой: если палец вернулся раньше таймера,
+         touchstart догонит переключение мгновенно (finalizeSwipeCommit). */
+      pendingSwipeCommit = {
+        dir,
+        timer: window.setTimeout(() => finalizeSwipeCommit(true), commitDur + 40),
+      };
       return;
     }
-    clearSwipe(true);
+    /* Отмена: сцена и соседний день плавно возвращаются на свои места. */
+    const returnDur = Math.round(Math.min(320, Math.max(170, 130 + Math.abs(dx) * 0.5)));
+    scene.style.setProperty("--swipe-anim-dur", returnDur + "ms");
+    if (peekEl) {
+      const peek = peekEl;
+      const backX = peekDir > 0 ? w : -w;
+      peekEl = null;
+      peekDir = 0;
+      peek.classList.add("is-returning");
+      peek.style.transform = `translate3d(${backX}px, 0, 0)`;
+      window.setTimeout(() => peek.remove(), returnDur + 40);
+    }
+    clearSwipe(true, returnDur);
+    releaseStripLink(returnDur);
+    window.setTimeout(() => scene.style.removeProperty("--swipe-anim-dur"), returnDur + 80);
   };
 
   scene.addEventListener("touchend", () => endSwipe(true), { passive: true });
@@ -2389,18 +2549,7 @@ function openProfile() {
           </div></div>
         </div>
         ${
-          canReview
-            ? `<button class="weekly-settings-row" type="button" data-act="open-tg">
-          <span class="weekly-settings-row-main">
-            <span class="weekly-settings-icon is-editor">${ICON_SHIELD}</span>
-            <span class="weekly-settings-copy">
-              <strong>заявки и редакторы</strong>
-              <span>${pendingCount ? "ждут проверки: " + pendingCount : "проверка замен и права"}</span>
-            </span>
-          </span>
-          ${ICON_CHEVRON}
-        </button>`
-            : ""
+          ""
         }
       </div>
       ${accountBlock}`;
@@ -3142,7 +3291,7 @@ function applySchedulePayload(payload) {
     if (!apply(payload)) return false;
     scheduleRevision += 1;
     if (!GROUPS.some((g) => g.id === state.group)) {
-      state.group = GROUPS.some((g) => g.id === DEFAULT_GROUP) ? DEFAULT_GROUP : (GROUPS[0] ? GROUPS[0].id : DEFAULT_GROUP);
+      state.group = "";
       state.draftGroup = state.group;
       save();
     }

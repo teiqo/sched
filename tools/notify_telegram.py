@@ -2,7 +2,7 @@
 """
 Рассылка уведомлений weeqo в Telegram.
 
-Запускается GitHub Action'ом (.github/workflows/notify-telegram.yml) каждые 15 минут.
+Запускается GitHub Action'ом (.github/workflows/notify-telegram.yml) каждые 5 минут.
 Секреты репозитория (Settings -> Secrets and variables -> Actions):
   TELEGRAM_BOT_TOKEN — токен бота от @BotFather (тот же, чей хэш в js/config.js)
   FIREBASE_API_KEY   — Web API Key проекта Firebase
@@ -148,6 +148,18 @@ def describe_swap(enc_key, entry):
     return line
 
 
+def describe_report(entry):
+    who = entry.get("byName") or entry.get("by") or "без входа"
+    group = entry.get("group") or "?"
+    text = (entry.get("message") or "").strip()
+    line = "\U0001F41E отчёт об ошибке — %s (%s):\n%s" % (who, group, text[:800])
+    if entry.get("hasFile"):
+        line += "\n\U0001F4CE файл: %s — смотри на сайте (настройки → отчёты об ошибках)" % (
+            entry.get("fileName") or "вложение"
+        )
+    return line
+
+
 def read_owner_id():
     """TELEGRAM_OWNER_ID из js/local-config.js / config.js (для тестовых сообщений)."""
     for path in (os.path.join(ROOT, "js", "local-config.js"), CONFIG_JS):
@@ -226,6 +238,42 @@ def main():
         fresh.append((t, describe_swap(enc, entry)))
     fresh.sort()
 
+    # --- новые заявки на проверку (weeqo-pending) -> владельцу и редакторам ---
+    pending_reqs = fb_get(root, "weeqo-pending", token)
+    seen_pending = state.get("pending") or {}
+    fresh_pending = []
+    for enc, entry in pending_reqs.items():
+        if not isinstance(entry, dict):
+            continue
+        t = entry.get("updatedAt") or entry.get("createdAt") or 0
+        if t <= (seen_pending.get(enc) or 0):
+            continue
+        seen_pending[enc] = t
+        if not state.get("pending"):
+            continue  # первый запуск — только запоминаем, чтобы не заспамить
+        if now_ms - t > 6 * 3600 * 1000:
+            continue
+        fresh_pending.append((t, describe_swap(enc, entry).replace("\U0001F514", "\U0001F550", 1)))
+    fresh_pending.sort()
+
+    # --- отчёты об ошибках (weeqo-reports) -> владельцу и редакторам ---
+    reports = fb_get(root, "weeqo-reports", token)
+    seen_reports = state.get("reports") or {}
+    fresh_reports = []
+    for rid, entry in reports.items():
+        if not isinstance(entry, dict):
+            continue
+        t = entry.get("createdAt") or 0
+        if t <= (seen_reports.get(rid) or 0):
+            continue
+        seen_reports[rid] = t
+        if not state.get("reports"):
+            continue  # первый запуск — только запоминаем
+        if now_ms - t > 24 * 3600 * 1000:
+            continue
+        fresh_reports.append((t, describe_report(entry)))
+    fresh_reports.sort()
+
     # --- обновление базового расписания ---
     schedule_line = None
     try:
@@ -258,24 +306,49 @@ def main():
                 sent += 1
             if r != "ok":
                 status = r
+        if pref.get("pending"):
+            for _, line in fresh_pending:
+                r = tg_send(tg_id, line)
+                if r == "ok":
+                    sent += 1
+                if r != "ok":
+                    status = r
         if status == "ok":
             fails.pop(tg_id, None)
         elif status == "forbidden":
             fails[tg_id] = fails.get(tg_id, 0) + 1
 
-    # 403 (человек ещё не нажимал /start) — терпим ~сутки (96 запусков по 15 мин):
+    # --- отчёты об ошибках: владельцу и редакторам с включёнными заявками ---
+    if fresh_reports:
+        recipients = set()
+        owner = read_owner_id()
+        if owner:
+            recipients.add(owner)
+        for tg_id, pref in subs.items():
+            if isinstance(pref, dict) and pref.get("pending"):
+                recipients.add(tg_id)
+        for _, line in fresh_reports:
+            for tg_id in recipients:
+                r = tg_send(tg_id, line)
+                if r == "ok":
+                    sent += 1
+
+    # 403 (человек ещё не нажимал /start) — терпим ~сутки (288 запусков по 5 мин):
     # он может нажать /start позже и начнёт получать сообщения сам.
     # (Запись в firebase отсюда не удаляется — это только защита от лишних вызовов.)
-    for tg_id in [t for t, c in fails.items() if c >= 96]:
+    for tg_id in [t for t, c in fails.items() if c >= 288]:
         subs.pop(tg_id, None)
         fails.pop(tg_id, None)
         log("подписка пропускается (403 уже ~сутки):", tg_id)
 
     state["fails"] = fails
     state["swaps"] = seen_swaps
+    state["pending"] = seen_pending
+    state["reports"] = seen_reports
     state["schedule"] = seen_schedule
     save_state(state)
-    log("готово: замен %d, расписание %s, сообщений %d" % (len(fresh), "да" if schedule_line else "нет", sent))
+    log("готово: замен %d, заявок %d, отчётов %d, расписание %s, сообщений %d" % (
+        len(fresh), len(fresh_pending), len(fresh_reports), "да" if schedule_line else "нет", sent))
     return 0
 
 

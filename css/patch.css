@@ -333,7 +333,7 @@
 
 /* те же ключевые кадры, что и у карточек дня: сдвиг сверху, блюр и проявление */
 .completed-lessons[data-open="true"] .agenda-list.is-completed > * {
-  animation: weekly-completed-row-in var(--page-slide-dur, 0.25s)
+  animation: weekly-completed-row-in var(--duration-fast, 0.4s)
     var(--page-slide-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
@@ -671,13 +671,12 @@ html.weekly-page #root::-webkit-scrollbar,
   color-scheme: light !important;
 }
 
-/* живая пара: при смене дня двигаем только положение,
-   прозрачность не трогаем — иначе цвет внутри бокса резко щёлкает в конце */
-.weekly-active-day-scene.is-entering .live-lesson-card {
-  animation: weekly-live-card-in var(--duration-fast, 0.25s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
-  animation-delay: var(--duration-stagger, 40ms) !important;
-  opacity: 1 !important;
-  will-change: transform;
+/* живая пара сегодня: то же появление, что у остальных пар */
+.weekly-active-day-scene.is-entering .live-lesson-card,
+#stage .weekly-active-day-scene.is-entering .live-lesson-card {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
+  animation-delay: var(--duration-stagger, 70ms) !important;
+  will-change: transform, opacity;
 }
 
 @keyframes weekly-live-card-in {
@@ -1771,13 +1770,15 @@ html.weekly-page #root::-webkit-scrollbar,
 
 /* ================= длительности анимаций (чуть длиннее) ================= */
 :root {
-  --page-slide-dur: 0.34s;
-  --page-fade-dur: 0.32s;
-  --duration-fast: 0.32s;
-  --duration-medium: 0.42s;
-  --duration-stagger: 55ms;
-  --stagger-dur: 0.45s;
-  --stagger-stagger: 55ms;
+  --page-slide-dur: 0.42s;
+  --page-fade-dur: 0.4s;
+  --duration-fast: 0.4s;
+  --duration-medium: 0.52s;
+  --duration-stagger: 70ms;
+  --stagger-dur: 0.55s;
+  --stagger-stagger: 70ms;
+  --stagger-distance: 14px;
+  --distance-medium: 14px;
 }
 
 /* во время скролла не держим лишние слои: тяжёлые will-change только на входе */
@@ -1984,7 +1985,7 @@ html.weekly-page #root::-webkit-scrollbar,
   transition: none;
 }
 .weekly-days-scene.is-swipe-return .weekly-active-day-stage {
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--swipe-anim-dur, 0.22s) cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* --- шторка замены: выбор предмета и подсказка --- */
@@ -2279,7 +2280,7 @@ a.weekly-settings-row.weekly-settings-link strong {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 50%;
   border: 1px solid rgba(128, 128, 128, 0.25);
   background: transparent;
   color: inherit;
@@ -3823,7 +3824,7 @@ a.weekly-settings-row,
 #bell-btn,
 #settings-trigger {
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: 50%;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, filter 0.15s ease;
 }
 
@@ -4332,17 +4333,17 @@ a.weekly-settings-row,
   transition-property: color, background-color, opacity !important;
 }
 #stage .weekly-active-day-scene.is-entering .live-lesson-card {
-  animation: t-row-in var(--duration-fast, 0.32s) var(--ease-smooth-out) both !important;
-  animation-delay: var(--duration-stagger, 55ms) !important;
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: var(--duration-stagger, 70ms) !important;
 }
 #stage .weekly-active-day-scene.is-entering .agenda-row {
-  animation: t-row-in var(--duration-fast, 0.32s) var(--ease-smooth-out) both !important;
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
 }
-#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(1) { animation-delay: calc(var(--duration-stagger, 55ms) * 2); }
-#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(2) { animation-delay: calc(var(--duration-stagger, 55ms) * 3); }
-#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(3) { animation-delay: calc(var(--duration-stagger, 55ms) * 4); }
-#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(4) { animation-delay: calc(var(--duration-stagger, 55ms) * 5); }
-#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(n+5) { animation-delay: calc(var(--duration-stagger, 55ms) * 6); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(1) { animation-delay: calc(var(--duration-stagger, 70ms) * 2); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(2) { animation-delay: calc(var(--duration-stagger, 70ms) * 3); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(3) { animation-delay: calc(var(--duration-stagger, 70ms) * 4); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(4) { animation-delay: calc(var(--duration-stagger, 70ms) * 5); }
+#stage .weekly-active-day-scene.is-entering .agenda-row:nth-child(n+5) { animation-delay: calc(var(--duration-stagger, 70ms) * 6); }
 .weekly-future-days {
   animation: none;
 }
@@ -4512,11 +4513,13 @@ a.weekly-settings-row,
 /* Акцент+: выбранный оттенок, светлый блик и более глубокая тень того же цвета.
    Фон статичен; небольшой перелив рисуется только на видимой пилюле. */
 :root[data-weekly-palette="accent-plus"] {
+  transition: background 0.3s ease, background-color 0.3s ease;
   --weekly-accent-gradient: linear-gradient(135deg, var(--weekly-gradient-light), var(--weekly-accent) 42%, var(--weekly-gradient-dark) 82%, var(--weekly-gradient-light));
   --weekly-plus-canvas: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--weekly-accent) 16%, transparent), transparent 65%),
     linear-gradient(150deg, color-mix(in srgb, var(--weekly-accent) 13%, #020207), #030308 70%);
 }
 :root[data-theme="light"][data-weekly-palette="accent-plus"] {
+  transition: background 0.3s ease, background-color 0.3s ease;
   --weekly-plus-canvas: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--weekly-accent) 14%, transparent), transparent 65%),
     linear-gradient(150deg, color-mix(in srgb, var(--weekly-accent) 19%, #ffffff), #fbfbfd 80%);
 }
@@ -4654,4 +4657,217 @@ a.weekly-settings-row,
 }
 #live-host:empty {
   display: none;
+}
+
+
+/* Уведомления и настройки — круглые кнопки */
+.weekly-header-actions .weekly-settings-trigger,
+.weekly-header-actions .weekly-bell-btn,
+.weekly-header-actions .weekly-tg-btn,
+#refresh-btn,
+#bell-btn,
+#settings-trigger {
+  border-radius: 50% !important;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  overflow: hidden;
+}
+.weekly-header-actions .weekly-settings-trigger.is-avatar {
+  border-radius: 50% !important;
+  padding: 2px;
+}
+@media (max-width: 430px) {
+  .weekly-header-actions .weekly-settings-trigger,
+  .weekly-header-actions .weekly-bell-btn,
+  .weekly-header-actions .weekly-tg-btn,
+  #bell-btn,
+  #settings-trigger {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 50% !important;
+  }
+}
+
+
+/* Каскад появления: перерывы и live-host вместе с парами */
+#stage .weekly-active-day-scene.is-entering .agenda-break,
+#stage .weekly-active-day-scene.is-entering #live-host {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+}
+#stage .weekly-active-day-scene.is-entering .agenda-list .agenda-row,
+#stage .weekly-active-day-scene.is-entering .agenda-list .agenda-break {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+}
+/* Завершённые пары сегодня при входе в день — лёгкое появление блока */
+#stage .weekly-active-day-scene.is-entering .completed-lessons {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(var(--duration-stagger, 70ms) * 1) !important;
+}
+
+
+/* ===== Акцент+: плавные градиенты при «все пары» и «окна» ===== */
+/* Плавный переход самого акцентного цвета (и всех color-mix от него). */
+@property --weekly-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a84ff;
+}
+@property --weekly-accent-readable {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a84ff;
+}
+:root[data-weekly-palette="accent-plus"],
+:root[data-weekly-palette="accent"] {
+  transition-property: --weekly-accent, --weekly-accent-readable;
+  transition-duration: 0.35s;
+  transition-timing-function: ease;
+}
+
+/* Единый неподвижный холст: градиент фона рисуется один раз на весь экран
+   и не перерисовывается при листании дней, скролле и пересоздании списков. */
+:root[data-weekly-palette="accent-plus"] html.weekly-page {
+  background: transparent !important;
+}
+:root[data-weekly-palette="accent-plus"] body {
+  background: transparent !important;
+}
+:root[data-weekly-palette="accent-plus"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--weekly-plus-canvas);
+  pointer-events: none;
+  animation: weeqo-plus-canvas-in 0.4s ease-out both;
+}
+@keyframes weeqo-plus-canvas-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+:root[data-weekly-palette="accent-plus"] #root,
+:root[data-weekly-palette="accent-plus"] .weekly-app,
+:root[data-weekly-palette="accent-plus"] .weekly-page,
+:root[data-weekly-palette="accent-plus"] #app {
+  background: transparent !important;
+}
+
+/* Подложки под парами: градиент не дёргается — ограничиваем перерисовку рамкой блока
+   и плавно проявляем при пересоздании (переключение «все пары» / «окна»). */
+:root[data-weekly-palette="accent-plus"] #stage .agenda-list {
+  contain: paint;
+}
+:root[data-weekly-palette="accent-plus"] #stage .live-lesson-card:not(.is-current):not(.is-overlap) {
+  contain: paint;
+}
+:root[data-weekly-palette="accent-plus"] #stage .agenda-list,
+:root[data-weekly-palette="accent-plus"] #stage .live-lesson-card:not(.is-current),
+:root[data-weekly-palette="accent-plus"] #stage .live-card-glass {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Перерывы и строки окон в акцент+ получают тот же тонированный фон, что и список, —
+   иначе на стыках видны «полосы» при каскадном появлении. */
+:root[data-weekly-palette="accent-plus"] #stage .agenda-break {
+  background: transparent;
+}
+
+/* Перелив пилюли выбранного дня не крутится во время самого жеста —
+   экономим кадры на свайпе и убираем микродёргания. */
+:root[data-weekly-palette="accent-plus"] .date-strip:is(.is-scrubbing, .is-settling, .is-pressing) .date-strip-selection::before {
+  animation-play-state: paused;
+}
+
+/* Сцена при листании в акцент+: старый день не остаётся под новым с градиентом —
+   оба слоя одинаково полупрозрачны только в момент перехода. */
+:root[data-weekly-palette="accent-plus"] .weekly-active-day-scene.is-leaving,
+:root[data-weekly-palette="accent-plus"] .weekly-active-day-scene.is-entering {
+  background: transparent;
+}
+
+/* Окна в парах: фон перетекает плавно при переключении палитры/акцента */
+:root #stage .agenda-row.is-window-row {
+  transition: background-color 0.35s ease;
+}
+
+/* --- свайп: соседний день подглядывает сбоку + больше зоны жеста --- */
+.weekly-days-scene {
+  position: relative;
+  /* Когда пар мало, пустое место ниже тоже работает зоной свайпа. */
+  min-height: calc(var(--weekly-viewport-height, 100dvh) - 236px);
+}
+
+.weekly-swipe-peek {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 3;
+  pointer-events: none;
+  transform: translate3d(100%, 0, 0);
+  transition: none;
+  will-change: transform;
+}
+
+.weekly-swipe-peek.is-returning {
+  transition: transform var(--swipe-anim-dur, 0.22s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.weekly-swipe-peek.is-fading {
+  transition: opacity 0.16s ease-out;
+  opacity: 0;
+}
+
+.weekly-days-scene.is-swipe-commit .weekly-active-day-stage {
+  transform: translate3d(var(--swipe-x, 0px), 0, 0);
+  transition: transform var(--swipe-anim-dur, 0.26s) cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.weekly-days-scene.is-swipe-commit .weekly-swipe-peek {
+  transition: transform var(--swipe-anim-dur, 0.26s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weekly-days-scene.is-swipe-commit .weekly-active-day-stage,
+  .weekly-days-scene.is-swipe-commit .weekly-swipe-peek,
+  .weekly-swipe-peek.is-returning,
+  .weekly-swipe-peek.is-fading {
+    transition: none;
+  }
+}
+
+/* Полоска выбора дня следует за свайпом без отставания */
+.date-strip.is-swipe-linked .date-strip-selection {
+  transition: none;
+}
+
+/* Подглядывающий день: окна и акцент+ подложки сразу нужного цвета
+   (правила основной сцены привязаны к #stage, а peek живёт в #scene) */
+.weekly-swipe-peek .agenda-row.is-window-row,
+.weekly-swipe-peek .agenda-row.is-window-row:hover,
+.weekly-swipe-peek .agenda-row.is-window-row:active {
+  background: var(--weekly-window-bg) !important;
+}
+:root[data-weekly-schedule-view="light"] .weekly-swipe-peek .agenda-row.is-window-row {
+  min-height: 62px;
+  padding: 9px 0;
+}
+:root[data-theme="dark"][data-weekly-palette="accent-plus"] .weekly-swipe-peek .agenda-list,
+:root[data-theme="dark"][data-weekly-palette="accent-plus"] .weekly-swipe-peek .live-lesson-card:not(.is-current) {
+  background: linear-gradient(125deg, color-mix(in srgb, var(--weekly-accent) 12%, #05050b), color-mix(in srgb, var(--weekly-accent) 4%, #040407)) !important;
+}
+:root[data-theme="light"][data-weekly-palette="accent-plus"] .weekly-swipe-peek .agenda-list,
+:root[data-theme="light"][data-weekly-palette="accent-plus"] .weekly-swipe-peek .live-lesson-card:not(.is-current) {
+  background: linear-gradient(125deg, #ffffff, color-mix(in srgb, var(--weekly-accent) 9%, #ffffff)) !important;
+}
+
+/* При переключении палитры акцентный цвет не анимируем — иначе синяя вспышка
+   от initial #0a84ff при включении акцентной темы. */
+:root.weeqo-no-accent-anim {
+  transition-property: none !important;
 }
