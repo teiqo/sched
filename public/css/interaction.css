@@ -42,22 +42,23 @@
 :root #stage .sched-drag-board > .agenda-row { opacity: 1; }
 :root .sched-drag-board > .agenda-row.is-drag-ghost {
   opacity: 1; border-color: transparent; color: var(--sched-secondary); background: var(--sched-fill);
-  outline: 1px dashed color-mix(in srgb, var(--sched-blue) 45%, transparent); outline-offset: -5px;
+  outline: 1px dashed color-mix(in srgb, var(--sched-blue) 45%, transparent); outline-offset: 5px;
 }
 :root .sched-drag-board > .agenda-row.is-drag-src {
   visibility: visible; opacity: 1; border: 1px solid transparent;
-  outline: 1px dashed var(--sched-blue); outline-offset: -5px;
+  outline: 1px dashed var(--sched-blue); outline-offset: 5px;
   background: color-mix(in srgb, var(--sched-blue) 6%, var(--sched-surface)); box-shadow: none;
 }
 :root .sched-drag-board > .agenda-row.is-drag-src .agenda-row-content,
 :root .sched-drag-board > .agenda-row.is-drag-src .lesson-swap-btn { visibility: hidden; }
 :root .sched-drag-board > .agenda-row.is-drop-target {
-  border: 1px solid transparent; outline: 2px dashed var(--sched-blue); outline-offset: -5px;
+  border: 1px solid transparent; outline: 2px dashed var(--sched-blue); outline-offset: 5px;
 }
 :root .sched-drag-board .lesson-swap-btn { visibility: hidden; }
 :root .is-drag-float.agenda-row, :root .is-drag-float.live-lesson-card {
   position: fixed !important; z-index: 900; box-sizing: border-box; margin: 0 !important;
   pointer-events: none; visibility: visible; opacity: 1; transform: scale(.975) !important;
+  transform-origin: center center !important;
   animation: none !important; transition: none !important; max-width: 100vw;
   border-radius: 12px; box-shadow: 0 2px 6px #0001, 0 12px 30px #0002;
 }
@@ -173,7 +174,7 @@ body.is-dragging-pair #scene { overflow-anchor: none; }
 
 @media (max-width: 767px), (pointer: coarse) {
   /* Always a bottom line: pressing, dragging and settling cannot raise a pill. */
-  :root #strip { --strip-selection-on: var(--sched-blue); }
+  :root #strip { --strip-selection-on: #fff; }
   :root #strip.date-strip #selection::before {
     transform: scaleY(0.050847458) !important;
     transform-origin: 50% 100% !important;
@@ -437,4 +438,128 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
+}
+
+
+/* Weak-device mode keeps the cheap horizontal phone swipe, but never replays
+   the per-lesson entrance cascade after the new day is committed. */
+:root[data-perf] #stage .sched-active-day-scene.is-entering,
+:root[data-perf] #stage .sched-active-day-scene.is-entering :is(
+  .agenda-row,
+  .agenda-break,
+  .live-lesson-card,
+  #live-host,
+  .completed-lessons,
+  .t-stagger-line
+) {
+  animation: none !important;
+  animation-name: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+:root[data-perf] #stage .sched-active-day-scene.is-entering :is(
+  .agenda-row,
+  .agenda-break,
+  .live-lesson-card,
+  #live-host,
+  .completed-lessons,
+  .t-stagger-line
+) {
+  transform: none !important;
+}
+
+/* On touch, the raised blue selector stays behind high-contrast day text. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index][data-under-selection="true"],
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index].is-selected {
+    color: #fff !important;
+  }
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index][data-under-selection="true"] > :is(span:first-child,strong),
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index].is-selected > :is(span:first-child,strong) {
+    position: relative;
+    z-index: 4;
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 24%);
+  }
+}
+
+
+/* Mobile report dialogs use the visual viewport and keep every card inside the
+   right safe area. This also fixes the owner report list, whose padded sheet
+   previously used content-box sizing and could extend past the phone edge. */
+#report-backdrop,
+#reports-backdrop {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+}
+#report-backdrop :is(.sched-report-sheet,#report-sheet-content),
+#reports-backdrop :is(.sched-reports-sheet,.sched-reports-list,.sched-report-card) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+#reports-backdrop .sched-reports-sheet {
+  width: min(600px, 100%) !important;
+  margin-inline: auto !important;
+  overflow-x: hidden;
+}
+#reports-backdrop :is(.sched-report-card-top,.sched-report-card-sender,.sched-report-card-file) {
+  min-width: 0;
+  max-width: 100%;
+}
+#reports-backdrop :is(.sched-report-card-sender,.sched-report-card-msg,.sched-report-file-link) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+#reports-backdrop .sched-report-card-file {
+  flex-wrap: wrap;
+}
+#reports-backdrop .sched-report-card-thumb,
+#reports-backdrop .sched-report-card-thumb img {
+  max-width: 100%;
+  height: auto;
+}
+#reports-backdrop .sched-report-card-diag pre {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media (max-width: 640px) {
+  #report-backdrop,
+  #reports-backdrop {
+    padding-top: max(12px, env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  #reports-backdrop .sched-reports-sheet {
+    width: 100% !important;
+    padding: 18px 16px !important;
+    border-radius: 20px;
+  }
+  #reports-backdrop .sched-report-card {
+    width: 100%;
+    padding: 14px;
+  }
+}
+
+
+/* Performance mode: the viewport itself still slides on #stage, but no lesson,
+   break, future-day or nested card runs an entrance animation. */
+:root[data-perf] #stage * {
+  animation: none !important;
+  animation-name: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
 }

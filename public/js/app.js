@@ -91,7 +91,7 @@ const systemTheme = () =>
     ? "light"
     : "dark";
 
-/* Режим произво��ительности: data-perf на <html>, по CSS остаются только
+/* Режим производительности: data-perf на <html>, по CSS остаются только
    лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются. */
 function applyPerfMode() {
   if (state.perfMode) document.documentElement.setAttribute("data-perf", "1");
@@ -467,7 +467,7 @@ function isRoomOnlySwap(s) {
 }
 
 function changeLabel(slot) {
-  return slot.moved ? "перенос" : isRoomOnlySwap(slot) ? "другая аудит��рия" : "замена";
+  return slot.moved ? "перенос" : isRoomOnlySwap(slot) ? "другая аудитория" : "замена";
 }
 
 function liveCardHtml(live, dIso) {
@@ -1255,7 +1255,7 @@ function save() {
       }),
     );
   } catch (e) {
-    /* пр������ватный режим */
+    /* приватный режим */
   }
 }
 
@@ -1435,7 +1435,7 @@ function scrubFrameStep(now) {
   if (!scrub) return;
 
   if (!scrub.pointerDown) {
-    /* Плавное выравнивание на день после отпускания пальц�� */
+    /* Плавное выравнивание на день после отпускания пальца */
     const elapsed = Math.max(0, now - (scrub.settleStartTime || now));
     const duration = scrub.settleDuration || 260;
     const progress = Math.min(1, elapsed / duration);
@@ -1617,7 +1617,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    /* Предыдущий жест мог не успеть доиграть (резко отпустили и ��разу нажали
+    /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
     dragClick = false;
@@ -1693,7 +1693,7 @@ function bindStrip() {
       renderedIndex: selectedIndex,
       underIndex: selectedIndex,
       /* Тап-режим: после отпускания пилюля доводится до нажатого дня,
-         а не тел��портируется на него сбросом трансформа. */
+         а не телепортируется на него сбросом трансформа. */
       tapGlide: false,
       week: weekStart(state.selected),
       selection,
@@ -2468,7 +2468,7 @@ function openProfile() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
             </span>
             <span class="sched-settings-copy">
-              <strong>настроить уведом��ения</strong>
+              <strong>настроить уведомления</strong>
               <span>что показывать и куда дублировать</span>
             </span>
           </span>
@@ -2824,8 +2824,22 @@ function init() {
   tickTimer = window.setInterval(tick, 1000);
 
   if (!LOCAL_PREVIEW && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
-    /* updateViaCache: none — проверка новой версии SW не упирается в HTTP-кэш. */
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {});
+    /* Новая версия должна заменить уже открытую старую страницу, иначе в памяти
+       остаются прежние строки и анимации даже после обновления файлов на GitHub. */
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let swReloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || swReloading) return;
+      swReloading = true;
+      location.reload();
+    });
+    navigator.serviceWorker
+      .register("sw.js", { updateViaCache: "none" })
+      .then((registration) => {
+        registration.update().catch(() => {});
+        registration.waiting?.postMessage({ type: "skip-waiting" });
+      })
+      .catch(() => {});
   }
 }
 
@@ -3001,7 +3015,7 @@ function openMoveSheet(dIso, n) {
   backdrop.querySelector("[data-move-to]:not(:disabled)")?.focus({ preventScroll: true });
 }
 
-/* Базовое расписание лежит в slotsForBase, а здесь накладыва��тся замены. */
+/* Базовое расписание лежит в slotsForBase, а здесь накладываются замены. */
 function slotsFor(d) {
   const list = slotsForBase(d);
   if (!list.length) return list;
@@ -3793,7 +3807,7 @@ function telegramSessionFromResult(result) {
 function authStatusHtml() {
   const message = tgAuthState === "checking" ? "проверяем вход…"
     : tgAuthState === "offline" ? "нет связи с сервером входа. профиль сохранён; общие правки пока недоступны."
-    : tgAuthState === "needs_login" ? "нужно один раз войти заново: для уведомлений теперь используется подтверждённая сесси�� sched."
+    : tgAuthState === "needs_login" ? "нужно один раз войти заново: для уведомлений теперь используется подтверждённая сессия sched."
     : "";
   if (!message) return "";
   return `<div class="sched-auth-status" role="status"><p>${escapeHtml(message)}</p>${tgAuthState === "offline"
@@ -3954,7 +3968,7 @@ function prepareTelegramLogin() {
 }
 function startTelegramLogin() {
   if (LOCAL_PREVIEW) { startLocalTelegramLogin(); return true; }
-  if (!tgConfigured()) { toast("в��од пока не настроен администратором."); return false; }
+  if (!tgConfigured()) { toast("вход пока не настроен администратором."); return false; }
   telegramLogin.start(); return true;
 }
 
@@ -4697,7 +4711,7 @@ function renderTgSheetBody() {
 
 function openTgSheet() {
   closeTgSheet();
-  /* Шторка нужна и вошедшим (заявки/реда��торы), пускаем при живой
+  /* Шторка нужна и вошедшим (заявки/редакторы), пускаем при живой
      сессии или настроенном боте. */
   if (!tgConfigured() && !tgSession) {
     toast("вход через телеграм не настроен");
@@ -4881,7 +4895,7 @@ function saveNotifs() {
   try {
     localStorage.setItem(NOTIF_KEY, JSON.stringify(notifList || []));
   } catch (e) {
-    /* приватный ��ежим */
+    /* приватный режим */
   }
 }
 
@@ -5432,7 +5446,7 @@ function openReportSheet() {
     <div class="sched-report-file-preview" id="report-file-preview" hidden><div class="sched-report-file-info"><strong id="report-file-name"></strong><small id="report-file-size"></small></div><button type="button" id="report-file-remove" aria-label="удалить файл">×</button></div>
     <p id="report-file-error" class="sched-report-file-error" role="alert" hidden></p>
     <label class="sched-report-include"><input id="report-include-diag" type="checkbox" checked><span>прикрепить диагностику</span></label>
-    <details class="sched-report-details"><summary>что войдёт в диагнос��ику</summary><p class="sched-report-privacy">полные настройки польз��вателя, включая уведомления; выбранный день и пары, версия приложения, устройство, состояние подключения и последние ошибки. без токенов, паролей и истории ��раузера.</p><pre class="sched-report-diag-pre">${escapeHtml(diag)}</pre><button type="button" class="sched-report-download" id="report-download-diag">скачать диагностику</button></details>
+    <details class="sched-report-details"><summary>что войдёт в диагностику</summary><p class="sched-report-privacy">полные настройки пользователя, включая уведомления; выбранный день и пары, версия приложения, устройство, состояние подключения и последние ошибки. без токенов, паролей и истории браузера.</p><pre class="sched-report-diag-pre">${escapeHtml(diag)}</pre><button type="button" class="sched-report-download" id="report-download-diag">скачать диагностику</button></details>
     <p class="sched-report-form-error" id="report-form-error" role="alert" hidden></p>
     <div class="sched-replace-actions"><button type="button" data-report="close">отмена</button><button type="button" class="is-primary" id="report-submit-btn">отправить</button></div>
   </div></div>`;

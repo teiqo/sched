@@ -176,6 +176,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       drag.scrollSpacer = spacer;
       scroller.scrollTop += items.get(p.n).getBoundingClientRect().top - rect.top;
     }
+    /* The drag board can be wider or shift after windows are revealed. Recenter
+       the scaled card against the actual dashed source placeholder, not the old row. */
+    centerCloneOnPlaceholder();
     if (!p.touchBody) { try { scene.setPointerCapture(p.pointerId); } catch (_) {} }
     try { navigator.vibrate?.(10); } catch (_) {}
     frame = requestAnimationFrame(animate);

@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-08-v18-motion-notifications";
+const CACHE = CACHE_PREFIX + "2026-09-08-v24-force-fresh-ui";
 const ASSETS = [
   "./",
   "./index.html",
@@ -54,15 +54,19 @@ self.addEventListener("install", (event) => {
   );
 });
 self.addEventListener("activate", (event) => {
+  let hadPreviousCache = false;
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(
+      .then((keys) => {
+        hadPreviousCache = keys.some((key) => key !== CACHE && isOurs(key));
+        return Promise.all(
           keys.filter((key) => key !== CACHE && isOurs(key)).map((key) => caches.delete(key)),
-        ),
-      )
-      .then(() => self.clients.claim()),
+        );
+      })
+      .then(() => self.clients.claim())
+      .then(() => hadPreviousCache ? self.clients.matchAll({ type: "window", includeUncontrolled: true }) : [])
+      .then((clients) => Promise.all(clients.map((client) => client.navigate(client.url).catch(() => null)))),
   );
 });
 self.addEventListener("message", (event) => {
