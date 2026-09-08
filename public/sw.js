@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-08-v24-force-fresh-ui";
+const CACHE = CACHE_PREFIX + "2026-09-09-v27-stable-profile-report-dash";
 const ASSETS = [
   "./",
   "./index.html",

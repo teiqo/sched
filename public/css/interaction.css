@@ -42,17 +42,17 @@
 :root #stage .sched-drag-board > .agenda-row { opacity: 1; }
 :root .sched-drag-board > .agenda-row.is-drag-ghost {
   opacity: 1; border-color: transparent; color: var(--sched-secondary); background: var(--sched-fill);
-  outline: 1px dashed color-mix(in srgb, var(--sched-blue) 45%, transparent); outline-offset: 5px;
+  outline: 2px dashed color-mix(in srgb, var(--sched-blue) 58%, transparent); outline-offset: 8px;
 }
 :root .sched-drag-board > .agenda-row.is-drag-src {
   visibility: visible; opacity: 1; border: 1px solid transparent;
-  outline: 1px dashed var(--sched-blue); outline-offset: 5px;
+  outline: 2px dashed var(--sched-blue); outline-offset: 8px;
   background: color-mix(in srgb, var(--sched-blue) 6%, var(--sched-surface)); box-shadow: none;
 }
 :root .sched-drag-board > .agenda-row.is-drag-src .agenda-row-content,
 :root .sched-drag-board > .agenda-row.is-drag-src .lesson-swap-btn { visibility: hidden; }
 :root .sched-drag-board > .agenda-row.is-drop-target {
-  border: 1px solid transparent; outline: 2px dashed var(--sched-blue); outline-offset: 5px;
+  border: 1px solid transparent; outline: 3px dashed var(--sched-blue); outline-offset: 8px;
 }
 :root .sched-drag-board .lesson-swap-btn { visibility: hidden; }
 :root .is-drag-float.agenda-row, :root .is-drag-float.live-lesson-card {
@@ -562,4 +562,92 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   animation-duration: 0s !important;
   animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
+}
+:root[data-perf] #stage *:not(.sched-active-day-stage),
+:root[data-perf] #stage *:not(.sched-active-day-stage)::before,
+:root[data-perf] #stage *:not(.sched-active-day-stage)::after {
+  transition: none !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+/* .sched-active-day-stage is the only exception: it is the cheap compositor
+   layer that follows a finger during a real horizontal phone swipe. */
+
+
+/* A dragged card is moved under body, outside .sched-app, so it must carry the
+   application typeface explicitly — including the current live lesson. */
+:root :is(.agenda-row,.live-lesson-card).is-drag-float {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
+  font-style: normal;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+:root :is(.agenda-row,.live-lesson-card).is-drag-float :is(button,input,select,textarea) {
+  font: inherit;
+}
+
+/* The replacement form never grows sideways. Teacher and room use equal,
+   shrinkable columns and every control remains inside its grid cell. */
+#swap-backdrop {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+#swap-backdrop .sched-replace-sheet {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden !important;
+  scrollbar-gutter: auto;
+}
+#swap-backdrop .sched-replace-sheet,
+#swap-backdrop .sched-replace-sheet * {
+  box-sizing: border-box;
+}
+#swap-backdrop .sched-replace-meta-grid {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+#swap-backdrop .sched-replace-meta-grid > *,
+#swap-backdrop .sched-replace-field,
+#swap-backdrop .sched-replace-select {
+  min-width: 0;
+  max-width: 100%;
+}
+#swap-backdrop :is(input,select) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+#swap-backdrop .sched-replace-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+#swap-backdrop .sched-replace-actions > button {
+  min-width: 0;
+}
+@media (max-width: 360px) {
+  #swap-backdrop .sched-replace-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* The attachment dash sits outside the button instead of eating into its
+   content area. The sheet padding leaves enough room for this outer frame. */
+#report-backdrop .sched-report-dropzone::before {
+  inset: -6px !important;
+  border-width: 2px;
+  border-radius: 20px;
+}
+
+/* Background authentication refreshes may rebuild profile content, but they
+   must never replay the opening animation or flash the whole overlay. */
+.sched-profile-backdrop.is-refreshing,
+.sched-profile-backdrop.is-refreshing .sched-profile {
+  animation: none !important;
+  transition: none !important;
 }

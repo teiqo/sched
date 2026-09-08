@@ -869,6 +869,7 @@ function setScene(html, direction) {
 
   const scene = $("#scene");
   const reduced =
+    state.perfMode ||
     window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
     Boolean(scene && scene.classList.contains("is-motion-lite"));
 
@@ -1661,7 +1662,7 @@ function bindStrip() {
     dragClick = false;
 
     const tapDist = Math.abs(pressedPosition - position);
-    const reducedMotion = motionQuery.matches;
+    const reducedMotion = motionQuery.matches || state.perfMode;
 
     scrub = {
       pointerId: e.pointerId,
@@ -3658,7 +3659,7 @@ async function ensureFbToken() {
   if (fbAuth.pending) return fbAuth.pending;
   const holder = fbAuth;
   const promise = (async () => {
-    const signed = await botRequest("auth/firebase", {}, sessionToken);
+    const signed = await botRequest("auth/firebase", {}, sessionToken, { retries: 0 });
     if (!signed.custom_token) throw new BotApiError("обнови папку bot: сервер не выдал firebase-токен", 503, "firebase_not_configured");
     const fresh = await fbAuthPost("https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken", { token: signed.custom_token, returnSecureToken: true });
     if (epoch !== tgAuthEpoch || tgSession?.id !== identity) throw new BotApiError("аккаунт изменился — действие отменено", 409, "cancelled");
@@ -3818,7 +3819,25 @@ function refreshAuthUi() {
   applyFlags();
   updateTgButton();
   renderTgSheetBody();
-  if (state.profileOpen) openProfile();
+  if (state.profileOpen) {
+    const backdrop = $("#profile-backdrop");
+    const content = backdrop?.querySelector(".sched-profile-content");
+    const scrollTop = content?.scrollTop || 0;
+    const notifsOpen = backdrop?.querySelector("#profile-notifs-toggle")?.getAttribute("aria-expanded") === "true";
+    backdrop?.classList.add("is-refreshing");
+    openProfile();
+    const freshContent = backdrop?.querySelector(".sched-profile-content");
+    if (freshContent) freshContent.scrollTop = scrollTop;
+    if (notifsOpen) {
+      const toggle = backdrop?.querySelector("#profile-notifs-toggle");
+      const panel = backdrop?.querySelector("#profile-notifs-panel");
+      toggle?.setAttribute("aria-expanded", "true");
+      panel?.classList.add("is-open");
+      panel?.setAttribute("aria-hidden", "false");
+      if (panel) panel.inert = false;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => backdrop?.classList.remove("is-refreshing")));
+  }
 }
 
 function resetFirebaseIdentity() {
@@ -3852,6 +3871,7 @@ async function ensurePushSession(force = false) {
   }
   if (!force && tgAuthError && Date.now() < tgAuthRetryAt) throw tgAuthError;
   const epoch = tgAuthEpoch, previous = tgSession, token = previous.session_token;
+  const previousAuthState = tgAuthState;
   tgAuthState = "checking";
   const promise = (async () => {
     try {
@@ -3866,7 +3886,13 @@ async function ensurePushSession(force = false) {
       tgAuthError = null;
       tgAuthState = "ready";
       saveTgSession();
-      refreshAuthUi();
+      const profileChanged = previousAuthState !== "ready" ||
+        previous.role !== session.role ||
+        previous.username !== session.username ||
+        previous.photo_url !== session.photo_url ||
+        tgDisplayName(previous) !== tgDisplayName(session);
+      if (profileChanged) refreshAuthUi();
+      else { applyFlags(); updateTgButton(); }
       return session.session_token;
     } catch (error) {
       if (epoch === tgAuthEpoch) {
@@ -4128,7 +4154,7 @@ function notifyCloudEvent(path, body) {
           : body.deleted
             ? "↩️ сброс замены"
             : body.cancelled
-              ? "🔕 отмена пары"
+              ? "отмена пары"
               : body.moved ? "↪️ перенос" : "🔔 замена";
     let original = null;
     try { original = slotsForBase(dateFromIso(dIso)).find((slot) => slot.n === n) || null; } catch (e) {}
@@ -4154,11 +4180,15 @@ function notifyCloudEvent(path, body) {
 /* Статус последней ошибки облака: 401/403 = права/правила, -1 = сеть. */
 var lastCloudStatus = 0;
 var lastCloudMessage = "";
+var cloudWriteRetryAt = 0;
 var cloudMutationChain = Promise.resolve();
 function cloudWrite(path, body, options = {}) {
   const identity = tgSession?.id;
   const task = cloudMutationChain.then(async () => {
     if (LOCAL_PREVIEW) return false;
+    /* A denied Firebase write used to make every pending edit request a fresh
+       bot/Firebase token, quickly causing a 429 storm and repeated UI refreshes. */
+    if (Date.now() < cloudWriteRetryAt) return false;
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
     try {
       if (!identity || tgSession?.id !== identity) throw new BotApiError("для общих правок войди через телеграм", 401, "login_required");
@@ -4182,15 +4212,22 @@ function cloudWrite(path, body, options = {}) {
       }
       lastCloudStatus = response?.status || -1;
       if (!response?.ok) {
+        if ([401, 403, 429].includes(response?.status)) cloudWriteRetryAt = Date.now() + 60000;
         lastCloudMessage = response?.status === 401
           ? "firebase не принял обновлённые права — опубликуй config/firebase.rules.json и проверь, что Web API key относится к этой базе"
           : "база отклонила запись — проверь config/firebase.rules.json и серверный ключ firebase";
         return false;
       }
+      cloudWriteRetryAt = 0;
       lastCloudStatus = 0; lastCloudMessage = "";
       if (options.notify !== false) notifyCloudEvent(path, body);
       return true;
-    } catch (error) { lastCloudStatus = error.status || -1; lastCloudMessage = error.message; return false; }
+    } catch (error) {
+      lastCloudStatus = error.status || -1;
+      if ([401, 403, 429].includes(lastCloudStatus)) cloudWriteRetryAt = Date.now() + 60000;
+      lastCloudMessage = error.message;
+      return false;
+    }
     finally { clearTimeout(timer); }
   });
   cloudMutationChain = task.catch(() => {});

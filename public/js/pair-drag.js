@@ -19,7 +19,7 @@ export function pairOrder(slots, fromN, toN) {
 
 export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder, onActiveChange, onFinish }) {
   let pending = null, drag = null, timer = null, frame = null, suppressUntil = 0;
-  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduced = () => document.documentElement.hasAttribute('data-perf') || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clearPending = () => { clearTimeout(timer); timer = null; pending = null; };
   const scrollerFor = node => {
     for (let el = node.parentElement; el && el !== document.body; el = el.parentElement) {
