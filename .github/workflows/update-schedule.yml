@@ -1,44 +1,33 @@
-name: update-schedule
-
+name: update schedule
 on:
   schedule:
-    # каждые 3 часа (GitHub может немного задерживать запуск)
-    - cron: "0 */3 * * *"
+    - cron: '0 */3 * * *'
   workflow_dispatch:
-
 permissions:
   contents: write
-
 concurrency:
   group: update-schedule
   cancel-in-progress: false
-
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: install pdfplumber
-        run: python3 -m pip install --break-system-packages pdfplumber
-
-      - name: parse pdf into data/schedule.json
-        run: python3 tools/update_schedule.py
-
-      - name: commit changes
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m pip install -r scripts/requirements.txt
+      - run: python3 scripts/update_schedule.py
+      - name: Commit schedule changes
         run: |
-          if [ -n "$(git status --porcelain data/)" ]; then
+          if [ -n "$(git status --porcelain public/data/)" ]; then
             git config user.name "schedule-bot"
             git config user.email "schedule-bot@users.noreply.github.com"
-            git add data/
-            git commit -m "chore: refresh schedule from sustec.ru"
-            # Remote мог уехать вперёд (твой пуш или другой прогон), пока шёл
-            # парсинг. Догоняем и повторяем push до трёх раз; при конфликте
-            # в data/ побеждает свежий разбор бота (-X theirs при rebase).
+            git add public/data/
+            git commit -m "chore: refresh schedule"
             for i in 1 2 3; do
-              git pull --rebase -X theirs origin "${{ github.ref_name }}" || git rebase --abort || true
-              git push && break
+              git pull --rebase origin "${{ github.ref_name }}" || { git rebase --abort; exit 1; }
+              git push && exit 0
             done
-          else
-            echo "no changes"
+            exit 1
           fi

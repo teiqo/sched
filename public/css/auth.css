@@ -1,0 +1,94 @@
+/* Telegram login: shared component, independent of schedule accent palettes. */
+.sched-auth {
+  --auth-bg: #ffffff;
+  --auth-ink: #222b35;
+  --auth-muted: #576474;
+  --auth-line: #d8e0e8;
+  --auth-soft: #f4f7fb;
+  --auth-blue: #1769b5;
+  --auth-on-blue: #ffffff;
+  --auth-error: #9e302b;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--auth-line);
+  border-radius: 12px;
+  background: var(--auth-bg);
+  color: var(--auth-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+html[data-theme="dark"] .sched-auth {
+  --auth-bg: #202428;
+  --auth-ink: #f3f6fa;
+  --auth-muted: #b8c4d1;
+  --auth-line: #485563;
+  --auth-soft: #2a323a;
+  --auth-blue: #7bbdff;
+  --auth-on-blue: #092843;
+  --auth-error: #ffa7a0;
+}
+.sched-auth *, .sched-auth *::before, .sched-auth *::after { box-sizing: border-box; }
+.sched-auth-heading { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.sched-auth-mark { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px; color: var(--auth-blue); background: var(--auth-soft); }
+.sched-auth-mark svg { width: 24px; height: 24px; }
+.sched-auth-eyebrow { font-size: 14px; font-weight: 650; letter-spacing: .6px; color: var(--auth-muted); }
+.sched-auth h2 { margin: 0 0 8px; font-size: 23px; line-height: 1.25; font-weight: 700; letter-spacing: -.6px; color: var(--auth-ink); }
+.sched-auth-description { margin: 0 0 24px; font-size: 15px; color: var(--auth-muted); }
+.sched-auth-controls { display: grid; gap: 12px; }
+.sched-auth .sched-auth-button {
+  display: flex; justify-content: center; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; padding: 12px 16px; margin: 0;
+  border: 1px solid var(--auth-line); border-radius: 8px;
+  background: var(--auth-bg); color: var(--auth-ink);
+  font: inherit; font-size: 15px; font-weight: 600; line-height: 1.35;
+  text-align: center; text-decoration: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sched-auth .sched-auth-button.is-primary { background: var(--auth-blue); border-color: var(--auth-blue); color: var(--auth-on-blue); }
+.sched-auth-button svg { width: 21px; height: 21px; flex: 0 0 21px; }
+.sched-auth .sched-auth-button:disabled { cursor: wait; opacity: .65; }
+.sched-auth :is(button, a, input):focus-visible { outline: 3px solid var(--auth-blue); outline-offset: 3px; }
+.sched-auth-button:not(:disabled):active { transform: translateY(1px); }
+.sched-auth .sched-auth-hint { margin: 0; font-size: 14px; line-height: 1.5; color: var(--auth-muted); }
+.sched-auth-divider { display: flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--auth-muted); font-size: 14px; text-align: center; }
+.sched-auth-divider::before, .sched-auth-divider::after { content: ""; flex: 1; min-width: 12px; border-top: 1px solid var(--auth-line); }
+.sched-auth-assurance { display: flex; align-items: flex-start; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--auth-line); color: var(--auth-muted); font-size: 14px; line-height: 1.5; }
+.sched-auth-assurance svg { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 1px; color: var(--auth-blue); }
+.sched-auth-feedback { margin: 16px 0 0; padding: 12px; border: 1px solid var(--auth-line); border-radius: 8px; background: var(--auth-soft); font-size: 14px; line-height: 1.5; color: var(--auth-ink); }
+.sched-auth-feedback.is-error { color: var(--auth-error); border-left: 3px solid currentColor; }
+.sched-auth-steps { list-style: none; display: grid; gap: 24px; margin: 0; padding: 0; }
+.sched-auth-steps li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 0; margin: 0; }
+.sched-auth-step-number { display: grid; place-items: center; height: 24px; margin-top: 2px; border: 1px solid var(--auth-line); border-radius: 50%; background: var(--auth-soft); color: var(--auth-muted); font-size: 14px; font-weight: 650; }
+.sched-auth-steps strong, .sched-auth-steps label { display: block; margin-bottom: 12px; font-size: 15px; font-weight: 650; }
+.sched-auth-steps form { min-width: 0; display: grid; gap: 12px; }
+.sched-auth-steps label { margin: 0; }
+.sched-auth .sched-auth-code { display: block; width: 100%; min-width: 0; height: 56px; padding: 12px; border: 1px solid var(--auth-line); border-radius: 8px; background: var(--auth-soft); color: var(--auth-ink); font: inherit; font-size: 22px; line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: 2px; text-align: center; }
+.sched-auth-code::placeholder { color: var(--auth-muted); opacity: .8; }
+.sched-auth-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 14px; color: var(--auth-muted); }
+.sched-auth-meta b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.sched-auth-progress { margin: 0; padding: 16px; border-radius: 8px; background: var(--auth-soft); color: var(--auth-ink); font-size: 15px; }
+.sched-auth-connected { padding: 16px; }
+.sched-auth-connected .sched-auth-assurance { margin: 0; padding: 0; border: 0; }
+.sched-auth-profile-group { padding: 0; background: transparent; }
+@media (max-width: 430px) {
+  .sched-auth { padding: 20px 16px; }
+  .sched-auth-steps li { gap: 8px; }
+  .sched-auth .sched-auth-button { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-auth *, .sched-auth *::before, .sched-auth *::after { animation: none !important; transition: none !important; }
+}
+
+.sched-auth .sched-auth-code-error { margin: 0; }
+.sched-auth-code[aria-invalid="true"] { border-color: var(--auth-error); }
+
+/* Account actions remain tappable after a successful login. */
+.sched-profile-hero .sched-profile-mini[data-act="tg-logout"] { min-width: 64px; min-height: 44px; font-size: 14px; border-radius: 8px; }
+.sched-profile-hero .sched-profile-hero-id { min-height: 44px; font-size: 14px; }
+.sched-profile-hero-role.is-user { color: #246443; background: #e8f1ec; }
+html[data-theme="dark"] .sched-profile-hero-role.is-user { color: #a1d9bd; background: #173226; }

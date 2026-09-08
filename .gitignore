@@ -1,6 +1,46 @@
-dist/
+# Dependencies and virtual environments
 node_modules/
+.venv/
+venv/
+
+# Build, coverage and test output
+dist/
+coverage/
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.cache/
+playwright-report/
+test-results/
+*.log
+*.tmp
+*.zip
+
+# Python bytecode
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+public/js/local-config.js
+*.pem
+*.key
+*service-account*.json
+firebase-key.json
+
+# Runtime data
+bot/data/
+bot-state.json
+bot-tg-offset.json
+bot_config.json
+*.sqlite*
+*.db*
+
+# Editor and OS files
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db

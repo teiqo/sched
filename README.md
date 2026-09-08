@@ -1,77 +1,125 @@
-# weeqo — расписание занятий
+# sched
 
-PWA с расписанием колледжа: текущая пара, звонки, вся неделя, общие замены с модерацией, уведомления. Хостинг — GitHub Pages, облако — Firebase Realtime Database, вход — Telegram (OIDC).
+веб-приложение с расписанием, общими заменами, входом через telegram и отдельным ботом для уведомлений и отчётов.
 
-## Структура
+## структура
 
-| Путь | Что это |
-| --- | --- |
-| `index.html` | единственная страница приложения |
-| `js/app.js` | приложение |
-| `js/schedule.js` | работа с данными расписания |
-| `js/config.js` | генерируется Action-ом при деплое — руками не править и не коммитить значения |
-| `css/patch.css` | ручные правки поверх собранных стилей |
-| `assets/` | собранные стили и шрифт |
-| `images/` | иконки |
-| `data/schedule.json` | расписание — обновляет бот, руками не трогать |
-| `data/changelog.json` | журнал изменений расписания |
-| `tools/update_schedule.py` | парсер PDF с сайта колледжа (cron каждые 3 часа) |
-| `tools/notify_telegram.py` | рассылка уведомлений в Telegram |
-| `tools/bot-hash.html` | локальный калькулятор sha256 токена бота |
-| `firebase-rules.json` | правила Realtime Database — публикуются руками в Firebase Console |
-| `.github/workflows/` | `deploy-pages.yml` — деплой сайта, `update-schedule.yml` — парсер по расписанию, `notify-telegram.yml` — уведомления |
+- `public/` — сайт и pwa
+- `bot/` — сервер входа, уведомлений и отчётов
+- `scripts/` — локальный запуск, сборка и обновление расписания
+- `config/firebase.rules.json` — правила firebase realtime database
+- `.github/workflows/` — публикация сайта и автоматическое обновление расписания
 
-## Настройка (Settings → Secrets and variables → Actions)
+## локальный запуск
 
-Workflow читает каждое значение из обеих вкладок — Variables и Secrets.
-
-| Имя | Что |
-| --- | --- |
-| `SHARED_SWAPS_URL` | URL Realtime Database + `/weeqo-swaps.json` |
-| `FIREBASE_API_KEY` | ключ веб-приложения Firebase |
-| `TELEGRAM_BOT_NAME` | username бота без @ |
-| `TELEGRAM_BOT_ID` | Client ID из BotFather → Login Widget |
-| `TELEGRAM_BOT_TOKEN_SHA256` | sha256 токена бота (посчитать через `tools/bot-hash.html`), нужен старому виджету |
-| `TELEGRAM_OWNER_ID` | telegram id владельца — необязательно |
-| `TELEGRAM_ADMIN_IDS` | telegram id редакторов через запятую — необязательно |
-
-## Firebase
-
-1. Создай Realtime Database и скопируй её URL в `SHARED_SWAPS_URL`.
-2. Опубликуй правила из `firebase-rules.json` (Realtime Database → Правила).
-3. Включи Anonymous в Authentication → Sign-in method.
-
-## Telegram
-
-BotFather (мини-апп) → выбрать бота → Login Widget → в Allowed URLs добавить `https://<твой>.github.io` → скопировать Client ID в `TELEGRAM_BOT_ID`.
-
-## Деплой и обновления
-
-- Любой пуш пересобирает `js/config.js` и деплоит сайт на Pages.
-- `update-schedule` ходит за PDF каждые 3 часа (cron по UTC). Запуск вручную: Actions → update-schedule → Run workflow.
-- При изменениях фронта поднимай версию кэша в `sw.js` (`weeqo-groups-vXX`) — иначе клиенты останутся на старом коде из кэша.
-
-## Локальный запуск и тестовый Telegram-профиль
-
-Из папки проекта запусти:
-
-```sh
-python3 tools/serve_local.py
+```bash
+python3 scripts/serve_local.py
 ```
 
-Открой `http://localhost:8765`. Затем: **настройки → профиль → тестовый вход Telegram**.
-Для другого порта: `python3 tools/serve_local.py --port 8080`.
+сайт откроется по адресу `http://127.0.0.1:8765`.
 
-- На `localhost`, `127.0.0.1` и IPv6 loopback доступен отдельный демо-профиль с пометкой **локальный тест**. Он не является настоящей авторизацией Telegram.
-- Демо-вход сохраняется только на время вкладки, включая её перезагрузку. Обычный выход удаляет его. Настройки уведомлений демо хранятся отдельно от обычных.
-- Облачные замены, Firebase-авторизация, Telegram-подписки и отправка отчётов в локальном режиме отключены, в том числе при передаче `swaps-cloud` в адресе.
-- На опубликованном сайте тестовая кнопка отсутствует. Проверка настоящих Telegram-сессий и серверные правила доступа не менялись.
-- Для локальной разработки новые регистрации service worker отключены. Если в этом же адресе остался старый service worker, закрой старые вкладки и обнови страницу; при необходимости удали его в инструментах разработчика браузера.
+локальный режим использует тестовый профиль. сообщения в telegram и изменения общей базы не отправляются.
 
-### Изменения интерфейса v78
+## сборка сайта
 
-Стабилизирована рулетка дней: подсветка растёт только вверх, обработка указателя объединена по кадрам, убраны повторные сдвиги сцены. Будущие дни дорисовываются без повторного наблюдения за всем деревом; скрытая вкладка не обновляет секундомер.
+```bash
+python3 scripts/stage_site.py
+```
 
-Окна стали темнее, с одной надписью «окно» в центре. Уведомления раскрываются внутри профиля. Акцент+ использует градиент выбранного цвета; знак и надпись логотипа работают по одной временной шкале. В узкой шапке остаётся читаемый статичный логотип, кнопка обновления возвращается при расширении. «Сегодня» расположено по центру. Удалён пункт «что менялось», сохранены группы настроек. Расписание звонков приведено к компактным двум колонкам.
+готовые файлы появятся в `dist/`. туда копируется только содержимое `public/`; серверные файлы, локальные данные и секреты не попадают.
 
-Точные данные пар, звонков и длительностей не изменены. Кэш приложения обновлён до `weeqo-groups-v78`.
+## публикация на github pages
+
+workflow `.github/workflows/deploy-pages.yml` сам создаёт публичный конфиг, собирает `dist/` и публикует сайт.
+
+добавь в repository variables:
+
+```text
+SHARED_SWAPS_URL
+FIREBASE_API_KEY
+TELEGRAM_BOT_NAME
+TELEGRAM_OWNER_ID
+TELEGRAM_ADMIN_IDS
+SCHED_NOTIFY_URL
+```
+
+добавь в repository secrets:
+
+```text
+NOTIFY_SECRET
+```
+
+в настройках репозитория включи `settings → pages → source → github actions`.
+
+`public/js/config.js` должен оставаться пустым шаблоном. значения конкретного сайта подставляются только во время сборки.
+
+## firebase
+
+создай realtime database и опубликуй правила из `config/firebase.rules.json`.
+
+`FIREBASE_API_KEY` и адрес базы используются сайтом и поэтому являются публичными параметрами. приватный ключ service account должен храниться только на сервере бота и никогда не должен попадать в `public/` или git.
+
+## telegram и бот
+
+создай бота и настрой web login в botfather. callback должен вести на:
+
+```text
+https://адрес-бота/auth/callback
+```
+
+скопируй пример окружения:
+
+```bash
+cp bot/.env.example bot/.env
+python3 -m pip install -r bot/requirements.txt
+set -a
+source bot/.env
+set +a
+python3 -m bot.main --check-config
+python3 -m bot.main
+```
+
+минимально нужны:
+
+```text
+TELEGRAM_BOT_TOKEN
+TELEGRAM_BOT_NAME
+TELEGRAM_CLIENT_ID
+TELEGRAM_CLIENT_SECRET
+TELEGRAM_OWNER_ID
+BOT_PUBLIC_URL
+SCHED_ALLOWED_ORIGINS
+NOTIFY_SECRET
+```
+
+`NOTIFY_SECRET` на сервере должен совпадать с одноимённым github secret. файл service account подключается через `FIREBASE_SERVICE_ACCOUNT_FILE` и хранится вне репозитория.
+
+данные бота находятся в `bot/data/` и игнорируются git. не удаляй эту папку при обновлении работающего сервера.
+
+## автоматическое обновление расписания
+
+workflow `.github/workflows/update-schedule.yml` запускает `scripts/update_schedule.py` каждые три часа и коммитит изменения только в `public/data/`.
+
+для ручного запуска:
+
+```bash
+python3 -m pip install -r scripts/requirements.txt
+python3 scripts/update_schedule.py
+```
+
+## безопасность
+
+не добавляй в git:
+
+- `.env`
+- токен бота
+- `NOTIFY_SECRET`
+- service-account json и приватные ключи
+- содержимое `bot/data/`
+- локальные базы, логи и сборку `dist/`
+
+эти файлы уже закрыты правилами в `.gitignore`.
+
+## лицензия
+
+см. `LICENSE`.

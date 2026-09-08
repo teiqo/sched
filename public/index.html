@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="ru" class="sched-page" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#F5F5F7" />
+    <script src="js/compat.js"></script>
+    <script>
+      /* тема применяется до первой отрисовки, чтобы лоадер не вспыхивал белым. */
+      (function () {
+        var mix = function (hex, base, ratio) {
+          var a = String(hex).replace("#", "");
+          var b = String(base).replace("#", "");
+          var p = function (i) {
+            var x = parseInt(a.slice(i, i + 2), 16);
+            var y = parseInt(b.slice(i, i + 2), 16);
+            return Math.round(x * ratio + y * (1 - ratio))
+              .toString(16)
+              .padStart(2, "0");
+          };
+          return "#" + p(0) + p(2) + p(4);
+        };
+        try {
+          var raw = localStorage.getItem("sched:groups:v2");
+          var data = raw ? JSON.parse(raw) : {};
+          /* тема: выбранная вручную, иначе — системная (первый запуск подхватывает ос). */
+          var manual =
+            data.themeManual === true ||
+            (!("themeManual" in data) && (data.theme === "light" || data.theme === "dark"));
+          var theme = manual
+            ? data.theme
+            : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+          var root = document.documentElement;
+          root.dataset.theme = theme;
+          var accent =
+            typeof data.accent === "string" && /^#[0-9a-f]{6}$/i.test(data.accent)
+              ? data.accent
+              : "";
+          var tint = theme === "light" ? "#F5F5F7" : "#000000";
+          if ((data.palette === "accent" || data.palette === "accent-plus") && accent) {
+            root.dataset.schedPalette = data.palette;
+            root.style.setProperty("--sched-accent", accent);
+            tint = mix(
+              accent,
+              theme === "light" ? "#ffffff" : "#05050a",
+              theme === "light" ? 0.2 : 0.18,
+            );
+          }
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", tint);
+        } catch (e) {
+          /* приватный режим — остаются дефолты из CSS */
+        }
+      })();
+    </script>
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="sched" />
+    <meta
+      name="description"
+      content="sched — удобное расписание занятий: какая пара идёт сейчас, сколько до конца, что дальше, звонки и вся неделя. работает офлайн, без регистрации."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="sched" />
+    <meta property="og:title" content="sched — расписание занятий" />
+    <meta
+      property="og:description"
+      content="sched — удобное расписание занятий: какая пара идёт сейчас, сколько до конца, что дальше, звонки и вся неделя. работает офлайн, без регистрации."
+    />
+    <meta property="og:image" content="assets/icons/sched-180.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="sched — расписание занятий" />
+    <meta
+      name="twitter:description"
+      content="sched — удобное расписание занятий: какая пара идёт сейчас, сколько до конца, что дальше, звонки и вся неделя. работает офлайн, без регистрации."
+    />
+    <link rel="icon" href="assets/icons/sched.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/sched-180.png" />
+    <title>sched — расписание занятий</title>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/transitions.css" />
+    <link rel="stylesheet" href="css/palettes.css" />
+    <link rel="stylesheet" href="css/overrides.css" />
+    <link rel="stylesheet" href="css/fixes.css" />
+    <link rel="stylesheet" href="css/interaction.css" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <!-- Публичный конфиг пуст в репозитории и создаётся из GitHub variables во время сборки. -->
+    <script src="js/config.js"></script>
+    <script type="module" src="js/app.js"></script>
+    <script>
+      /* страховка от «бесконечной загрузки»: если модуль не поднялся (битый файл
+         в кэше service worker, обрыв сети), один раз чистим кэш и перезагружаемся. */
+      (function () {
+        var FLAG = "sched:self-heal";
+        var healed = false;
+
+        function booted() {
+          var app = document.getElementById("app");
+          return !document.getElementById("loader") || (app && !app.hidden);
+        }
+
+        function reload() {
+          var url = location.pathname + "?fresh=" + Date.now() + location.hash;
+          location.replace(url);
+        }
+
+        function heal(reason) {
+          if (healed || booted()) return;
+          healed = true;
+          try {
+            if (sessionStorage.getItem(FLAG)) return; /* уже пробовали — не циклим */
+            sessionStorage.setItem(FLAG, reason || "1");
+          } catch (e) {
+            return;
+          }
+          var done = false;
+          var finish = function () {
+            if (done) return;
+            done = true;
+            reload();
+          };
+          window.setTimeout(finish, 2500);
+          var jobs = [];
+          if (window.caches && caches.keys) {
+            jobs.push(
+              caches.keys().then(function (keys) {
+                return Promise.all(
+                  keys.map(function (k) {
+                    return caches.delete(k);
+                  }),
+                );
+              }),
+            );
+          }
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            jobs.push(
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(
+                  regs.map(function (r) {
+                    return r.unregister();
+                  }),
+                );
+              }),
+            );
+          }
+          Promise.all(jobs).then(finish, finish);
+        }
+
+        window.addEventListener("error", function (event) {
+          var src = event && event.filename ? String(event.filename) : "";
+          if (
+            event &&
+            (event.error instanceof SyntaxError ||
+              src.indexOf("app.js") !== -1 ||
+              src.indexOf("schedule.js") !== -1)
+          ) {
+            heal("error");
+          }
+        });
+
+        window.setTimeout(function () {
+          heal("timeout");
+        }, 8000);
+
+        window.addEventListener("load", function () {
+          window.setTimeout(function () {
+            if (booted()) {
+              try {
+                sessionStorage.removeItem(FLAG);
+              } catch (e) {}
+            }
+          }, 1500);
+        });
+      })();
+    </script>
+    <style>
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="app-loading-state" id="loader" role="status" aria-live="polite">
+        <div class="app-loading-mark" aria-hidden="true">
+          <div class="app-loading-mark-blur"></div>
+          <div class="app-loading-mark-surface">
+            <svg class="sched-mark" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.937A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="sched-app is-schedule-tab" id="app" hidden>
+        <header class="sched-header">
+          <div class="sched-title-row">
+            <button
+              class="sched-week-switch is-header-leading is-static"
+              id="week-switch"
+              type="button"
+              disabled
+              aria-label="чётность недели"
+            >
+              <span class="sched-week-badge" id="week-badge">
+                <span class="sched-academic-week" id="week-number">1</span>
+                <span id="week-parity">нечётная</span>
+              </span>
+            </button>
+
+            <h1>
+              <span class="sched-header-brand" id="brand">
+                <span class="sched-header-mark">
+                  <svg class="sched-mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.937A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                    />
+                  </svg>
+                </span>
+                <span class="sched-header-word">sched</span>
+                <span class="sched-header-spark is-first"></span>
+                <span class="sched-header-spark is-second"></span>
+              </span>
+            </h1>
+
+            <div class="sched-header-actions">
+              <button
+                class="sched-tg-btn sched-bell-btn"
+                id="bell-btn"
+                type="button"
+                aria-label="уведомления"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.9"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+                </svg>
+                <span class="sched-tg-badge" id="bell-badge" hidden></span>
+              </button>
+
+              <div class="sched-settings" id="settings">
+                <button
+                  class="sched-settings-trigger"
+                  id="settings-trigger"
+                  type="button"
+                  aria-expanded="false"
+                  aria-label="настройки"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                      d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
+                    />
+                  </svg>
+                </button>
+
+                <div
+                  class="sched-settings-popover t-dropdown"
+                  id="settings-popover"
+                  data-origin="top-right"
+                  role="dialog"
+                  aria-label="настройки"
+                >
+                  <div class="sched-settings-group">
+                    <button
+                      class="sched-settings-row sched-account-row"
+                      id="go-account"
+                      type="button"
+                    >
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-account" id="account-icon">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M21.9 4.6c.3-1.1-.8-2-1.9-1.6L2.6 10.4c-1 .4-.9 1.7.1 2l4.2 1.4 1.6 5c.3.9 1.4 1.1 2 .4l2.2-2.6 4 3c.7.5 1.8.1 2-.8l2.6-14.6z"
+                            />
+                            <path d="M7 14.5 18 6" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong id="account-title">войти через телеграм</strong>
+                          <span id="account-hint">загрузка…</span>
+                        </span>
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                    <button class="sched-settings-row" id="go-bells" type="button">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-offline">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="8" />
+                            <path d="M12 8v4l3 2" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>расписание звонков</strong>
+                          <span>пн–пт и сб</span>
+                        </span>
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                    <button class="sched-settings-row" id="go-tg-sheet" type="button" hidden>
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-editor">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>заявки и редакторы</strong>
+                          <span id="settings-pending-hint">проверка замен и права</span>
+                        </span>
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                    <button class="sched-settings-row" id="go-reports-sheet" type="button" hidden>
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-bug">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 8V6M9 6.5h6" />
+                            <rect x="8" y="8" width="8" height="10" rx="4" />
+                            <path
+                              d="M8 11H4.5M8 15H4.5M19.5 11H16M19.5 15H16M9.5 20.5 8 22M14.5 20.5 16 22"
+                            />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>отчёты об ошибках</strong>
+                          <span id="settings-reports-hint">сообщения пользователей</span>
+                        </span>
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div class="sched-settings-group">
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-perf">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5z" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>режим производительности</strong>
+                          <span id="perf-hint">все эффекты</span>
+                        </span>
+                      </span>
+                      <button
+                        class="sched-setting-switch"
+                        id="perf-switch"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="режим производительности"
+                      >
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="sched-settings-group">
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-theme">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="4" />
+                            <path
+                              d="M12 4v1M12 19v1M4 12h1M19 12h1M6.3 6.3l.7.7M17 17l.7.7M17.7 6.3l-.7.7M7 17l-.7.7"
+                            />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>тёмная тема</strong>
+                          <span id="theme-hint">светлая</span>
+                        </span>
+                      </span>
+                      <button
+                        class="sched-setting-switch"
+                        id="dark-switch"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="тёмная тема"
+                      >
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    <div class="sched-settings-row sched-theme-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-palette">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H13a2 2 0 0 1 0-4h4a4 4 0 0 0 4-4 6 6 0 0 0-6-6z"
+                            />
+                            <circle cx="8" cy="9" r="1.2" />
+                            <circle cx="7" cy="14" r="1.2" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>тема</strong>
+                          <span id="palette-hint">базовая</span>
+                        </span>
+                      </span>
+                      <div
+                        class="sched-theme-modes"
+                        id="theme-modes"
+                        role="group"
+                        aria-label="тема"
+                      >
+                        <button type="button" data-mode="default" aria-pressed="true">
+                          базовая
+                        </button>
+                        <button type="button" data-mode="accent" aria-pressed="false">
+                          акцент
+                        </button>
+                        <button type="button" data-mode="accent-plus" aria-pressed="false">
+                          акцент+
+                        </button>
+                      </div>
+                    </div>
+                    <div class="sched-settings-row" id="accent-row" hidden>
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-palette">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="8" />
+                            <path d="M12 4v16" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>цвет акцента</strong>
+                          <span id="accent-hint">#0A84FF</span>
+                        </span>
+                      </span>
+                      <input
+                        class="sched-accent-input"
+                        id="accent-color"
+                        type="color"
+                        value="#0A84FF"
+                        aria-label="цвет акцента"
+                      />
+                    </div>
+                  </div>
+
+                  <details class="sched-settings-more">
+                    <summary class="sched-settings-row sched-settings-more-summary">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-bells">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2"/></svg>
+                        </span>
+                        <span class="sched-settings-copy"><strong>дополнительно</strong><span>вид расписания и кнопки пар</span></span>
+                      </span>
+                      <svg class="sched-settings-more-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                    </summary>
+                    <div class="sched-settings-group">
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-layout">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <rect x="3" y="4" width="18" height="16" rx="3" />
+                            <path d="M3 10h18M9 10v10" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>показывать окна</strong>
+                          <span id="windows-hint">все окна дня — удобно менять расписание</span>
+                        </span>
+                      </span>
+                      <button
+                        class="sched-setting-switch"
+                        id="windows-switch"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="показывать окна"
+                      >
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-layout">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="8" r="4" /><path d="M5 21v-2a7 7 0 0 1 14 0v2M3 3l18 18" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>показывать вакансии</strong>
+                          <span>пары без назначенного преподавателя</span>
+                        </span>
+                      </span>
+                      <button class="sched-setting-switch" id="vacancies-switch" type="button" aria-pressed="false" aria-label="показывать вакансии">
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-layout">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1ZM12 6v14" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>самостоятельная работа</strong>
+                          <span>показывать в расписании</span>
+                        </span>
+                      </span>
+                      <button class="sched-setting-switch" id="self-study-switch" type="button" aria-pressed="true" aria-label="показывать самостоятельную работу">
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-layout">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/><path d="M5 4v16"/></svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>кнопки замены</strong>
+                          <span>показывать у карточек пар</span>
+                        </span>
+                      </span>
+                      <button class="sched-setting-switch" id="swap-buttons-switch" type="button" aria-pressed="false" aria-label="показывать кнопки замены"><span aria-hidden="true"></span></button>
+                    </div>
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-layout">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M4 7h16M4 12h16M4 17h10" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>лёгкий вид</strong>
+                          <span id="light-hint">плоские и компактные пары</span>
+                        </span>
+                      </span>
+                      <button
+                        class="sched-setting-switch"
+                        id="light-switch"
+                        type="button"
+                        aria-pressed="false"
+                        aria-label="лёгкий вид"
+                      >
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    <div class="sched-settings-row">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-week-scope">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                          >
+                            <rect x="3" y="4" width="18" height="7" rx="2" />
+                            <rect x="3" y="14" width="18" height="6" rx="2" />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>вся неделя</strong>
+                          <span id="scope-hint">показывать следующие дни ниже</span>
+                        </span>
+                      </span>
+                      <button
+                        class="sched-setting-switch"
+                        id="scope-switch"
+                        type="button"
+                        aria-pressed="true"
+                        aria-label="вся неделя"
+                      >
+                        <span aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    </div>
+                  </details>
+
+                  <div class="sched-settings-group">
+                    <button class="sched-settings-row" id="go-bug" type="button">
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-bug">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.9"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 8V6M9 6.5h6" />
+                            <rect x="8" y="8" width="8" height="10" rx="4" />
+                            <path
+                              d="M8 11H4.5M8 15H4.5M19.5 11H16M19.5 15H16M9.5 20.5 8 22M14.5 20.5 16 22"
+                            />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>сообщить об ошибке</strong>
+                          <span>описать проблему и прикрепить файл</span>
+                        </span>
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div class="sched-settings-group">
+                    <a
+                      class="sched-settings-row sched-settings-link"
+                      id="go-cool"
+                      href="https://t.me/teiqo"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span class="sched-settings-row-main">
+                        <span class="sched-settings-icon is-cool">
+                          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path
+                              d="M12 3.1l2.6 5.5 6 .8-4.4 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9L3.4 9.4l6-.8z"
+                            />
+                          </svg>
+                        </span>
+                        <span class="sched-settings-copy">
+                          <strong>бурмалда</strong>
+                          <span>телеграм автора · @teiqo</span>
+                        </span>
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </a>
+                    <div class="sched-settings-freshness">
+                      <span id="freshness">группа: не выбрано</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="date-strip" id="strip" data-selected-index="0">
+            <button
+              class="date-strip-week-arrow is-previous"
+              id="prev-week"
+              type="button"
+              aria-label="предыдущая неделя"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+            </button>
+            <span class="date-strip-selection" id="selection" aria-hidden="true"></span>
+            <button
+              class="date-strip-week-arrow"
+              id="next-week"
+              type="button"
+              aria-label="следующая неделя"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+            <button
+              class="date-strip-today"
+              id="today-btn"
+              type="button"
+              aria-label="вернуться к сегодняшнему дню"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 7 4 12l5 5" />
+                <path d="M4 12h9a6 6 0 0 1 6 6" />
+              </svg>
+              сегодня
+            </button>
+          </div>
+        </header>
+
+        <main class="sched-schedule-view" id="schedule-view">
+          <div class="sched-days-scene" id="scene">
+            <div class="sched-active-day-stage" id="stage">
+              <div class="sched-active-day-scene" id="day-scene"></div>
+            </div>
+          </div>
+          <footer class="sched-schedule-footer" id="schedule-footer" aria-label="обновление расписания">
+            <button class="sched-stamp-button" id="go-updates" type="button" aria-label="история обновлений">
+              <span class="sched-data-stamp" id="data-stamp" role="status" hidden></span>
+            </button>
+            <button
+                class="sched-refresh-btn"
+                id="refresh-btn"
+                type="button"
+                aria-label="обновить данные"
+                title="обновить данные"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M23 4v6h-6" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+              </button>
+          </footer>
+        </main>
+
+        <div class="bells-view" id="aux-view" hidden></div>
+
+
+      </div>
+
+      <div class="sched-profile-backdrop" id="profile-backdrop" hidden></div>
+      <div class="sched-onboarding" id="onboarding" hidden></div>
+    </div>
+  </body>
+</html>

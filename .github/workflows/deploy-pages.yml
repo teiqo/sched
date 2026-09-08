@@ -1,85 +1,50 @@
-name: deploy pages
-
+name: deploy sched
 on:
   push:
   workflow_dispatch:
-
+  workflow_run:
+    workflows: [update schedule]
+    types: [completed]
 permissions:
+  contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: false
-
 jobs:
   deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: build js/config.js from environment
-        # Приоритет: Variables → Secrets → значение, уже закоммиченное в js/config.js.
-        # Последнее важно: если секрет не создан, деплой больше НЕ обнуляет конфиг.
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build public configuration
         env:
           SHARED_SWAPS_URL: ${{ vars.SHARED_SWAPS_URL || secrets.SHARED_SWAPS_URL }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY || secrets.FIREBASE_API_KEY }}
           TELEGRAM_BOT_NAME: ${{ vars.TELEGRAM_BOT_NAME || secrets.TELEGRAM_BOT_NAME }}
-          TELEGRAM_BOT_ID: ${{ vars.TELEGRAM_BOT_ID || secrets.TELEGRAM_BOT_ID }}
           TELEGRAM_OWNER_ID: ${{ vars.TELEGRAM_OWNER_ID || secrets.TELEGRAM_OWNER_ID }}
           TELEGRAM_ADMIN_IDS: ${{ vars.TELEGRAM_ADMIN_IDS || secrets.TELEGRAM_ADMIN_IDS }}
-          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY || vars.FIREBASE_API_KEY }}
-          TELEGRAM_BOT_TOKEN_SHA256: ${{ secrets.TELEGRAM_BOT_TOKEN_SHA256 || vars.TELEGRAM_BOT_TOKEN_SHA256 }}
-        run: |
-          # текущее значение переменной из уже лежащего в репе js/config.js
-          committed() {
-            [ -f js/config.js ] || return 0
-            sed -n "s/^var $1 = \"\(.*\)\";\$/\1/p" js/config.js | head -1
-          }
-          pick() {
-            eval "env_val=\$$1"
-            if [ -n "$env_val" ]; then printf '%s' "$env_val"; else committed "$1"; fi
-          }
-          V_SHARED_SWAPS_URL=$(pick SHARED_SWAPS_URL)
-          V_FIREBASE_API_KEY=$(pick FIREBASE_API_KEY)
-          V_TELEGRAM_BOT_NAME=$(pick TELEGRAM_BOT_NAME)
-          V_TELEGRAM_BOT_ID=$(pick TELEGRAM_BOT_ID)
-          V_TELEGRAM_OWNER_ID=$(pick TELEGRAM_OWNER_ID)
-          V_TELEGRAM_ADMIN_IDS=$(pick TELEGRAM_ADMIN_IDS)
-          V_TELEGRAM_BOT_TOKEN_SHA256=$(pick TELEGRAM_BOT_TOKEN_SHA256)
-          for v in SHARED_SWAPS_URL FIREBASE_API_KEY TELEGRAM_BOT_NAME TELEGRAM_BOT_ID; do
-            eval "val=\$V_$v"
-            if [ -z "$val" ]; then
-              echo "::warning::$v пуст — заполни его в js/local-config.js или в Settings → Secrets and variables → Actions"
-            fi
-          done
-          printf '%s\n' \
-            '/* ---------- конфиг weeqo: генерируется Action-ом из окружения github-pages ---------- */' \
-            "var SHARED_SWAPS_URL = \"${V_SHARED_SWAPS_URL}\";" \
-            "var FIREBASE_API_KEY = \"${V_FIREBASE_API_KEY}\";" \
-            "var TELEGRAM_BOT_NAME = \"${V_TELEGRAM_BOT_NAME}\";" \
-            "var TELEGRAM_BOT_ID = \"${V_TELEGRAM_BOT_ID}\";" \
-            "var TELEGRAM_OWNER_ID = \"${V_TELEGRAM_OWNER_ID}\";" \
-            "var TELEGRAM_ADMIN_IDS = \"${V_TELEGRAM_ADMIN_IDS}\";" \
-            "var TELEGRAM_BOT_TOKEN_SHA256 = \"${V_TELEGRAM_BOT_TOKEN_SHA256}\";" \
-            > js/config.js
-          echo "config.js: строк $(grep -c '^var ' js/config.js), firebase key заполнен: $([ -n "$V_FIREBASE_API_KEY" ] && echo да || echo нет)"
-
-      - name: stage site (без служебных файлов)
-        run: |
-          mkdir -p dist
-          rsync -a \
-            --exclude '.git' --exclude '.github' --exclude 'tools' \
-            --exclude 'dist' --exclude 'firebase-rules.json' \
-            ./ dist/
-
+          SCHED_NOTIFY_URL: ${{ vars.SCHED_NOTIFY_URL }}
+        run: python3 scripts/build_config.py
+      - name: Stage only public files
+        run: python3 scripts/stage_site.py
       - uses: actions/configure-pages@v5
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Notify bot after successful publication
+        env:
+          SCHED_NOTIFY_URL: ${{ vars.SCHED_NOTIFY_URL }}
+          NOTIFY_SECRET: ${{ secrets.NOTIFY_SECRET }}
+        run: python3 scripts/notify_schedule.py

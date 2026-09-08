@@ -1,0 +1,9 @@
+{
+  "name": "sched",
+  "version": "1.4.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 scripts/serve_local.py",
+    "stage": "python3 scripts/stage_site.py"
+  }
+}

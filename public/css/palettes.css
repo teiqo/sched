@@ -1,0 +1,361 @@
+:root[data-sched-palette="opaque"],
+:root[data-theme][data-sched-palette="opaque"] {
+  --sched-bg: #09090b;
+  --sched-surface: #222226;
+  --sched-raised: #2c2c32;
+  --sched-text: #f7f6f2;
+  --sched-secondary: #d2cfc4;
+  --sched-tertiary: #a09e95;
+  --sched-separator: #5c5c66;
+  --sched-fill: #35353c;
+  --sched-blue: #d8d3c6;
+  --sched-green: #c8c4b8;
+  --sched-live: #121212;
+  --sched-live-fill: #121212;
+  --sched-yellow: #e0c56a;
+  --sched-note: #2a2618;
+  --sched-danger: #ff8a84;
+  --homework-accent: #f7f6f2;
+  --homework-accent-strong: #ffffff;
+  --homework-accent-soft: #35353c;
+  --homework-on-accent: #0c0c0e;
+  --sched-shadow: none;
+  --opaque-paper: #f3f1ea;
+  --opaque-ink: #161616;
+  --opaque-meta: #5e5d58;
+  --sched-motion-state: var(--duration-fast);
+  --sched-motion-ease: var(--ease-smooth-out);
+  color-scheme: dark;
+}
+:root[data-sched-palette="opaque"] html.sched-page,
+:root[data-sched-palette="opaque"] html.sched-page body,
+:root[data-sched-palette="opaque"] html.sched-page #root,
+:root[data-sched-palette="opaque"] .sched-app {
+  background: var(--sched-bg);
+}
+:root[data-sched-palette="opaque"] .sched-app:before {
+  background: #0000009e;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-sched-palette="opaque"] .sched-header-mark {
+  background: var(--opaque-paper);
+  box-shadow: none;
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .sched-header-spark {
+  background: var(--opaque-paper);
+}
+:root[data-sched-palette="opaque"] .sched-week-badge {
+  background: var(--sched-raised);
+  color: var(--sched-text);
+  box-shadow: inset 0 0 0 1px var(--sched-separator);
+}
+:root[data-sched-palette="opaque"] .sched-academic-week {
+  background: var(--sched-fill);
+  color: var(--sched-text);
+}
+:root[data-sched-palette="opaque"] .sched-account-avatar,
+:root[data-sched-palette="opaque"] .sched-account-avatar.is-empty {
+  background: var(--sched-fill);
+  box-shadow: inset 0 0 0 1px var(--sched-separator);
+  color: var(--sched-text);
+}
+:root[data-sched-palette="opaque"] .sched-account-avatar svg {
+  filter: none;
+}
+:root[data-sched-palette="opaque"] .sched-notifications-trigger {
+  color: var(--sched-secondary);
+}
+:root[data-sched-palette="opaque"] .sched-settings-icon,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-editor,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-offline,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-theme,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-palette,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-layout,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-week-scope,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-request,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-freshman,
+:root[data-sched-palette="opaque"] .sched-settings-icon.is-onboarding {
+  background: var(--opaque-paper);
+  box-shadow: none;
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .sched-settings-copy > span {
+  color: var(--sched-tertiary);
+}
+:root[data-sched-palette="opaque"] .sched-week-switch.is-second .sched-week-badge {
+  background: var(--opaque-paper);
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .sched-date-controls {
+  background: var(--sched-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-sched-palette="opaque"] .date-strip {
+  border-bottom-color: var(--sched-separator);
+}
+:root[data-sched-palette="opaque"] .date-strip-selection,
+:root[data-sched-palette="opaque"] .date-strip-selection:before {
+  background: var(--opaque-paper);
+}
+:root[data-sched-palette="opaque"] .date-strip button[data-date-index],
+:root[data-sched-palette="opaque"] .date-strip button[data-date-index].is-today:not(.is-selected),
+:root[data-sched-palette="opaque"]
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index].is-selected:not([data-under-selection="true"]) {
+  color: var(--sched-secondary);
+}
+:root[data-sched-palette="opaque"]
+  .date-strip
+  button[data-date-index]:not(.is-selected)
+  > span:first-child {
+  color: var(--sched-tertiary);
+}
+:root[data-sched-palette="opaque"] .date-strip button[data-date-index]:not(.is-selected) strong {
+  color: var(--sched-secondary);
+}
+:root[data-sched-palette="opaque"] .date-strip button[data-date-index].is-selected:not(.is-day-off),
+:root[data-sched-palette="opaque"]
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index][data-under-selection="true"]:not(.is-day-off) {
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .date-strip button[data-date-index].is-day-off,
+:root[data-sched-palette="opaque"]
+  .date-strip
+  button[data-date-index].is-day-off.is-today:not(.is-selected),
+:root[data-sched-palette="opaque"] .date-strip button[data-date-index].is-day-off.is-selected,
+:root[data-sched-palette="opaque"]
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index].is-day-off[data-under-selection="true"] {
+  color: var(--sched-tertiary);
+}
+:root[data-sched-palette="opaque"] .sched-day-heading {
+  margin-bottom: 14px;
+}
+:root[data-sched-palette="opaque"] .sched-day-heading h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+:root[data-sched-palette="opaque"] .sched-day-heading-copy > span {
+  margin-top: 3px;
+  color: var(--sched-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+:root[data-sched-palette="opaque"] .sched-day-block.is-future .sched-day-heading h2 {
+  color: var(--sched-secondary);
+  font-size: 22px;
+  font-weight: 650;
+}
+:root[data-sched-palette="opaque"] .date-strip-today.is-visible {
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--sched-raised);
+  box-shadow: inset 0 0 0 1px var(--sched-separator);
+  color: var(--sched-text);
+}
+:root[data-sched-palette="opaque"] .sched-subgroup-select-value {
+  color: var(--sched-secondary);
+}
+:root[data-sched-palette="opaque"] .sched-subgroup-select.is-global {
+  background: var(--sched-surface);
+  box-shadow: inset 0 0 0 1px var(--sched-separator);
+}
+:root[data-sched-palette="opaque"]
+  .sched-active-day-scene.is-entering
+  .sched-day-heading.t-stagger {
+  --stagger-dur: var(--duration-fast);
+}
+:root[data-sched-palette="opaque"] .live-lesson-card {
+  border-color: var(--sched-separator);
+  border-radius: 14px;
+  background: var(--sched-surface);
+}
+:root[data-sched-palette="opaque"] .live-lesson-card.is-current {
+  padding: 16px;
+  overflow: hidden;
+  background: var(--opaque-paper);
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .live-card-backglow,
+:root[data-sched-palette="opaque"] .live-card-particles {
+  display: none;
+}
+:root[data-sched-palette="opaque"] .live-card-glass {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-sched-palette="opaque"] .is-current .live-card-status,
+:root[data-sched-palette="opaque"] .is-current .live-card-timing {
+  color: var(--opaque-meta);
+}
+:root[data-sched-palette="opaque"] .is-current .live-lesson-card h3 {
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .is-current .lesson-meta,
+:root[data-sched-palette="opaque"] .is-current .lesson-type-accent {
+  color: var(--opaque-meta);
+}
+:root[data-sched-palette="opaque"] .live-lesson-card .lesson-location,
+:root[data-sched-palette="opaque"] .agenda-row .lesson-location {
+  display: none;
+}
+:root[data-sched-palette="opaque"] .is-current .lesson-room {
+  color: var(--opaque-ink);
+  background: #16161614;
+}
+:root[data-sched-palette="opaque"] .live-card-status span > i {
+  background: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .live-card-status span > i:after {
+  border-color: #12121259;
+}
+:root[data-sched-palette="opaque"] .live-card-progress {
+  background: #1212121f;
+}
+:root[data-sched-palette="opaque"] .live-card-progress i {
+  background: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .live-lesson-card.is-next {
+  border-color: var(--sched-separator);
+}
+:root[data-sched-palette="opaque"] .live-card-status {
+  color: var(--sched-text);
+}
+:root[data-sched-palette="opaque"] .agenda-list {
+  border-color: var(--sched-separator);
+  border-radius: 14px;
+  background: var(--sched-surface);
+}
+:root[data-sched-palette="opaque"] .agenda-row {
+  min-height: 82px;
+  padding: 14px 14px 14px 12px;
+  gap: 12px;
+  align-items: start;
+}
+:root[data-sched-palette="opaque"] .agenda-row + .agenda-row {
+  border-top-color: var(--sched-separator);
+}
+:root[data-sched-palette="opaque"] .agenda-row-time time {
+  color: var(--sched-text);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+:root[data-sched-palette="opaque"] .agenda-row-time time span {
+  color: var(--sched-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+:root[data-sched-palette="opaque"] .agenda-row strong {
+  color: var(--sched-text);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+}
+:root[data-sched-palette="opaque"] .agenda-row-content > .lesson-meta {
+  margin-top: 7px;
+  gap: 6px;
+}
+:root[data-sched-palette="opaque"] .agenda-row small {
+  margin-top: 6px;
+  color: var(--sched-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+}
+:root[data-sched-palette="opaque"] .lesson-type-accent {
+  color: var(--sched-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+:root[data-sched-palette="opaque"] .lesson-type-accent:before {
+  display: none;
+}
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-lecture,
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-practice,
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-lab,
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-mixed,
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-online,
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-class {
+  color: var(--sched-secondary);
+}
+:root[data-sched-palette="opaque"] .lesson-room {
+  margin: 0;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--sched-fill);
+  color: var(--sched-text);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+:root[data-sched-palette="opaque"] .agenda-list.is-completed .agenda-row strong {
+  color: var(--sched-secondary);
+  font-weight: 600;
+}
+:root[data-sched-palette="opaque"] .agenda-list.is-completed .lesson-type-accent,
+:root[data-sched-palette="opaque"] .agenda-list.is-completed .lesson-room {
+  color: var(--sched-tertiary);
+  background: transparent;
+  padding: 0;
+}
+:root[data-sched-palette="opaque"][data-sched-schedule-view="light"]
+  .sched-schedule-view
+  .lesson-room {
+  margin: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--sched-fill);
+  color: var(--sched-text);
+  font-size: 11px;
+  font-weight: 650;
+}
+:root[data-sched-palette="opaque"] .sched-settings-popover {
+  border: 1px solid var(--sched-separator);
+  background: var(--sched-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-sched-palette="opaque"] .sched-tab-bar {
+  background: var(--sched-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-sched-palette="opaque"] .sched-tab-bar:after {
+  background: var(--opaque-paper);
+  box-shadow: none;
+}
+:root[data-sched-palette="opaque"] .sched-tab-bar button {
+  color: var(--sched-tertiary);
+}
+:root[data-sched-palette="opaque"] .sched-tab-bar button.is-active {
+  color: var(--opaque-ink);
+}
+:root[data-sched-palette="opaque"] .sched-palette-toggle.is-opaque i {
+  opacity: 1;
+}
+:root[data-sched-palette="opaque"] .sched-palette-toggle.is-opaque i:nth-child(1) {
+  background: #09090b;
+}
+:root[data-sched-palette="opaque"] .sched-palette-toggle.is-opaque i:nth-child(2) {
+  background: #222226;
+}
+:root[data-sched-palette="opaque"] .sched-palette-toggle.is-opaque i:nth-child(3) {
+  background: #a09e95;
+}
+:root[data-sched-palette="opaque"] .sched-palette-toggle.is-opaque i:nth-child(4) {
+  background: #f3f1ea;
+}

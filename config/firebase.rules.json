@@ -1,0 +1,49 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "weeqo-swaps": {
+      ".read": true,
+      "$key": {
+        ".write": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && (auth.token.sched_role === 'owner' || auth.token.sched_role === 'editor' || root.child('weeqo-editors').child(auth.token.tg_id).isString())",
+        ".validate": "newData.val() === null || (newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 300000 && (!newData.child('subject').exists() || (newData.child('subject').isString() && newData.child('subject').val().length <= 120)) && (!newData.child('teacher').exists() || (newData.child('teacher').isString() && newData.child('teacher').val().length <= 120)) && (!newData.child('room').exists() || (newData.child('room').isString() && newData.child('room').val().length <= 40)))"
+      }
+    },
+    "weeqo-pending": {
+      ".read": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id",
+      "$key": {
+        ".write": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && ((auth.token.sched_role === 'owner' || auth.token.sched_role === 'editor' || root.child('weeqo-editors').child(auth.token.tg_id).isString()) || (newData.exists() && newData.child('by').val() === auth.token.tg_id && (!data.exists() || data.child('by').val() === auth.token.tg_id)))",
+        ".validate": "newData.val() === null || (newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 300000 && newData.child('by').isString() && (!newData.child('subject').exists() || (newData.child('subject').isString() && newData.child('subject').val().length <= 120)) && (!newData.child('teacher').exists() || (newData.child('teacher').isString() && newData.child('teacher').val().length <= 120)) && (!newData.child('room').exists() || (newData.child('room').isString() && newData.child('room').val().length <= 40)))"
+      }
+    },
+    "weeqo-users": {
+      ".read": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && auth.token.sched_role === 'owner'",
+      ".write": false
+    },
+    "weeqo-editors": {
+      ".read": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id",
+      "$tgId": {
+        ".write": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && auth.token.sched_role === 'owner'",
+        ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 80)"
+      }
+    },
+    "weeqo-meta": {
+      ".read": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id",
+      ".write": false
+    },
+    "weeqo-tg-subs": {
+      "$tgId": {
+        ".read": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && (auth.token.tg_id === $tgId || auth.token.sched_role === 'owner')",
+        ".write": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && auth.token.tg_id === $tgId",
+        ".validate": "newData.val() === null || (newData.child('name').isString() && newData.child('name').val().length <= 80 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 300000 && (!newData.child('swaps').exists() || newData.child('swaps').isBoolean()) && (!newData.child('schedule').exists() || newData.child('schedule').isBoolean()) && (!newData.child('pending').exists() || newData.child('pending').isBoolean()))"
+      }
+    },
+    "weeqo-reports": {
+      ".read": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && (auth.token.sched_role === 'owner' || auth.token.sched_role === 'editor' || root.child('weeqo-editors').child(auth.token.tg_id).isString())",
+      "$reportId": {
+        ".write": "auth != null && auth.token.tg_id != null && auth.uid === 'telegram:' + auth.token.tg_id && ((auth.token.sched_role === 'owner' || auth.token.sched_role === 'editor' || root.child('weeqo-editors').child(auth.token.tg_id).isString()) || (!data.exists() && newData.exists() && newData.child('by').val() === auth.token.tg_id))",
+        ".validate": "newData.val() === null || (newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now + 300000 && newData.child('message').isString() && newData.child('message').val().length <= 5000)"
+      }
+    }
+  }
+}

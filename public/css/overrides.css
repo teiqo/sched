@@ -1,0 +1,5800 @@
+/* ---------- шрифт Inter (variable, вшит локально) ---------- */
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- лоадер сразу берёт фон темы, без белой вспышки при обновлении ---------- */
+.app-loading-state {
+  background: var(--sched-bg, #f5f5f7);
+}
+
+/* доправки поверх стилей оригинала — анимации смены дня/рулетки берутся из sched-*.css как на csu.noteven.dev */
+
+/* сцену двигаем через WAAPI от текущего кадра, чтобы прерывание не дёргало прямоугольник */
+.sched-active-day-scene.is-leaving[data-direction],
+.sched-active-day-scene.is-entering[data-direction] {
+  animation: none;
+}
+
+/* единая полоса дней для всех тем: в покое маленькая линия,
+   при клике, колесе или перетаскивании — полный прямоугольник */
+:root {
+  --strip-selection-fill: var(--sched-blue);
+  --strip-selection-idle: var(--sched-blue);
+  --strip-selection-on: #fff;
+  --strip-today-bg: color-mix(in srgb, var(--sched-blue) 10%, transparent);
+  --strip-today-ring: color-mix(in srgb, var(--sched-blue) 52%, transparent);
+  --sched-hover-fill: color-mix(in srgb, var(--sched-fill) 58%, transparent);
+  --sched-hover-subtle: color-mix(in srgb, var(--sched-text) 5%, transparent);
+}
+
+:root[data-theme="light"] {
+  --sched-hover-fill: color-mix(in srgb, var(--sched-fill) 68%, transparent);
+  --sched-hover-subtle: rgba(0, 0, 0, 0.04);
+}
+
+:root[data-sched-palette="colorful"] {
+  --strip-selection-fill: linear-gradient(90deg, #6578f6, #9a6fe8);
+}
+
+:root[data-sched-palette="neutral"],
+:root[data-sched-palette="neutral-light"] {
+  --strip-selection-fill: #248bda;
+  --strip-selection-idle: #248bda;
+}
+
+:root[data-sched-palette="opaque"] {
+  --strip-selection-fill: var(--sched-blue);
+  --strip-selection-on: #111114;
+  --strip-today-bg: color-mix(in srgb, var(--sched-blue) 12%, transparent);
+  --strip-today-ring: color-mix(in srgb, var(--sched-blue) 62%, transparent);
+}
+
+/* светлые версии палитр не наследуют тёмные жёсткие селекторы из оригинальных CSS */
+:root[data-theme="light"][data-sched-palette="neutral-light"] {
+  --sched-bg: #eef2f5;
+  --sched-surface: #ffffff;
+  --sched-raised: #f8fafc;
+  --sched-text: #18212a;
+  --sched-secondary: #677684;
+  --sched-tertiary: #7d8b97;
+  --sched-separator: rgba(54, 76, 94, 0.16);
+  --sched-fill: rgba(36, 139, 218, 0.1);
+  --sched-blue: #248bda;
+  --sched-green: #299d69;
+  --sched-live: #299d69;
+  --sched-live-fill: #38b77d;
+  --sched-yellow: #b77a14;
+  --sched-note: #fff6d8;
+  --sched-danger: #d9414c;
+  --sched-shadow: 0 10px 28px rgba(42, 65, 82, 0.1);
+  color-scheme: light;
+}
+
+:root[data-theme="light"][data-sched-palette="opaque-light"] {
+  --sched-bg: #f2f0ea;
+  --sched-surface: #fffdf8;
+  --sched-raised: #f8f5ee;
+  --sched-text: #171715;
+  --sched-secondary: #68655d;
+  --sched-tertiary: #858179;
+  --sched-separator: rgba(74, 70, 61, 0.18);
+  --sched-fill: rgba(74, 70, 61, 0.09);
+  --sched-blue: #343431;
+  --sched-green: #397154;
+  --sched-live: #397154;
+  --sched-live-fill: #4d8c6c;
+  --sched-yellow: #9a721d;
+  --sched-note: #fff4cd;
+  --sched-danger: #b8423c;
+  --sched-shadow: 0 10px 28px rgba(52, 48, 40, 0.1);
+  --strip-selection-fill: #343431;
+  --strip-selection-idle: #343431;
+  --strip-selection-on: #fff;
+  --strip-today-bg: rgba(52, 52, 49, 0.08);
+  --strip-today-ring: rgba(52, 52, 49, 0.42);
+  color-scheme: light;
+}
+
+:root[data-theme="light"],
+:root[data-theme="light"][data-sched-palette] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"],
+:root[data-theme="dark"][data-sched-palette] {
+  color-scheme: dark;
+}
+
+.date-strip {
+  perspective: 320px;
+}
+
+.date-strip-selection,
+.date-strip button[data-date-index] {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* в чёрно-белой палитре сам слой выделения рисовал постоянный прямоугольник — убираем фон */
+:root .date-strip-selection,
+:root[data-sched-palette] .date-strip-selection {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.date-strip-selection:before {
+  background: var(--strip-selection-fill) !important;
+  box-shadow: none;
+  /* показываем верхний скруглённый край прямоугольника снизу ячейки */
+  clip-path: inset(
+    0 5px calc(var(--date-strip-item-height) - var(--date-strip-line-height)) round 0
+  ) !important;
+  transform: translateY(calc(var(--date-strip-item-height) - var(--date-strip-line-height)))
+    rotateX(0deg) !important;
+  transform-origin: center top;
+  transition:
+    clip-path 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.24s ease,
+    transform 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: clip-path, transform;
+}
+
+.date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-hop) .date-strip-selection:before,
+.date-strip-selection.is-hop:before {
+  clip-path: inset(0 round 17px) !important;
+  box-shadow: none !important;
+  transform: translateY(0) rotateX(0) scale(1.005) !important;
+}
+
+.date-strip.is-pressing .date-strip-selection:before {
+  transform: translateY(0) rotateX(0) scale(1.012) !important;
+}
+
+/* после отпускания сначала фиксируем полный прямоугольник, затем плавно опускаем его.
+   Ускорено и без выпирания: долгое опускание читалось как «пилюля проваливается вниз». */
+.date-strip.is-releasing .date-strip-selection:before {
+  transition:
+    clip-path 0.24s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s ease,
+    transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* выбранный день больше не становится белым на маленькой полоске */
+:root .date-strip button[data-date-index].is-selected:not(.is-day-off) {
+  color: var(--strip-selection-idle) !important;
+}
+
+:root .date-strip button[data-date-index].is-selected.is-day-off {
+  color: var(--sched-danger) !important;
+}
+
+/* выходные и летние каникулы — красные во всех палитрах */
+:root .date-strip button[data-date-index].is-day-off,
+:root .date-strip button[data-date-index].is-day-off strong,
+:root .date-strip button[data-date-index].is-day-off > span:first-child,
+:root .date-strip button[data-date-index].is-day-off .date-lesson-dots i,
+:root
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index].is-day-off[data-under-selection="true"] {
+  color: var(--sched-danger) !important;
+}
+
+/* на поднятом прямоугольнике используем контрастный цвет */
+/* Пока держишь/ведёшь, цифра под пилюлей должна оставаться контрастной, а не
+   сливаться с её цветом. Раньше при долгом зажатии (скрабинг без движения)
+   выбранный день ещё не помечен data-under-selection и уходил в idle-цвет,
+   совпадающий с заливкой, — цифра пропадала.
+   Добавили и фазу is-pressing: до активации вождения пилюля уже выросла над
+   нажатым днём, а его цифра ещё была серой — поэтому «выделение закрывало день». */
+:root
+  .date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-hop, .is-releasing)
+  button[data-date-index][data-under-selection="true"]:not(.is-day-off),
+:root
+  .date-strip:is(.is-pressing, .is-hop, .is-releasing)
+  button[data-date-index].is-selected:not(.is-day-off),
+:root
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index][data-under-selection="true"]:not(.is-day-off),
+:root
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index].is-selected:not(.is-day-off),
+:root .date-strip.is-hop button[data-date-index].is-selected:not(.is-day-off) {
+  color: var(--strip-selection-on) !important;
+}
+
+/* сегодняшний день виден во всех палитрах и в белом режиме */
+:root .date-strip button[data-date-index].is-today:not(.is-selected) {
+  background: var(--strip-today-bg);
+  box-shadow: inset 0 0 0 1px var(--strip-today-ring) !important;
+  color: var(--sched-blue) !important;
+}
+
+:root .date-strip button[data-date-index].is-today:not(.is-selected) > span:first-child,
+:root .date-strip button[data-date-index].is-today:not(.is-selected) > strong {
+  color: var(--sched-blue) !important;
+}
+
+:root .date-strip button[data-date-index].is-today.is-selected {
+  background: var(--strip-today-bg);
+  box-shadow: inset 0 0 0 1px var(--strip-today-ring);
+}
+
+/* возврат на сегодня: стрелка и текст всегда видимы вне сегодняшнего дня */
+.sched-header,
+.date-strip {
+  overflow: visible;
+}
+
+:root .date-strip-today,
+:root[data-sched-palette] .date-strip-today,
+:root #today-btn {
+  position: absolute;
+  top: calc(100% + 34px);
+  right: 4px;
+  left: auto;
+  display: inline-flex !important;
+  width: auto;
+  height: 28px;
+  min-height: 0;
+  padding: 0 9px 0 7px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sched-blue) 12%, var(--sched-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sched-blue) 28%, transparent);
+  color: var(--sched-blue);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate3d(0, -50%, 0);
+  transition:
+    opacity 0.16s ease,
+    transform 0.22s var(--sched-motion-ease),
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+:root[data-sched-schedule-view="light"] .date-strip-today,
+:root[data-sched-schedule-view="light"] #today-btn {
+  top: calc(100% + 31px);
+}
+
+:root .date-strip-today.is-visible,
+:root[data-sched-palette] .date-strip-today.is-visible,
+:root #today-btn.is-visible {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(0, -50%, 0);
+}
+
+:root .date-strip-today:active,
+:root #today-btn:active {
+  transform: translate3d(0, -50%, 0) scale(0.96);
+}
+
+:root .date-strip-today svg,
+:root[data-sched-palette] .date-strip-today svg,
+:root #today-btn svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  stroke-width: 2.2;
+}
+
+/* точки с количеством пар стоят в общей сетке дня и не наезжают на число */
+:root .date-strip button[data-date-index] {
+  padding: 5px 0 6px !important;
+  grid-auto-rows: min-content;
+  align-content: center;
+  row-gap: 3px;
+}
+
+:root .date-lesson-dots {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  position: static;
+  max-width: 100%;
+  height: 3px;
+  gap: 2.5px;
+  transform: none;
+  pointer-events: none;
+}
+
+:root .date-lesson-dots i {
+  display: block !important;
+  flex: 0 0 3px !important;
+  width: 3px !important;
+  height: 3px !important;
+  border-radius: 50% !important;
+  background-color: currentColor !important;
+  box-sizing: border-box;
+}
+
+/* завершённые пары: появление такое же, как у обычной смены дня */
+.completed-lessons.t-acc {
+  --acc-expand: var(--page-slide-dur, 0.25s);
+  --acc-collapse: var(--page-slide-dur, 0.25s);
+  --acc-chevron: var(--page-slide-dur, 0.25s);
+  --acc-ease: var(--page-slide-ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.completed-lessons-toggle {
+  cursor: pointer;
+}
+
+.completed-lessons .t-acc-panel-inner {
+  padding-top: 0;
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+  transition: padding-top var(--acc-collapse) var(--acc-ease);
+}
+
+.completed-lessons[data-open="true"] .t-acc-panel-inner {
+  padding-top: 10px;
+  transition: padding-top var(--acc-expand) var(--acc-ease);
+}
+
+/* те же ключевые кадры, что и у карточек дня: сдвиг сверху, блюр и проявление */
+.completed-lessons.is-expanding .agenda-list.is-completed > * {
+  animation: sched-completed-row-in var(--duration-fast, 0.4s)
+    var(--page-slide-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.completed-lessons.is-expanding .agenda-list.is-completed > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.completed-lessons.is-expanding .agenda-list.is-completed > *:nth-child(2) {
+  animation-delay: var(--duration-stagger, 40ms);
+}
+.completed-lessons.is-expanding .agenda-list.is-completed > *:nth-child(3) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 2);
+}
+.completed-lessons.is-expanding .agenda-list.is-completed > *:nth-child(4) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 3);
+}
+.completed-lessons.is-expanding .agenda-list.is-completed > *:nth-child(n + 5) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 4);
+}
+
+@keyframes sched-completed-row-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, calc(var(--page-slide-distance, 8px) * -1), 0);
+    filter: blur(var(--page-blur, 3px));
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .completed-lessons.is-expanding .agenda-list.is-completed > * {
+    animation: none;
+  }
+}
+
+/* звонки: будни слева, суббота справа */
+.bells-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+
+.bells-section {
+  min-width: 0;
+}
+
+.bells-grid .agenda-row {
+  display: block;
+  min-height: 0;
+  padding: 8px 10px;
+}
+
+.bells-grid .agenda-row-time time {
+  padding-top: 0;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.bells-grid .agenda-row strong {
+  margin-top: 2px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bells-grid .agenda-row small {
+  margin-top: 1px;
+  font-size: 10.5px;
+}
+
+.bells-grid .agenda-row.is-bell-break {
+  background: color-mix(in srgb, var(--sched-fill) 55%, transparent);
+}
+
+.bells-grid .agenda-row.is-bell-break .agenda-row-time time,
+.bells-grid .agenda-row.is-bell-break strong {
+  color: var(--sched-secondary);
+}
+
+.bells-grid .agenda-row.is-bell-break strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 360px) {
+  .bells-grid {
+    gap: 8px;
+  }
+
+  .bells-grid .agenda-row {
+    padding: 7px 8px;
+  }
+
+  .bells-grid .agenda-row strong {
+    font-size: 13px;
+  }
+}
+
+.bells-section-head {
+  display: flex;
+  padding: 0 3px 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bells-section-head strong {
+  color: var(--sched-text);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.bells-section-head span {
+  color: var(--sched-secondary);
+  font-size: 12.5px;
+}
+
+/* ---------- дополнительные гармоничные палитры ---------- */
+
+:root[data-theme="dark"][data-sched-palette="ocean"] {
+  --sched-bg: #0b1620;
+  --sched-surface: #132433;
+  --sched-raised: #1a2f42;
+  --sched-text: #eaf4fb;
+  --sched-secondary: #9fb6c8;
+  --sched-tertiary: #859cb0;
+  --sched-separator: rgba(150, 190, 220, 0.18);
+  --sched-fill: rgba(86, 168, 224, 0.16);
+  --sched-blue: #56b5e8;
+  --sched-green: #4fc4a2;
+  --sched-live: #4fc4a2;
+  --sched-live-fill: #5cd3b0;
+  --sched-yellow: #edc873;
+  --sched-note: #1c2c1f;
+  --sched-danger: #f2807c;
+  --sched-shadow: 0 12px 34px rgba(3, 14, 22, 0.44);
+  --strip-selection-fill: #56b5e8;
+  --strip-selection-idle: #56b5e8;
+  --strip-selection-on: #06202e;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"][data-sched-palette="ocean-light"] {
+  --sched-bg: #edf4f8;
+  --sched-surface: #ffffff;
+  --sched-raised: #f6fafd;
+  --sched-text: #10222f;
+  --sched-secondary: #5c7386;
+  --sched-tertiary: #75899a;
+  --sched-separator: rgba(30, 74, 102, 0.16);
+  --sched-fill: rgba(23, 124, 176, 0.1);
+  --sched-blue: #177cb0;
+  --sched-green: #1f8f72;
+  --sched-live: #1f8f72;
+  --sched-live-fill: #2ba586;
+  --sched-yellow: #b1791a;
+  --sched-note: #fff5d6;
+  --sched-danger: #cf4a4a;
+  --sched-shadow: 0 10px 28px rgba(23, 63, 87, 0.12);
+  --strip-selection-fill: #177cb0;
+  --strip-selection-idle: #177cb0;
+  --strip-selection-on: #ffffff;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"][data-sched-palette="forest"] {
+  --sched-bg: #0d1712;
+  --sched-surface: #16261e;
+  --sched-raised: #1e3328;
+  --sched-text: #ecf5ef;
+  --sched-secondary: #a4bbad;
+  --sched-tertiary: #8aa294;
+  --sched-separator: rgba(158, 205, 178, 0.17);
+  --sched-fill: rgba(92, 190, 138, 0.15);
+  --sched-blue: #5cbe8a;
+  --sched-green: #6fd39c;
+  --sched-live: #6fd39c;
+  --sched-live-fill: #7ee0aa;
+  --sched-yellow: #dcc06b;
+  --sched-note: #222a17;
+  --sched-danger: #ef8279;
+  --sched-shadow: 0 12px 34px rgba(4, 16, 10, 0.44);
+  --strip-selection-fill: #5cbe8a;
+  --strip-selection-idle: #5cbe8a;
+  --strip-selection-on: #062315;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"][data-sched-palette="forest-light"] {
+  --sched-bg: #eff4ee;
+  --sched-surface: #ffffff;
+  --sched-raised: #f7fbf7;
+  --sched-text: #16241b;
+  --sched-secondary: #5d7263;
+  --sched-tertiary: #748876;
+  --sched-separator: rgba(37, 82, 53, 0.16);
+  --sched-fill: rgba(31, 122, 78, 0.1);
+  --sched-blue: #1f7a4e;
+  --sched-green: #1f7a4e;
+  --sched-live: #1f7a4e;
+  --sched-live-fill: #2f9765;
+  --sched-yellow: #a5761b;
+  --sched-note: #fdf4d3;
+  --sched-danger: #c9463f;
+  --sched-shadow: 0 10px 28px rgba(28, 61, 40, 0.12);
+  --strip-selection-fill: #1f7a4e;
+  --strip-selection-idle: #1f7a4e;
+  --strip-selection-on: #ffffff;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"][data-sched-palette="plum"] {
+  --sched-bg: #150f1a;
+  --sched-surface: #221a2b;
+  --sched-raised: #2d2338;
+  --sched-text: #f2ecf7;
+  --sched-secondary: #b3a5c1;
+  --sched-tertiary: #998ba8;
+  --sched-separator: rgba(190, 168, 214, 0.18);
+  --sched-fill: rgba(166, 124, 224, 0.16);
+  --sched-blue: #a67ce0;
+  --sched-green: #64c8a4;
+  --sched-live: #64c8a4;
+  --sched-live-fill: #74d6b2;
+  --sched-yellow: #e3bd72;
+  --sched-note: #2a2418;
+  --sched-danger: #f0808f;
+  --sched-shadow: 0 12px 34px rgba(12, 6, 18, 0.46);
+  --strip-selection-fill: #a67ce0;
+  --strip-selection-idle: #a67ce0;
+  --strip-selection-on: #1b1024;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"][data-sched-palette="plum-light"] {
+  --sched-bg: #f5f0f6;
+  --sched-surface: #ffffff;
+  --sched-raised: #faf6fb;
+  --sched-text: #221a29;
+  --sched-secondary: #6d6076;
+  --sched-tertiary: #85778e;
+  --sched-separator: rgba(74, 51, 88, 0.16);
+  --sched-fill: rgba(122, 70, 176, 0.1);
+  --sched-blue: #7a46b0;
+  --sched-green: #22886a;
+  --sched-live: #22886a;
+  --sched-live-fill: #2f9d7c;
+  --sched-yellow: #a9771c;
+  --sched-note: #fdf2d8;
+  --sched-danger: #c8455c;
+  --sched-shadow: 0 10px 28px rgba(56, 36, 66, 0.12);
+  --strip-selection-fill: #7a46b0;
+  --strip-selection-idle: #7a46b0;
+  --strip-selection-on: #ffffff;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"][data-sched-palette="sand"] {
+  --sched-bg: #17130e;
+  --sched-surface: #241e17;
+  --sched-raised: #30281f;
+  --sched-text: #f6f0e6;
+  --sched-secondary: #bcae9b;
+  --sched-tertiary: #a2937f;
+  --sched-separator: rgba(214, 194, 164, 0.18);
+  --sched-fill: rgba(214, 160, 88, 0.15);
+  --sched-blue: #dda45e;
+  --sched-green: #7cc08c;
+  --sched-live: #7cc08c;
+  --sched-live-fill: #8bd09b;
+  --sched-yellow: #e6c274;
+  --sched-note: #2b2416;
+  --sched-danger: #ef8b74;
+  --sched-shadow: 0 12px 34px rgba(14, 10, 5, 0.46);
+  --strip-selection-fill: #dda45e;
+  --strip-selection-idle: #dda45e;
+  --strip-selection-on: #241705;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"][data-sched-palette="sand-light"] {
+  --sched-bg: #f7f2ea;
+  --sched-surface: #fffdf9;
+  --sched-raised: #fbf7f0;
+  --sched-text: #241d13;
+  --sched-secondary: #746755;
+  --sched-tertiary: #8b7d6a;
+  --sched-separator: rgba(88, 71, 48, 0.16);
+  --sched-fill: rgba(163, 106, 33, 0.1);
+  --sched-blue: #a36a21;
+  --sched-green: #2c8560;
+  --sched-live: #2c8560;
+  --sched-live-fill: #3a9a72;
+  --sched-yellow: #9c7418;
+  --sched-note: #fdf1cf;
+  --sched-danger: #c1503a;
+  --sched-shadow: 0 10px 28px rgba(66, 52, 32, 0.12);
+  --strip-selection-fill: #a36a21;
+  --strip-selection-idle: #a36a21;
+  --strip-selection-on: #ffffff;
+  color-scheme: light;
+}
+
+:root .completed-lessons .completed-lessons-chevron {
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+
+:root .completed-lessons[data-open="true"] .completed-lessons-chevron {
+  transform: scaleY(-1);
+}
+
+/* полосы прокрутки скрыты, но колесо, тачпад и свайп продолжают работать */
+html.sched-page,
+html.sched-page body,
+html.sched-page #root,
+.sched-app,
+.sched-notifications-scroll,
+.sched-profile,
+.sched-onboarding-slide,
+.sched-freshness-slide,
+#aux-view {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html.sched-page::-webkit-scrollbar,
+html.sched-page body::-webkit-scrollbar,
+html.sched-page #root::-webkit-scrollbar,
+.sched-app::-webkit-scrollbar,
+.sched-notifications-scroll::-webkit-scrollbar,
+.sched-profile::-webkit-scrollbar,
+.sched-onboarding-slide::-webkit-scrollbar,
+.sched-freshness-slide::-webkit-scrollbar,
+#aux-view::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* в белом режиме элементы форм не получают тёмную системную схему */
+:root[data-theme="light"]
+  :is(.sched-app, .sched-onboarding, .sched-profile-backdrop)
+  :is(select, input, textarea) {
+  color-scheme: light !important;
+}
+
+/* живая пара сегодня: то же появление, что у остальных пар */
+.sched-active-day-scene.is-entering .live-lesson-card,
+#stage .sched-active-day-scene.is-entering .live-lesson-card {
+  animation: t-row-in var(--duration-fast, 0.4s)
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
+  animation-delay: var(--duration-stagger, 70ms) !important;
+  will-change: transform, opacity;
+}
+
+@keyframes sched-live-card-in {
+  from {
+    transform: translate3d(0, var(--distance-medium, 12px), 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.live-card-backglow,
+.live-card-glass,
+.live-card-status,
+.live-card-progress {
+  transition: none;
+}
+
+/* ---------- аудитория всегда в квадратике ---------- */
+
+.lesson-room {
+  display: inline-flex;
+  min-height: 20px;
+  padding: 2px 7px;
+  align-items: center;
+  border-radius: 6px;
+  background: var(--sched-fill);
+  color: var(--sched-secondary);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.live-card-glass .lesson-room,
+.live-lesson-card .lesson-room {
+  font-size: 11px;
+}
+
+/* ---------- чётность: индикатор, а не переключатель ---------- */
+
+.sched-week-switch.is-static {
+  cursor: default;
+}
+
+.sched-week-switch.is-static:disabled {
+  opacity: 1;
+}
+
+.sched-week-switch.is-static:active .sched-week-badge {
+  transform: none;
+}
+
+/* ---------- выбор группы: ровная сетка ---------- */
+
+.sched-onboarding-slide {
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  gap: 22px;
+}
+
+.sched-onboarding-slide.is-welcome {
+  grid-template-rows: minmax(min-content, 1fr) auto;
+}
+
+.sched-onboarding-copy {
+  align-self: center;
+}
+
+.sched-onboarding-slide.is-profile .sched-onboarding-copy {
+  text-align: center;
+}
+
+.sched-onboarding-slide.is-profile .sched-onboarding-back {
+  margin: 0 auto 16px;
+  justify-content: center;
+}
+
+.sched-onboarding-slide.is-profile .sched-profile-fields {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.sched-onboarding-slide.is-profile .sched-profile-field > small {
+  text-align: center;
+}
+
+.sched-onboarding-action {
+  margin-bottom: 4px;
+}
+
+.sched-onboarding-copy h1 {
+  font-size: 34px;
+}
+
+/* ===== v16: единая механика полоски и цветные палитры ===== */
+
+:root {
+  --palette-accent-1: var(--sched-blue);
+  --palette-accent-2: var(--sched-green);
+  --palette-accent-3: var(--sched-yellow);
+  --palette-accent-4: var(--sched-danger);
+  --week-odd-color: var(--palette-accent-1);
+  --week-even-color: var(--palette-accent-4);
+}
+
+/* В каждой теме линия снизу разворачивается в карточку тем же способом, что в цветной. */
+:root .date-strip-selection:before,
+:root[data-sched-palette] .date-strip-selection:before {
+  clip-path: inset(
+    0 5px calc(var(--date-strip-item-height) - var(--date-strip-line-height)) round 0
+  ) !important;
+  transform: translateY(calc(var(--date-strip-item-height) - var(--date-strip-line-height)))
+    rotateX(0deg) !important;
+  transform-origin: center top !important;
+  transition:
+    clip-path 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.24s ease,
+    transform 0.34s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+:root
+  .date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-hop)
+  .date-strip-selection:before,
+:root .date-strip-selection.is-hop:before,
+:root[data-sched-palette]
+  .date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-hop)
+  .date-strip-selection:before,
+:root[data-sched-palette] .date-strip-selection.is-hop:before {
+  clip-path: inset(0 round 17px) !important;
+  transform: translateY(0) rotateX(0) scale(1.005) !important;
+  box-shadow: none !important;
+}
+
+/* Счётчик недели теперь полностью берёт цвета текущей палитры. */
+:root .sched-week-badge,
+:root[data-sched-palette] .sched-week-badge {
+  background: color-mix(in srgb, var(--week-odd-color) 16%, var(--sched-surface)) !important;
+  color: var(--week-odd-color) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--week-odd-color) 22%, transparent) !important;
+}
+
+:root .sched-week-switch.is-second .sched-week-badge,
+:root[data-sched-palette] .sched-week-switch.is-second .sched-week-badge {
+  background: color-mix(in srgb, var(--week-even-color) 15%, var(--sched-surface)) !important;
+  color: var(--week-even-color) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--week-even-color) 22%, transparent) !important;
+}
+
+:root .sched-academic-week,
+:root[data-sched-palette] .sched-academic-week {
+  background: color-mix(in srgb, currentColor 17%, transparent) !important;
+  color: inherit !important;
+}
+
+/* У следующей пары нет зелёной полосы; отсчёт крупнее и стоит слева по центру. */
+.live-lesson-card.is-next .live-card-progress {
+  display: none !important;
+}
+
+.agenda-row.is-next:before {
+  content: none !important;
+  display: none !important;
+}
+
+.lesson-origin-mark.is-next {
+  background: color-mix(in srgb, var(--palette-accent-1) 13%, transparent);
+  color: var(--palette-accent-1);
+}
+
+.live-card-timing.is-next-timing {
+  display: flex;
+  min-height: 34px;
+  margin-top: 13px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 11px;
+  color: var(--sched-secondary);
+}
+
+.live-card-timing.is-next-timing #live-left {
+  color: var(--palette-accent-1);
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.live-card-timing.is-next-timing .live-next-range {
+  padding-left: 11px;
+  border-left: 1px solid var(--sched-separator);
+  color: var(--sched-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Превью в переключателе показывает реальные четыре акцента палитры. */
+.sched-palette-toggle[data-palette] i {
+  opacity: 1 !important;
+  transform: none !important;
+}
+.sched-palette-toggle[data-palette] i:nth-child(1) {
+  background: var(--palette-accent-1) !important;
+}
+.sched-palette-toggle[data-palette] i:nth-child(2) {
+  background: var(--palette-accent-2) !important;
+}
+.sched-palette-toggle[data-palette] i:nth-child(3) {
+  background: var(--palette-accent-3) !important;
+}
+.sched-palette-toggle[data-palette] i:nth-child(4) {
+  background: var(--palette-accent-4) !important;
+}
+
+/* Сохранённые темы. Их фон спокойный, но интерфейс использует несколько акцентов. */
+:root[data-sched-palette="colorful"] {
+  --palette-accent-1: #7182ff;
+  --palette-accent-2: #50c99a;
+  --palette-accent-3: #f1b84b;
+  --palette-accent-4: #ec6f9e;
+  --week-odd-color: #50c99a;
+  --week-even-color: #ec6f9e;
+}
+:root[data-sched-palette="neutral"],
+:root[data-sched-palette="neutral-light"] {
+  --palette-accent-1: #248bda;
+  --palette-accent-2: #45aa7e;
+  --palette-accent-3: #d69b36;
+  --palette-accent-4: #df5c66;
+}
+:root[data-sched-palette="opaque"],
+:root[data-sched-palette="opaque-light"] {
+  --palette-accent-1: var(--sched-blue);
+  --palette-accent-2: var(--sched-secondary);
+  --palette-accent-3: var(--sched-yellow);
+  --palette-accent-4: var(--sched-danger);
+}
+:root[data-sched-palette="ocean"],
+:root[data-sched-palette="ocean-light"] {
+  --palette-accent-1: #3aa8df;
+  --palette-accent-2: #35bd9b;
+  --palette-accent-3: #efb95b;
+  --palette-accent-4: #eb6d81;
+  --strip-selection-fill: linear-gradient(90deg, #3aa8df, #38c1ac);
+}
+:root[data-sched-palette="forest"],
+:root[data-sched-palette="forest-light"] {
+  --palette-accent-1: #3eae70;
+  --palette-accent-2: #49a7d8;
+  --palette-accent-3: #e1ad45;
+  --palette-accent-4: #e66f62;
+  --strip-selection-fill: linear-gradient(90deg, #3eae70, #49a7d8);
+}
+:root[data-sched-palette="plum"],
+:root[data-sched-palette="plum-light"] {
+  --palette-accent-1: #9a69dc;
+  --palette-accent-2: #e067a7;
+  --palette-accent-3: #dbad45;
+  --palette-accent-4: #45ad9a;
+  --strip-selection-fill: linear-gradient(90deg, #9a69dc, #e067a7);
+  --week-even-color: #e067a7;
+}
+:root[data-sched-palette="sand"],
+:root[data-sched-palette="sand-light"] {
+  --palette-accent-1: #d18b3d;
+  --palette-accent-2: #359884;
+  --palette-accent-3: #c96858;
+  --palette-accent-4: #6879c9;
+  --strip-selection-fill: linear-gradient(90deg, #d18b3d, #c96858);
+  --week-even-color: #6879c9;
+}
+
+/* Аврора: бирюза, фиолетовый, розовый и золото. */
+:root[data-theme="dark"][data-sched-palette="aurora"] {
+  --sched-bg: #0c151a;
+  --sched-surface: #15242a;
+  --sched-raised: #1c3037;
+  --sched-text: #edf9f8;
+  --sched-secondary: #9bb8b7;
+  --sched-tertiary: #7f9e9e;
+  --sched-separator: rgba(139, 207, 202, 0.18);
+  --sched-fill: rgba(64, 202, 184, 0.14);
+  --sched-blue: #52d0c1;
+  --sched-green: #9b7ee8;
+  --sched-live: #55d6a9;
+  --sched-live-fill: #63dfb5;
+  --sched-yellow: #efbd5f;
+  --sched-note: #292617;
+  --sched-danger: #ef6f9d;
+  --sched-shadow: 0 12px 34px rgba(2, 12, 15, 0.46);
+  --palette-accent-1: #52d0c1;
+  --palette-accent-2: #9b7ee8;
+  --palette-accent-3: #efbd5f;
+  --palette-accent-4: #ef6f9d;
+  --strip-selection-fill: linear-gradient(90deg, #49cdbb, #947ce8, #e96f9e);
+  --strip-selection-idle: #52d0c1;
+  --strip-selection-on: #071b1c;
+  --week-odd-color: #52d0c1;
+  --week-even-color: #ef6f9d;
+  color-scheme: dark;
+}
+:root[data-theme="light"][data-sched-palette="aurora-light"] {
+  --sched-bg: #f1f6f7;
+  --sched-surface: #ffffff;
+  --sched-raised: #f7fbfb;
+  --sched-text: #132629;
+  --sched-secondary: #5d7779;
+  --sched-tertiary: #748c8e;
+  --sched-separator: rgba(32, 92, 93, 0.16);
+  --sched-fill: rgba(27, 148, 137, 0.1);
+  --sched-blue: #168f86;
+  --sched-green: #7654c5;
+  --sched-live: #248c69;
+  --sched-live-fill: #32a27c;
+  --sched-yellow: #a97516;
+  --sched-note: #fff4d4;
+  --sched-danger: #c43f72;
+  --sched-shadow: 0 10px 28px rgba(31, 76, 78, 0.11);
+  --palette-accent-1: #168f86;
+  --palette-accent-2: #7654c5;
+  --palette-accent-3: #b27b18;
+  --palette-accent-4: #c43f72;
+  --strip-selection-fill: linear-gradient(90deg, #168f86, #7654c5, #c43f72);
+  --strip-selection-idle: #168f86;
+  --strip-selection-on: #fff;
+  --week-odd-color: #168f86;
+  --week-even-color: #c43f72;
+  color-scheme: light;
+}
+
+/* Закат: оранжевый, коралловый, фиолетовый и синий. */
+:root[data-theme="dark"][data-sched-palette="sunset"] {
+  --sched-bg: #1c1114;
+  --sched-surface: #2b1b20;
+  --sched-raised: #38232a;
+  --sched-text: #fff2ed;
+  --sched-secondary: #c6a39d;
+  --sched-tertiary: #aa8985;
+  --sched-separator: rgba(236, 166, 143, 0.18);
+  --sched-fill: rgba(238, 111, 82, 0.14);
+  --sched-blue: #ff8a55;
+  --sched-green: #8d80e8;
+  --sched-live: #64c7a2;
+  --sched-live-fill: #75d4b0;
+  --sched-yellow: #f2bf58;
+  --sched-note: #322719;
+  --sched-danger: #f06478;
+  --sched-shadow: 0 12px 34px rgba(16, 5, 8, 0.48);
+  --palette-accent-1: #ff8a55;
+  --palette-accent-2: #f06478;
+  --palette-accent-3: #9a82ec;
+  --palette-accent-4: #58a9dc;
+  --strip-selection-fill: linear-gradient(90deg, #ff8a55, #f06478, #9a82ec);
+  --strip-selection-idle: #ff8a55;
+  --strip-selection-on: #26100b;
+  --week-odd-color: #ff8a55;
+  --week-even-color: #9a82ec;
+  color-scheme: dark;
+}
+:root[data-theme="light"][data-sched-palette="sunset-light"] {
+  --sched-bg: #fff3ec;
+  --sched-surface: #ffffff;
+  --sched-raised: #fff9f5;
+  --sched-text: #311c18;
+  --sched-secondary: #80655f;
+  --sched-tertiary: #987b74;
+  --sched-separator: rgba(111, 61, 47, 0.16);
+  --sched-fill: rgba(218, 91, 51, 0.1);
+  --sched-blue: #d85b33;
+  --sched-green: #6758bd;
+  --sched-live: #268663;
+  --sched-live-fill: #35a17a;
+  --sched-yellow: #a87212;
+  --sched-note: #fff1ce;
+  --sched-danger: #c43d58;
+  --sched-shadow: 0 10px 28px rgba(103, 54, 40, 0.11);
+  --palette-accent-1: #d85b33;
+  --palette-accent-2: #c43d58;
+  --palette-accent-3: #6758bd;
+  --palette-accent-4: #277cae;
+  --strip-selection-fill: linear-gradient(90deg, #d85b33, #c43d58, #6758bd);
+  --strip-selection-idle: #d85b33;
+  --strip-selection-on: #fff;
+  --week-odd-color: #d85b33;
+  --week-even-color: #6758bd;
+  color-scheme: light;
+}
+
+/* Конфетная: розовый, голубой, сиреневый и мята. */
+:root[data-theme="dark"][data-sched-palette="candy"] {
+  --sched-bg: #1a101d;
+  --sched-surface: #291a2e;
+  --sched-raised: #37223e;
+  --sched-text: #fff0fa;
+  --sched-secondary: #c4a3c3;
+  --sched-tertiary: #a789a8;
+  --sched-separator: rgba(226, 163, 218, 0.19);
+  --sched-fill: rgba(231, 103, 174, 0.14);
+  --sched-blue: #ee72b5;
+  --sched-green: #64cdbb;
+  --sched-live: #64cdbb;
+  --sched-live-fill: #75dac8;
+  --sched-yellow: #efc25e;
+  --sched-note: #302718;
+  --sched-danger: #ff7180;
+  --sched-shadow: 0 12px 34px rgba(13, 5, 16, 0.48);
+  --palette-accent-1: #ee72b5;
+  --palette-accent-2: #65bbed;
+  --palette-accent-3: #a77ce9;
+  --palette-accent-4: #64cdbb;
+  --strip-selection-fill: linear-gradient(90deg, #ee72b5, #a77ce9, #65bbed);
+  --strip-selection-idle: #ee72b5;
+  --strip-selection-on: #24101d;
+  --week-odd-color: #64cdbb;
+  --week-even-color: #ee72b5;
+  color-scheme: dark;
+}
+:root[data-theme="light"][data-sched-palette="candy-light"] {
+  --sched-bg: #fff2f8;
+  --sched-surface: #ffffff;
+  --sched-raised: #fff8fc;
+  --sched-text: #321b2b;
+  --sched-secondary: #7d6174;
+  --sched-tertiary: #94778a;
+  --sched-separator: rgba(112, 52, 88, 0.15);
+  --sched-fill: rgba(202, 52, 130, 0.09);
+  --sched-blue: #c93482;
+  --sched-green: #238c7b;
+  --sched-live: #238c7b;
+  --sched-live-fill: #31a08d;
+  --sched-yellow: #a77512;
+  --sched-note: #fff2cf;
+  --sched-danger: #c73e55;
+  --sched-shadow: 0 10px 28px rgba(98, 47, 77, 0.1);
+  --palette-accent-1: #c93482;
+  --palette-accent-2: #287fae;
+  --palette-accent-3: #7950bd;
+  --palette-accent-4: #238c7b;
+  --strip-selection-fill: linear-gradient(90deg, #c93482, #7950bd, #287fae);
+  --strip-selection-idle: #c93482;
+  --strip-selection-on: #fff;
+  --week-odd-color: #238c7b;
+  --week-even-color: #c93482;
+  color-scheme: light;
+}
+
+/* Кибер: циан, фиолетовый, лайм и оранжевый. */
+:root[data-theme="dark"][data-sched-palette="cyber"] {
+  --sched-bg: #090f14;
+  --sched-surface: #111c25;
+  --sched-raised: #172632;
+  --sched-text: #edfaff;
+  --sched-secondary: #91adba;
+  --sched-tertiary: #7795a3;
+  --sched-separator: rgba(120, 207, 231, 0.18);
+  --sched-fill: rgba(44, 202, 226, 0.13);
+  --sched-blue: #35cce5;
+  --sched-green: #9fd857;
+  --sched-live: #9fd857;
+  --sched-live-fill: #afe566;
+  --sched-yellow: #f2a94d;
+  --sched-note: #292317;
+  --sched-danger: #ff6f7e;
+  --sched-shadow: 0 12px 34px rgba(1, 8, 13, 0.52);
+  --palette-accent-1: #35cce5;
+  --palette-accent-2: #a276ef;
+  --palette-accent-3: #9fd857;
+  --palette-accent-4: #f29a49;
+  --strip-selection-fill: linear-gradient(90deg, #35cce5, #a276ef);
+  --strip-selection-idle: #35cce5;
+  --strip-selection-on: #06171c;
+  --week-odd-color: #9fd857;
+  --week-even-color: #a276ef;
+  color-scheme: dark;
+}
+:root[data-theme="light"][data-sched-palette="cyber-light"] {
+  --sched-bg: #eff8f6;
+  --sched-surface: #ffffff;
+  --sched-raised: #f7fcfb;
+  --sched-text: #11262a;
+  --sched-secondary: #587478;
+  --sched-tertiary: #718a8d;
+  --sched-separator: rgba(27, 85, 91, 0.15);
+  --sched-fill: rgba(20, 139, 153, 0.09);
+  --sched-blue: #128b99;
+  --sched-green: #5f901d;
+  --sched-live: #5f901d;
+  --sched-live-fill: #72a92b;
+  --sched-yellow: #ae6d11;
+  --sched-note: #fff2cc;
+  --sched-danger: #c74255;
+  --sched-shadow: 0 10px 28px rgba(24, 77, 81, 0.1);
+  --palette-accent-1: #128b99;
+  --palette-accent-2: #7148b5;
+  --palette-accent-3: #5f901d;
+  --palette-accent-4: #c66a20;
+  --strip-selection-fill: linear-gradient(90deg, #128b99, #7148b5);
+  --strip-selection-idle: #128b99;
+  --strip-selection-on: #fff;
+  --week-odd-color: #5f901d;
+  --week-even-color: #7148b5;
+  color-scheme: light;
+}
+
+/* Больше разных цветов внутри карточек, без изменения спокойного фона. */
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .sched-header-mark {
+  background: linear-gradient(145deg, var(--palette-accent-1), var(--palette-accent-2)) !important;
+}
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .sched-settings-icon.is-palette {
+  background: linear-gradient(145deg, var(--palette-accent-2), var(--palette-accent-4)) !important;
+}
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .sched-settings-icon.is-theme {
+  background: linear-gradient(145deg, var(--palette-accent-3), var(--palette-accent-4)) !important;
+}
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .agenda-list:not(.is-completed)
+  .agenda-row:nth-child(4n + 1)
+  .lesson-room {
+  color: var(--palette-accent-1);
+}
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .agenda-list:not(.is-completed)
+  .agenda-row:nth-child(4n + 2)
+  .lesson-room {
+  color: var(--palette-accent-2);
+}
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .agenda-list:not(.is-completed)
+  .agenda-row:nth-child(4n + 3)
+  .lesson-room {
+  color: var(--palette-accent-3);
+}
+:root[data-sched-palette]:not([data-sched-palette="opaque"]):not(
+    [data-sched-palette="opaque-light"]
+  )
+  .agenda-list:not(.is-completed)
+  .agenda-row:nth-child(4n + 4)
+  .lesson-room {
+  color: var(--palette-accent-4);
+}
+
+/* Градиенты сохранённых цветных палитр перекрывают их старые однотонные значения. */
+:root[data-theme][data-sched-palette="ocean"] {
+  --strip-selection-fill: linear-gradient(90deg, #3aa8df, #38c1ac) !important;
+  --strip-selection-idle: #3aa8df !important;
+}
+:root[data-theme][data-sched-palette="ocean-light"] {
+  --strip-selection-fill: linear-gradient(90deg, #177cae, #279b84) !important;
+  --strip-selection-idle: #177cae !important;
+}
+:root[data-theme][data-sched-palette="forest"] {
+  --strip-selection-fill: linear-gradient(90deg, #3eae70, #49a7d8) !important;
+  --strip-selection-idle: #3eae70 !important;
+}
+:root[data-theme][data-sched-palette="forest-light"] {
+  --strip-selection-fill: linear-gradient(90deg, #277c4b, #2d7fa9) !important;
+  --strip-selection-idle: #277c4b !important;
+}
+:root[data-theme][data-sched-palette="plum"] {
+  --strip-selection-fill: linear-gradient(90deg, #9a69dc, #e067a7) !important;
+  --strip-selection-idle: #9a69dc !important;
+}
+:root[data-theme][data-sched-palette="plum-light"] {
+  --strip-selection-fill: linear-gradient(90deg, #7545ad, #b33f7b) !important;
+  --strip-selection-idle: #7545ad !important;
+}
+:root[data-theme][data-sched-palette="sand"] {
+  --strip-selection-fill: linear-gradient(90deg, #d18b3d, #c96858) !important;
+  --strip-selection-idle: #d18b3d !important;
+}
+:root[data-theme][data-sched-palette="sand-light"] {
+  --strip-selection-fill: linear-gradient(90deg, #a46a25, #a84e43) !important;
+  --strip-selection-idle: #a46a25 !important;
+}
+
+/* ---------- sched: спокойная система тем ---------- */
+/* Все палитры используют структуру и типографику базовой темы. Отличается только один приглушённый акцент. */
+:root {
+  --sched-self: #a66a20;
+  --sched-self-soft: rgba(166, 106, 32, 0.12);
+  --sched-room: #3979aa;
+  --sched-room-soft: rgba(57, 121, 170, 0.11);
+  --sched-vacancy: #b23b46;
+  --sched-vacancy-soft: rgba(178, 59, 70, 0.12);
+}
+
+:root[data-theme="dark"] {
+  --sched-self: #d59b52;
+  --sched-self-soft: rgba(213, 155, 82, 0.16);
+  --sched-room: #73a9d1;
+  --sched-room-soft: rgba(115, 169, 209, 0.15);
+  --sched-vacancy: #ff858b;
+  --sched-vacancy-soft: rgba(255, 133, 139, 0.16);
+}
+
+/* В палитрах цвета «аудитории» и «самостоятельной» подстраиваются под акцент и фон темы. Базовая палитра (без data-sched-palette) остаётся прежней. */
+:root[data-sched-palette] {
+  --sched-room: var(--sched-blue);
+  --sched-room-soft: color-mix(in srgb, var(--sched-blue) 14%, transparent);
+  --sched-self: var(--sched-yellow);
+  --sched-self-soft: color-mix(in srgb, var(--sched-yellow) 15%, transparent);
+  --sched-vacancy: var(--sched-danger);
+  --sched-vacancy-soft: color-mix(in srgb, var(--sched-danger) 14%, transparent);
+}
+
+/* Полоска выбора дня одинаковой высоты во всех палитрах — как в «цветной», чтобы она не сидела чуть выше. */
+:root .date-strip {
+  --date-strip-item-height: 59px;
+}
+
+/* Светлые палитры: те же нейтральные поверхности, только спокойный акцент. */
+:root[data-theme="light"][data-sched-palette] {
+  --sched-bg: #f5f5f7;
+  --sched-surface: #ffffff;
+  --sched-raised: #ffffff;
+  --sched-text: #1d1d1f;
+  --sched-secondary: #6e6e73;
+  --sched-tertiary: #818187;
+  --sched-separator: rgba(60, 60, 67, 0.16);
+  --sched-fill: rgba(118, 118, 128, 0.12);
+  --sched-green: #3f8f64;
+  --sched-live: #3f8f64;
+  --sched-live-fill: #4b9f71;
+  --sched-yellow: #b7812e;
+  --sched-note: #fff8df;
+  --sched-danger: #c94b50;
+  --sched-shadow: 0 10px 32px rgba(0, 0, 0, 0.07);
+  --strip-selection-fill: var(--sched-blue) !important;
+  --strip-selection-idle: var(--sched-blue) !important;
+  --palette-accent-1: var(--sched-blue);
+  --palette-accent-2: color-mix(in srgb, var(--sched-blue) 86%, #ffffff);
+  --palette-accent-3: color-mix(in srgb, var(--sched-blue) 74%, #6e6e73);
+  --palette-accent-4: color-mix(in srgb, var(--sched-blue) 62%, #ffffff);
+  color-scheme: light;
+}
+
+/* Тёмные палитры: базовые чёрные поверхности и тот же единственный акцент. */
+:root[data-theme="dark"][data-sched-palette] {
+  --sched-bg: #000000;
+  --sched-surface: #1c1c1e;
+  --sched-raised: #2c2c2e;
+  --sched-text: #ffffff;
+  --sched-secondary: #98989d;
+  --sched-tertiary: #8e8e93;
+  --sched-separator: rgba(84, 84, 88, 0.62);
+  --sched-fill: rgba(118, 118, 128, 0.24);
+  --sched-green: #63ad80;
+  --sched-live: #63ad80;
+  --sched-live-fill: #70b98d;
+  --sched-yellow: #d2a055;
+  --sched-note: #342f20;
+  --sched-danger: #ef7171;
+  --sched-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  --strip-selection-fill: var(--sched-blue) !important;
+  --strip-selection-idle: var(--sched-blue) !important;
+  --strip-selection-on: #ffffff;
+  --palette-accent-1: var(--sched-blue);
+  --palette-accent-2: color-mix(in srgb, var(--sched-blue) 86%, #ffffff);
+  --palette-accent-3: color-mix(in srgb, var(--sched-blue) 76%, #98989d);
+  --palette-accent-4: color-mix(in srgb, var(--sched-blue) 68%, #ffffff);
+  color-scheme: dark;
+}
+
+/* Один приглушённый акцент на палитру — без разноцветных карточек и градиентов. */
+:root[data-theme="light"][data-sched-palette="colorful"] {
+  --sched-blue: #656aa4;
+}
+:root[data-theme="light"][data-sched-palette="neutral-light"] {
+  --sched-blue: #4f7183;
+}
+:root[data-theme="light"][data-sched-palette="opaque-light"] {
+  --sched-blue: #66615a;
+}
+:root[data-theme="light"][data-sched-palette="ocean-light"] {
+  --sched-blue: #3f7690;
+}
+:root[data-theme="light"][data-sched-palette="forest-light"] {
+  --sched-blue: #4e7660;
+}
+:root[data-theme="light"][data-sched-palette="plum-light"] {
+  --sched-blue: #745f7d;
+}
+:root[data-theme="light"][data-sched-palette="sand-light"] {
+  --sched-blue: #876d4e;
+}
+:root[data-theme="light"][data-sched-palette="aurora-light"] {
+  --sched-blue: #4b7773;
+}
+:root[data-theme="light"][data-sched-palette="sunset-light"] {
+  --sched-blue: #8a655b;
+}
+:root[data-theme="light"][data-sched-palette="candy-light"] {
+  --sched-blue: #826578;
+}
+:root[data-theme="light"][data-sched-palette="cyber-light"] {
+  --sched-blue: #49757b;
+}
+:root[data-theme="light"][data-sched-palette="midnight-light"] {
+  --sched-blue: #4d58c6;
+}
+:root[data-theme="light"][data-sched-palette="rose-light"] {
+  --sched-blue: #b45877;
+}
+:root[data-theme="light"][data-sched-palette="mint-light"] {
+  --sched-blue: #2c9b80;
+}
+:root[data-theme="light"][data-sched-palette="coral-light"] {
+  --sched-blue: #cf6247;
+}
+
+:root[data-theme="dark"][data-sched-palette="colorful"] {
+  --sched-blue: #9297ca;
+}
+:root[data-theme="dark"][data-sched-palette="neutral"] {
+  --sched-blue: #83a3b3;
+}
+:root[data-theme="dark"][data-sched-palette="opaque"] {
+  --sched-blue: #b1aca4;
+}
+:root[data-theme="dark"][data-sched-palette="ocean"] {
+  --sched-blue: #78a8bf;
+}
+:root[data-theme="dark"][data-sched-palette="forest"] {
+  --sched-blue: #82a690;
+}
+:root[data-theme="dark"][data-sched-palette="plum"] {
+  --sched-blue: #a18baa;
+}
+:root[data-theme="dark"][data-sched-palette="sand"] {
+  --sched-blue: #ae987d;
+}
+:root[data-theme="dark"][data-sched-palette="aurora"] {
+  --sched-blue: #7fa5a1;
+}
+:root[data-theme="dark"][data-sched-palette="sunset"] {
+  --sched-blue: #b18d83;
+}
+:root[data-theme="dark"][data-sched-palette="candy"] {
+  --sched-blue: #a98b9e;
+}
+:root[data-theme="dark"][data-sched-palette="cyber"] {
+  --sched-blue: #79a1a7;
+}
+:root[data-theme="dark"][data-sched-palette="midnight"] {
+  --sched-blue: #8b93ea;
+}
+:root[data-theme="dark"][data-sched-palette="rose"] {
+  --sched-blue: #dd8aa9;
+}
+:root[data-theme="dark"][data-sched-palette="mint"] {
+  --sched-blue: #64c6aa;
+}
+:root[data-theme="dark"][data-sched-palette="coral"] {
+  --sched-blue: #f0937a;
+}
+
+:root[data-sched-palette] .sched-header-mark,
+:root[data-sched-palette] .sched-settings-icon,
+:root[data-sched-palette] .sched-settings-icon.is-theme,
+:root[data-sched-palette] .sched-settings-icon.is-palette,
+:root[data-sched-palette] .sched-settings-icon.is-layout,
+:root[data-sched-palette] .sched-settings-icon.is-week-scope,
+:root[data-sched-palette] .sched-settings-icon.is-offline {
+  background: var(--sched-blue) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+:root[data-sched-palette] .sched-palette-toggle i:nth-child(1) {
+  background: var(--palette-accent-1) !important;
+}
+:root[data-sched-palette] .sched-palette-toggle i:nth-child(2) {
+  background: var(--palette-accent-2) !important;
+}
+:root[data-sched-palette] .sched-palette-toggle i:nth-child(3) {
+  background: var(--palette-accent-3) !important;
+}
+:root[data-sched-palette] .sched-palette-toggle i:nth-child(4) {
+  background: var(--palette-accent-4) !important;
+}
+
+/* Текст и карточки во всех палитрах повторяют базовый формат. */
+:root[data-sched-palette] .agenda-list {
+  overflow: hidden;
+  border: 1px solid var(--sched-separator);
+  border-radius: 12px;
+  background: var(--sched-surface);
+}
+:root[data-sched-palette] .agenda-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  min-height: 75px;
+  padding: 12px 13px;
+  align-items: stretch;
+  gap: 10px;
+}
+:root[data-sched-palette] .agenda-row-time time {
+  padding-top: 2px;
+  color: var(--sched-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+:root[data-sched-palette] .agenda-row-time time span {
+  margin-top: 3px;
+  color: var(--sched-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+:root[data-sched-palette] .agenda-row strong {
+  color: var(--sched-text);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+:root[data-sched-palette] .agenda-row-content > .lesson-meta {
+  margin-top: 4px;
+  gap: 4px;
+  color: var(--sched-secondary);
+  font-size: 13px;
+}
+:root[data-sched-palette] .agenda-row small {
+  margin-top: 3px;
+  color: var(--sched-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+:root[data-sched-palette] .lesson-type-accent {
+  color: var(--sched-secondary);
+  font-size: inherit;
+  font-weight: inherit;
+}
+:root[data-sched-palette] .agenda-list.is-completed .lesson-type-accent,
+:root[data-sched-palette] .agenda-list.is-completed .lesson-room {
+  opacity: 0.72;
+}
+
+/* Самостоятельная работа — всегда тёплая, аудитория — всегда холодная. */
+.lesson-origin-mark.is-local {
+  background: var(--sched-self-soft) !important;
+  color: var(--sched-self) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sched-self) 24%, transparent);
+}
+.lesson-room,
+:root[data-sched-palette] .agenda-list:not(.is-completed) .agenda-row:nth-child(n) .lesson-room,
+:root[data-sched-palette] .live-lesson-card .lesson-room {
+  display: inline-flex;
+  min-height: 20px;
+  margin: 0;
+  padding: 2px 7px;
+  align-items: center;
+  border-radius: 5px;
+  background: var(--sched-room-soft) !important;
+  color: var(--sched-room) !important;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+/* Вакансия заметнее остальных преподавателей, но остаётся в той же строке метаданных. */
+.lesson-type-accent.is-vacancy,
+:root[data-sched-palette] .lesson-type-accent.is-vacancy,
+:root[data-sched-palette="opaque"] .lesson-type-accent.is-vacancy {
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--sched-vacancy-soft) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sched-vacancy) 28%, transparent);
+  color: var(--sched-vacancy) !important;
+  font-weight: 750 !important;
+}
+
+/* Компактнее меню: профиль и группа появляются выше, элементы остаются не меньше 44 px. */
+.sched-settings-popover {
+  padding: 5px;
+  gap: 5px;
+  border-radius: 18px;
+}
+.sched-settings-group {
+  border-radius: 13px;
+}
+.sched-settings-row {
+  min-height: 46px;
+  padding: 5px 9px;
+  gap: 8px;
+}
+.sched-settings-row-main {
+  gap: 8px;
+}
+.sched-settings-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.sched-settings-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.sched-settings-freshness {
+  min-height: 38px;
+}
+
+/* Логотип-искра: адаптивный SVG, цвет наследуется от фона блока. */
+.sched-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sched-mark path {
+  fill: currentColor !important;
+  stroke: none !important;
+  stroke-dasharray: none !important;
+  stroke-dashoffset: 0 !important;
+  animation: none !important;
+}
+.app-loading-mark-surface .sched-mark,
+.sched-onboarding-mark .sched-mark {
+  padding: 23%;
+  box-sizing: border-box;
+}
+.sched-header-word:after {
+  content: "sched";
+}
+
+/* В профиле кнопка «готово» нейтральная, без тревожного красного. */
+.sched-profile-footer button {
+  background: var(--sched-fill);
+  color: var(--sched-text);
+  box-shadow: inset 0 0 0 1px var(--sched-separator);
+}
+
+/* Значок остаётся адаптивным: цвет подстраивается под текущую палитру/тему. */
+.app-loading-mark-blur,
+.app-loading-mark-surface,
+.sched-onboarding-mark {
+  background: var(--sched-blue) !important;
+}
+
+/* ================= три темы, замена пары, анимации без блюра ================= */
+
+:root {
+  --page-blur: 0px;
+  --stagger-blur: 0px;
+  --scrub-scene-blur: 0px;
+  --distance-medium: 10px;
+  --sched-accent: #0a84ff;
+}
+
+/* Пары, подложки и заголовки появляются только из затемнённого состояния вниз,
+   без блюра и без масштаба — только opacity и translate3d, что считается на GPU. */
+@keyframes t-row-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+@keyframes t-stagger-line-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+@keyframes sched-completed-row-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+@keyframes sched-live-card-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes sched-day-in-forward {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes sched-day-in-backward {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes sched-day-out-forward {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+@keyframes sched-day-out-backward {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+
+/* никаких filter: blur на содержимом расписания */
+.t-acc-panel-inner,
+.agenda-list,
+.agenda-row,
+.live-lesson-card,
+.completed-lessons,
+.sched-day-block,
+.sched-day-heading,
+.sched-active-day-scene,
+.sched-days-scene {
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Дочерние элементы строки держим на том же GPU-слою и в покое,
+   иначе после анимации t-row-in (translate3d(0,0,0)) класс снимается и
+   элемент сваливается обратно на основной слой — текст при этом
+   «прыгает на несколько пикселей» из-за разницы субпиксельного рендера.
+   Применяем единый метод для обычных пар, окон и лёгкого режима. */
+.agenda-row,
+.live-lesson-card,
+.agenda-row-time,
+.agenda-row-content,
+.agenda-row-time *,
+.agenda-row-content *,
+.agenda-row strong,
+.agenda-row span,
+.agenda-row small,
+.agenda-row .agenda-row-sub,
+.agenda-row .agenda-row-sub *,
+.agenda-row .lesson-room,
+.agenda-row.is-window-row,
+.agenda-row.is-window-row *,
+.agenda-row.is-window-row strong,
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row,
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row *,
+:root[data-sched-schedule-view="light"] .sched-schedule-view .lesson-room,
+:root[data-perf] .agenda-row,
+:root[data-perf] .agenda-row *,
+.sched-day-heading,
+.sched-day-heading *,
+.t-stagger-line,
+.sched-day-heading-copy,
+.sched-day-heading-copy > * {
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+#stage,
+.agenda-list,
+.agenda-row,
+.live-lesson-card,
+.sched-day-heading {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- компактный заголовок дня при наезде на кнопку сегодня --- */
+.sched-day-heading h2 {
+  white-space: nowrap;
+}
+.sched-day-heading.is-compact-date .sched-day-weekday {
+  display: none !important;
+}
+
+/* ---------- переключатель темы ---------- */
+.sched-theme-modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--sched-fill);
+}
+.sched-theme-modes button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sched-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.sched-theme-modes button.is-active {
+  background: var(--sched-blue);
+  color: #fff;
+}
+
+.sched-accent-input {
+  width: 46px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--sched-separator);
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+}
+.sched-accent-input::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.sched-accent-input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 7px;
+}
+
+/* ---------- темы ---------- */
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) {
+  --sched-blue: var(--sched-accent, #0a84ff);
+  --sched-live: var(--sched-accent, #0a84ff);
+  --palette-accent-1: var(--sched-accent, #0a84ff);
+  --palette-accent-2: var(--sched-accent, #0a84ff);
+  --palette-accent-3: var(--sched-accent, #0a84ff);
+  --palette-accent-4: var(--sched-accent, #0a84ff);
+  --strip-selection-fill: var(--sched-accent, #0a84ff);
+}
+
+:root[data-sched-palette="amoled"] {
+  --sched-bg: #000000;
+  --sched-surface: #000000;
+  --sched-raised: #0a0a0a;
+  --sched-separator: rgba(255, 255, 255, 0.14);
+  --sched-fill: rgba(255, 255, 255, 0.07);
+  --sched-text: #ffffff;
+  --sched-secondary: #9a9aa2;
+  --sched-tertiary: #6f6f77;
+  --sched-shadow: none;
+}
+:root[data-sched-palette="amoled"] body,
+:root[data-sched-palette="amoled"] .sched-page {
+  background: #000000;
+}
+
+/* ---------- замена пары ---------- */
+.agenda-row {
+  position: relative;
+}
+.lesson-swap-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--sched-tertiary);
+  opacity: 0.55;
+  cursor: pointer;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  transition:
+    opacity 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+body.is-dragging-pair {
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.lesson-swap-btn svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+.lesson-swap-btn:hover,
+.lesson-swap-btn:active {
+  opacity: 1;
+  background: var(--sched-fill);
+  color: var(--sched-blue);
+}
+.agenda-row.is-cancelled .agenda-row-content > strong {
+  text-decoration: line-through;
+  color: var(--sched-tertiary);
+}
+.lesson-origin-mark.is-swap {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  text-transform: lowercase;
+  background: color-mix(in srgb, var(--sched-blue) 16%, transparent);
+  color: var(--sched-blue);
+}
+
+.sched-replace-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  /* Панель вешается на body мимо .sched-app, поэтому шрифт задаём явно —
+     тот же стек, что у основного приложения. */
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  letter-spacing: 0;
+}
+
+/* Окно колокольчика открывается сверху вниз */
+#bell-backdrop {
+  align-items: flex-start;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+}
+#bell-backdrop .sched-replace-sheet {
+  transform: translate3d(0, -24px, 0);
+}
+#bell-backdrop.is-open .sched-replace-sheet {
+  transform: translate3d(0, 0, 0);
+}
+
+/* Окна настроек (уведомления, заявки/редакторы, отчёты) открываются по центру с анимацией расширения */
+#notifs-backdrop,
+#tg-backdrop,
+#reports-backdrop,
+#report-backdrop {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+#notifs-backdrop .sched-replace-sheet,
+#tg-backdrop .sched-replace-sheet,
+#reports-backdrop .sched-replace-sheet,
+#report-backdrop .sched-replace-sheet,
+#report-backdrop .sched-report-sheet {
+  margin: auto;
+  transform-origin: center center;
+  transform: scale(0.84);
+  opacity: 0;
+  transition:
+    transform 0.16s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.14s ease;
+}
+#notifs-backdrop.is-open .sched-replace-sheet,
+#tg-backdrop.is-open .sched-replace-sheet,
+#reports-backdrop.is-open .sched-replace-sheet,
+#report-backdrop.is-open .sched-replace-sheet,
+#report-backdrop.is-open .sched-report-sheet {
+  transform: scale(1);
+  opacity: 1;
+  transition:
+    transform 0.22s cubic-bezier(0.18, 1.15, 0.32, 1),
+    opacity 0.18s ease;
+}
+@media (max-width: 480px) {
+  #notifs-backdrop,
+  #tg-backdrop,
+  #reports-backdrop,
+  #report-backdrop {
+    padding: 12px;
+  }
+}
+
+/* Базовый бандл задаёт form-элементам font:inherit только для своих окон,
+   наши панели туда не входят — кнопки и поля брали браузерный шрифт. */
+.sched-replace-backdrop button,
+.sched-replace-backdrop select,
+.sched-replace-backdrop input,
+.sched-replace-backdrop textarea {
+  font-family: inherit;
+}
+.sched-replace-backdrop.is-open {
+  opacity: 1;
+}
+.sched-replace-sheet {
+  width: min(440px, 100%);
+  margin: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--sched-surface);
+  border: 1px solid var(--sched-separator);
+  display: grid;
+  gap: 10px;
+  transform: translate3d(0, 12px, 0);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sched-replace-backdrop.is-open .sched-replace-sheet {
+  transform: translate3d(0, 0, 0);
+}
+.sched-replace-head {
+  display: grid;
+  gap: 2px;
+}
+.sched-replace-head strong {
+  font-size: 16px;
+  color: var(--sched-text);
+}
+.sched-replace-head span {
+  font-size: 12px;
+  color: var(--sched-secondary);
+}
+.sched-replace-field {
+  display: grid;
+  gap: 4px;
+}
+.sched-replace-field span {
+  font-size: 11px;
+  color: var(--sched-secondary);
+}
+.sched-replace-field input {
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--sched-separator);
+  background: var(--sched-raised);
+  color: var(--sched-text);
+}
+.sched-replace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.sched-replace-actions button {
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--sched-separator);
+  background: var(--sched-raised);
+  color: var(--sched-text);
+  cursor: pointer;
+}
+.sched-replace-actions button.is-primary {
+  background: var(--sched-blue);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* ================= длительности анимаций (чуть длиннее) ================= */
+:root {
+  --page-slide-dur: 0.42s;
+  --page-fade-dur: 0.4s;
+  --duration-fast: 0.4s;
+  --duration-medium: 0.52s;
+  --duration-stagger: 70ms;
+  --stagger-dur: 0.55s;
+  --stagger-stagger: 70ms;
+  --stagger-distance: 14px;
+  --distance-medium: 14px;
+}
+
+/* во время скролла не держим лишние слои: тяжёлые will-change только на входе */
+.sched-active-day-scene:not(.is-entering) .agenda-row,
+.sched-active-day-scene:not(.is-entering) .live-lesson-card,
+.sched-active-day-scene:not(.is-entering) .t-stagger-line {
+  will-change: auto;
+}
+
+/* ===== плавные следующие дни, ровная полоска, акцент и неон ===== */
+
+/* ---------- 1. следующие дни проявляются плавно, а не резко ---------- */
+@keyframes sched-future-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.sched-future-days {
+  animation: sched-future-in var(--duration-medium, 0.42s)
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.sched-future-days > .sched-day-block {
+  animation: sched-future-in var(--duration-medium, 0.42s)
+    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.sched-future-days > .sched-day-block:nth-of-type(1) {
+  animation-delay: 40ms;
+}
+.sched-future-days > .sched-day-block:nth-of-type(2) {
+  animation-delay: 90ms;
+}
+.sched-future-days > .sched-day-block:nth-of-type(3) {
+  animation-delay: 140ms;
+}
+.sched-future-days > .sched-day-block:nth-of-type(4) {
+  animation-delay: 185ms;
+}
+.sched-future-days > .sched-day-block:nth-of-type(n + 5) {
+  animation-delay: 225ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-future-days,
+  .sched-future-days > .sched-day-block {
+    animation: none !important;
+  }
+}
+
+/* ---------- 2. полоска выбора дня ровно по серой линии во всех темах ---------- */
+:root .date-strip,
+:root[data-sched-palette] .date-strip {
+  --date-strip-line-height: 3px;
+  --date-strip-button-padding-bottom: 11px;
+  --date-strip-dots-bottom: 8px;
+  padding-bottom: 0 !important;
+}
+:root .date-strip-selection,
+:root[data-sched-palette] .date-strip-selection {
+  top: 6px !important;
+  height: var(--date-strip-item-height) !important;
+}
+
+/* ---------- 3. акцентная тема: любой оттенок + тонированный фон ---------- */
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) {
+  --sched-blue: var(--sched-accent, #0a84ff);
+  --sched-live: var(--sched-accent, #0a84ff);
+  --sched-live-fill: var(--sched-accent, #0a84ff);
+  --palette-accent-1: var(--sched-accent, #0a84ff);
+  --palette-accent-2: var(--sched-accent, #0a84ff);
+  --palette-accent-3: var(--sched-accent, #0a84ff);
+  --palette-accent-4: var(--sched-accent, #0a84ff);
+  --strip-selection-fill: var(--sched-accent, #0a84ff);
+  --sched-bg: color-mix(in srgb, var(--sched-accent, #0a84ff) 10%, #000000);
+  --sched-surface: color-mix(in srgb, var(--sched-accent, #0a84ff) 13%, #121216);
+  --sched-raised: color-mix(in srgb, var(--sched-accent, #0a84ff) 16%, #1c1c22);
+  --sched-note: color-mix(in srgb, var(--sched-accent, #0a84ff) 18%, #1a1a20);
+  --sched-separator: color-mix(
+    in srgb,
+    var(--sched-accent, #0a84ff) 28%,
+    rgba(255, 255, 255, 0.16)
+  );
+  --sched-fill: color-mix(in srgb, var(--sched-accent, #0a84ff) 18%, rgba(255, 255, 255, 0.06));
+  --sched-text: #ffffff;
+  --sched-secondary: color-mix(in srgb, var(--sched-accent, #0a84ff) 26%, #9c9ca6);
+  --sched-tertiary: color-mix(in srgb, var(--sched-accent, #0a84ff) 20%, #82828c);
+  --sched-shadow: 0 10px 32px color-mix(in srgb, var(--sched-accent, #0a84ff) 20%, transparent);
+  color-scheme: dark;
+}
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])[data-theme="light"] {
+  --sched-bg: color-mix(in srgb, var(--sched-accent, #0a84ff) 10%, #ffffff);
+  --sched-surface: color-mix(in srgb, var(--sched-accent, #0a84ff) 4%, #ffffff);
+  --sched-raised: color-mix(in srgb, var(--sched-accent, #0a84ff) 7%, #ffffff);
+  --sched-note: color-mix(in srgb, var(--sched-accent, #0a84ff) 12%, #fffdf0);
+  --sched-text: #0f0f14;
+  --sched-secondary: color-mix(in srgb, var(--sched-accent, #0a84ff) 32%, #5a5a63);
+  --sched-tertiary: color-mix(in srgb, var(--sched-accent, #0a84ff) 24%, #6f6f78);
+  --sched-separator: color-mix(in srgb, var(--sched-accent, #0a84ff) 30%, rgba(60, 60, 67, 0.18));
+  --sched-fill: color-mix(in srgb, var(--sched-accent, #0a84ff) 16%, rgba(118, 118, 128, 0.12));
+  color-scheme: light;
+}
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) html.sched-page,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) body,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) #root,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .sched-app {
+  background: var(--sched-bg);
+}
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .date-strip
+  button[data-date-index].is-selected,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index][data-under-selection="true"],
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .sched-header-mark,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .sched-freshness-done,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-external-schedule-link,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-theme-modes
+  button.is-active,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-replace-actions
+  button.is-primary {
+  color: var(--sched-on-accent, #ffffff);
+}
+.sched-theme-modes button.is-active {
+  color: var(--sched-on-accent, #ffffff);
+}
+
+/* ---------- 4. новая тема вместо amoled: неон ---------- */
+:root[data-sched-palette="neon"],
+:root[data-theme][data-sched-palette="neon"] {
+  --sched-bg: #0b0a18;
+  --sched-surface: #14122a;
+  --sched-raised: #1c1938;
+  --sched-text: #f3f1ff;
+  --sched-secondary: #a99ee0;
+  --sched-tertiary: #8078b8;
+  --sched-separator: rgba(150, 120, 255, 0.3);
+  --sched-fill: rgba(140, 110, 255, 0.16);
+  --sched-blue: #7c5cff;
+  --sched-green: #2ff5c8;
+  --sched-live: #2ff5c8;
+  --sched-live-fill: #2ff5c8;
+  --sched-yellow: #ffd75e;
+  --sched-danger: #ff5c8a;
+  --sched-note: #1d1a38;
+  --sched-shadow: 0 12px 34px rgba(70, 40, 170, 0.42);
+  --palette-accent-1: #7c5cff;
+  --palette-accent-2: #2ff5c8;
+  --palette-accent-3: #ffd75e;
+  --palette-accent-4: #ff5c8a;
+  --strip-selection-fill: #7c5cff;
+  color-scheme: dark;
+}
+:root[data-sched-palette="neon"] html.sched-page,
+:root[data-sched-palette="neon"] body,
+:root[data-sched-palette="neon"] #root {
+  background: #0b0a18;
+}
+:root[data-sched-palette="neon"] .sched-app {
+  background:
+    radial-gradient(1100px 460px at 10% -10%, rgba(124, 92, 255, 0.26), transparent 62%),
+    radial-gradient(900px 420px at 94% 4%, rgba(47, 245, 200, 0.14), transparent 64%), #0b0a18;
+}
+:root[data-sched-palette="neon"] .sched-date-controls {
+  background: color-mix(in srgb, #14122a 88%, transparent);
+}
+:root[data-sched-palette="neon"] .date-strip-selection:before {
+  background: linear-gradient(90deg, #7c5cff, #2ff5c8) !important;
+  box-shadow:
+    0 0 10px rgba(124, 92, 255, 0.8),
+    0 0 20px rgba(47, 245, 200, 0.32) !important;
+}
+:root[data-sched-palette="neon"] .agenda-list,
+:root[data-sched-palette="neon"] .live-lesson-card {
+  border-color: rgba(124, 92, 255, 0.3);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.05),
+    0 8px 26px rgba(16, 6, 52, 0.6);
+}
+:root[data-sched-palette="neon"] .sched-week-badge {
+  background: rgba(124, 92, 255, 0.2);
+  color: #cfc3ff;
+}
+:root[data-sched-palette="neon"] .sched-header-mark {
+  color: #0b0a18;
+  box-shadow: 0 6px 18px rgba(124, 92, 255, 0.45);
+}
+:root[data-sched-palette="neon"] .sched-tab-bar {
+  background: color-mix(in srgb, #1c1938 94%, transparent);
+}
+:root[data-sched-palette="neon"] .sched-tab-bar:after {
+  background: rgba(124, 92, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(150, 120, 255, 0.3);
+}
+:root[data-sched-palette="neon"] .sched-tab-bar button.is-active {
+  color: #d6ccff;
+}
+:root[data-sched-palette="neon"] .lesson-room {
+  background: rgba(124, 92, 255, 0.16);
+  color: #cec4ff;
+}
+:root[data-sched-palette="neon"] .live-card-progress i {
+  background: linear-gradient(90deg, #7c5cff, #2ff5c8);
+}
+:root[data-sched-palette="neon"] .date-strip button[data-date-index].is-selected,
+:root[data-sched-palette="neon"]
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index][data-under-selection="true"] {
+  color: #ffffff;
+}
+
+/* --- отменённая пара: зачёркиваем весь текст строки --- */
+.agenda-row.is-cancelled .agenda-row-content > strong,
+.agenda-row.is-cancelled .agenda-row-content > small,
+.agenda-row.is-cancelled .agenda-row-content > .lesson-meta > *,
+.agenda-row.is-cancelled .agenda-row-time time,
+.agenda-row.is-cancelled .agenda-row-time time > span {
+  color: var(--sched-tertiary);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in srgb, var(--sched-danger) 62%, currentColor);
+}
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap,
+.agenda-row.is-cancelled .lesson-advisory {
+  text-decoration: none;
+}
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap {
+  background: color-mix(in srgb, var(--sched-danger) 16%, transparent);
+  color: var(--sched-danger);
+}
+
+/* --- свайп по дням на телефоне: сцена едет за пальцем --- */
+.sched-active-day-stage {
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.sched-days-scene.is-swiping .sched-active-day-stage,
+.sched-days-scene.is-swipe-return .sched-active-day-stage {
+  transform: translate3d(var(--swipe-x, 0px), 0, 0);
+  will-change: transform;
+}
+.sched-days-scene.is-swiping .sched-active-day-stage {
+  transition: none !important;
+}
+.sched-days-scene.is-swipe-return .sched-active-day-stage {
+  transition: transform var(--swipe-anim-dur, 0.22s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- шторка замены: выбор предмета и подсказка --- */
+.sched-replace-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sched-replace-select:after {
+  position: absolute;
+  right: 13px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid var(--sched-secondary);
+  border-bottom: 1.6px solid var(--sched-secondary);
+  content: "";
+  pointer-events: none;
+  transform: translateY(-2px) rotate(45deg);
+}
+.sched-replace-select select {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 30px 10px 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--sched-separator);
+  border-radius: 12px;
+  background: var(--sched-raised);
+  color: var(--sched-text);
+  font: inherit;
+  font-size: 14px;
+}
+.sched-replace-select select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sched-blue) 45%, transparent);
+  outline-offset: 1px;
+}
+.sched-replace-hint {
+  margin: -2px 2px 0;
+  color: var(--sched-tertiary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sched-days-scene.is-swiping .sched-active-day-stage,
+  .sched-days-scene.is-swipe-return .sched-active-day-stage {
+    transform: none;
+  }
+}
+
+/* ===== серые перерывы в расписании звонков ===== */
+.bells-grid .agenda-row.is-bell-break {
+  background: rgba(142, 142, 147, 0.18);
+}
+
+.bells-grid .agenda-row.is-bell-break .agenda-row-time time,
+.bells-grid .agenda-row.is-bell-break strong,
+.bells-grid .agenda-row.is-bell-break small {
+  color: #8e8e93;
+}
+
+:root[data-theme="light"] .bells-grid .agenda-row.is-bell-break {
+  background: rgba(120, 120, 128, 0.12);
+}
+
+:root[data-theme="light"] .bells-grid .agenda-row.is-bell-break .agenda-row-time time,
+:root[data-theme="light"] .bells-grid .agenda-row.is-bell-break strong,
+:root[data-theme="light"] .bells-grid .agenda-row.is-bell-break small {
+  color: #6e6e76;
+}
+
+/* ===== акцентная тема: фон, подложки и логотип идут от выбранного цвета ===== */
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) {
+  --sched-bg: color-mix(in srgb, var(--sched-accent, #0a84ff) 26%, #05050a);
+  --sched-surface: color-mix(in srgb, var(--sched-accent, #0a84ff) 30%, #101015);
+  --sched-raised: color-mix(in srgb, var(--sched-accent, #0a84ff) 36%, #1a1a20);
+  --sched-note: color-mix(in srgb, var(--sched-accent, #0a84ff) 34%, #1a1a20);
+  --sched-fill: color-mix(in srgb, var(--sched-accent, #0a84ff) 30%, rgba(255, 255, 255, 0.07));
+  --sched-separator: color-mix(
+    in srgb,
+    var(--sched-accent, #0a84ff) 42%,
+    rgba(255, 255, 255, 0.16)
+  );
+  --sched-blue: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --sched-live: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --sched-live-fill: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --strip-selection-fill: var(--sched-accent, #0a84ff);
+  --strip-selection-idle: var(--sched-accent, #0a84ff);
+  --strip-selection-on: var(--sched-on-accent, #ffffff);
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])[data-theme="light"] {
+  --sched-bg: color-mix(in srgb, var(--sched-accent, #0a84ff) 20%, #ffffff);
+  --sched-surface: color-mix(in srgb, var(--sched-accent, #0a84ff) 9%, #ffffff);
+  --sched-raised: color-mix(in srgb, var(--sched-accent, #0a84ff) 13%, #ffffff);
+  --sched-note: color-mix(in srgb, var(--sched-accent, #0a84ff) 16%, #fffdf0);
+  --sched-fill: color-mix(in srgb, var(--sched-accent, #0a84ff) 20%, rgba(118, 118, 128, 0.12));
+  --sched-separator: color-mix(in srgb, var(--sched-accent, #0a84ff) 34%, rgba(60, 60, 67, 0.18));
+}
+
+/* Прямоугольные подложки под парами тоже тонируются. */
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .agenda-list {
+  border-color: var(--sched-separator) !important;
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 14%, var(--sched-surface)) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .agenda-list.is-completed {
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 7%, var(--sched-surface)) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .agenda-row
+  + .agenda-row {
+  border-top-color: var(--sched-separator) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .live-lesson-card:not(.is-current) {
+  border-color: var(--sched-separator) !important;
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 14%, var(--sched-surface)) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .live-card-glass {
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 18%, var(--sched-surface)) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .bells-grid
+  .agenda-row.is-bell-break {
+  background: color-mix(
+    in srgb,
+    var(--sched-accent, #0a84ff) 12%,
+    rgba(142, 142, 147, 0.18)
+  ) !important;
+}
+
+/* Логотип и иконки: чернила подбираются под акцент, поэтому белый цвет не пропадает. */
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-header-mark,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon.is-theme,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon.is-palette,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon.is-layout,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon.is-week-scope,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon.is-offline {
+  background: var(--sched-accent, #0a84ff) !important;
+  color: var(--sched-on-accent, #ffffff) !important;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--sched-on-accent, #ffffff) 24%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--sched-text, #ffffff) 20%, transparent) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .date-strip
+  button[data-date-index].is-selected,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .date-strip:is(.is-scrubbing, .is-settling)
+  button[data-date-index][data-under-selection="true"],
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .sched-freshness-done,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-external-schedule-link,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-theme-modes
+  button.is-active,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-replace-actions
+  button.is-primary {
+  color: var(--sched-on-accent, #ffffff) !important;
+}
+
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) .sched-freshness-done,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-external-schedule-link,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .sched-replace-actions
+  button.is-primary {
+  background: var(--sched-accent, #0a84ff) !important;
+}
+
+/* ===== раунд 12: акцентный фон, тёмные подложки, рулетка как колесо ===== */
+
+/* 1. Акцентная тема реально красит фон.
+   Базовые палитры объявлены как :root[data-theme="dark"][data-sched-palette] (0-3-0),
+   поэтому переменные акцента тоже должны иметь три атрибута, иначе они проигрывают. */
+:root[data-theme="dark"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) {
+  --sched-bg: color-mix(in srgb, var(--sched-accent, #0a84ff) 18%, #05050a);
+  --sched-surface: color-mix(in srgb, var(--sched-accent, #0a84ff) 10%, #04040a);
+  --sched-raised: color-mix(in srgb, var(--sched-accent, #0a84ff) 14%, #08080f);
+  --sched-note: color-mix(in srgb, var(--sched-accent, #0a84ff) 12%, #08080f);
+  --sched-fill: color-mix(in srgb, var(--sched-accent, #0a84ff) 16%, rgba(255, 255, 255, 0.07));
+  --sched-separator: color-mix(
+    in srgb,
+    var(--sched-accent, #0a84ff) 30%,
+    rgba(255, 255, 255, 0.14)
+  );
+  --sched-blue: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --sched-live: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --sched-live-fill: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --strip-selection-fill: var(--sched-accent, #0a84ff);
+  --strip-selection-idle: var(--sched-accent, #0a84ff);
+  --strip-selection-on: var(--sched-on-accent, #ffffff);
+  --sched-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="light"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]) {
+  --sched-bg: color-mix(in srgb, var(--sched-accent, #0a84ff) 28%, #ffffff);
+  --sched-surface: color-mix(in srgb, var(--sched-accent, #0a84ff) 6%, #ffffff);
+  --sched-raised: color-mix(in srgb, var(--sched-accent, #0a84ff) 10%, #ffffff);
+  --sched-note: color-mix(in srgb, var(--sched-accent, #0a84ff) 14%, #fffdf0);
+  --sched-fill: color-mix(in srgb, var(--sched-accent, #0a84ff) 18%, rgba(118, 118, 128, 0.12));
+  --sched-separator: color-mix(in srgb, var(--sched-accent, #0a84ff) 32%, rgba(60, 60, 67, 0.18));
+  --sched-blue: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --sched-live: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --sched-live-fill: var(--sched-accent-readable, var(--sched-accent, #0a84ff));
+  --strip-selection-fill: var(--sched-accent, #0a84ff) !important;
+  --strip-selection-idle: var(--sched-accent, #0a84ff) !important;
+  --strip-selection-on: var(--sched-on-accent, #ffffff);
+}
+
+/* 2. Подложки под парами заметно темнее фона. */
+:root[data-theme="dark"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .agenda-list,
+:root[data-theme="dark"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .live-lesson-card:not(.is-current) {
+  border-color: var(--sched-separator) !important;
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 9%, #030307) !important;
+}
+:root[data-theme="dark"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .agenda-list.is-completed {
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 5%, #020206) !important;
+}
+:root[data-theme="dark"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .live-card-glass {
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 13%, #05050c) !important;
+}
+:root[data-theme="dark"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .bells-grid
+  .agenda-row.is-bell-break {
+  background: color-mix(
+    in srgb,
+    var(--sched-accent, #0a84ff) 10%,
+    rgba(16, 16, 22, 0.92)
+  ) !important;
+}
+
+:root[data-theme="light"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .agenda-list,
+:root[data-theme="light"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .live-lesson-card:not(.is-current) {
+  border-color: var(--sched-separator) !important;
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 10%, #ffffff) !important;
+}
+:root[data-theme="light"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .agenda-list.is-completed {
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 5%, #ffffff) !important;
+}
+:root[data-theme="light"]:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"])
+  .live-card-glass {
+  background: color-mix(in srgb, var(--sched-accent, #0a84ff) 14%, #ffffff) !important;
+}
+
+/* 4. Светлая тема: время пары чуть правее. */
+:root[data-theme="light"] .agenda-list .agenda-row-time,
+:root[data-theme="light"][data-sched-palette] .agenda-list .agenda-row-time {
+  padding-left: 10px;
+}
+
+/* 5. Строка «стать крутым» со звездой. */
+.sched-settings-row.sched-settings-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sched-settings-row.sched-settings-link:hover {
+  background: var(--sched-hover-fill);
+}
+:root .sched-settings-icon.is-cool,
+:root[data-sched-palette] .sched-settings-icon.is-cool,
+:root:is([data-sched-palette="accent"], [data-sched-palette="accent-plus"]):not(
+    [data-sched-palette="opaque"]
+  ):not([data-sched-palette="opaque-light"])
+  .sched-settings-icon.is-cool {
+  background: linear-gradient(135deg, #ffd85c, #ff9f0a) !important;
+  color: #241a00 !important;
+  box-shadow: none !important;
+}
+:root .sched-settings-icon.is-cool svg,
+:root[data-sched-palette] .sched-settings-icon.is-cool svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* Строка «стать крутым»: та же геометрия, что и у остальных строк.
+   Базовое правило размера шеврона написано как button.sched-settings-row > svg,
+   поэтому в ссылке SVG брал дефолтные 300x150 и раздувал строку. */
+a.sched-settings-row.sched-settings-link {
+  min-height: 46px;
+  padding: 5px 9px;
+  gap: 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--sched-text);
+}
+a.sched-settings-row.sched-settings-link > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--sched-secondary);
+  fill: none;
+  stroke-width: 1.9;
+}
+a.sched-settings-row.sched-settings-link .sched-settings-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+a.sched-settings-row.sched-settings-link .sched-settings-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: none;
+}
+a.sched-settings-row.sched-settings-link strong {
+  font-size: 13.5px;
+  line-height: 1.18;
+}
+
+/* ---------- Telegram: кнопка входа, заявки, редакторы, тосты ---------- */
+.sched-tg-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.sched-tg-btn svg {
+  width: 20px;
+  height: 20px;
+}
+.sched-tg-btn.is-auth {
+  color: #2aabee;
+  border-color: rgba(42, 171, 238, 0.5);
+}
+.sched-tg-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--sched-header-bg, var(--sched-surface, #18181b));
+  z-index: 5;
+  pointer-events: none;
+}
+.sched-tg-sheet {
+  max-height: 82vh;
+  overflow-y: auto;
+}
+.sched-tg-widget {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 6px;
+  min-height: 44px;
+}
+.sched-tg-section {
+  margin-top: 16px;
+}
+.sched-tg-section > span {
+  display: block;
+  font-size: 12px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.sched-tg-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid rgba(128, 128, 128, 0.18);
+  flex-wrap: wrap;
+}
+.sched-tg-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+.sched-tg-row-text span {
+  font-size: 12px;
+  opacity: 0.65;
+}
+.sched-tg-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sched-tg-row-actions button {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
+  color: inherit;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.sched-tg-row-actions button.is-primary {
+  background: #2aabee;
+  border-color: #2aabee;
+  color: #fff;
+}
+#sched-toast-container {
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 9999;
+  max-width: 88vw;
+}
+.sched-toast-item,
+#sched-toast {
+  background: rgba(16, 16, 20, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  transition:
+    opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.sched-toast-item.is-visible,
+#sched-toast.is-visible {
+  opacity: 0.96;
+  transform: translateY(0) scale(1);
+}
+.sched-toast-item.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+}
+
+/* ---------- штамп данных: отдельной строкой слева, между бейджем чётности и рулеткой дней ---------- */
+.sched-data-stamp {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 2px;
+  min-height: 12px;
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 12px;
+  color: var(--sched-tertiary);
+  white-space: nowrap;
+}
+
+/* ---------- в текущей паре под часами — сколько уже прошло ---------- */
+.live-card-range {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.live-card-range small {
+  font-size: 9.5px;
+  font-weight: 550;
+  opacity: 0.72;
+}
+
+/* ---------- настройки без блюра: затемнение фона остаётся, размытие убрано ---------- */
+.sched-app:before {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* ---------- «что менялось»: воздух между шапкой и пустым состоянием ---------- */
+.sched-updates-empty {
+  margin: 14px 2px 4px;
+}
+
+/* ---------- лёгкий вид: ровная подложка у аудитории ---------- */
+/* Бандл в лёгком виде обнуляет padding и заливку чипа, а наша заливка с !important
+   оставалась — получалась смятая подложка без отступов. Возвращаем нормальный вид. */
+:root[data-sched-schedule-view="light"] .sched-schedule-view .lesson-room {
+  min-height: 20px;
+  padding: 2px 7px !important;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+/* ---------- лёгкий вид: время пар чуть правее от края ---------- */
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row-time {
+  padding-left: 6px;
+}
+
+/* ---------- перерыв между парами: чип на линии-разделителе ---------- */
+/* Разделитель строк (.agenda-row + .agenda-row) из-за вставки теряется,
+   поэтому линию рисует сам блок, а чип перекрывает её по центру. */
+.agenda-break {
+  position: relative;
+  z-index: 1;
+  height: 0;
+  border-top: 1px solid var(--sched-separator);
+  pointer-events: none;
+}
+.agenda-break-chip {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  /* непрозрачная подложка: чип перекрывает линию чисто, без просвета */
+  background: var(--sched-raised);
+  color: var(--sched-tertiary);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.agenda-break-chip strong {
+  color: var(--sched-secondary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+#refresh-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- узкие экраны (телефоны): шапка без каши ---------- */
+/* На 390px и меньше правая зона (тема+обновление+настройки, а с Telegram ещё и
+   кнопка входа) не влезала в свою колонку сетки и налезала на логотип.
+   Решение: логотип оставляем звездой, кнопки компактнее, переключатель темы
+   убираем из шапки (он есть первой строкой в настройках). */
+@media (max-width: 430px) {
+  .sched-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .sched-header-actions {
+    gap: 4px;
+  }
+  .sched-header-actions .sched-settings-trigger,
+  .sched-header-actions .sched-tg-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+  .sched-header-actions .sched-theme-toggle {
+    display: none;
+  }
+}
+
+/* --- колокольчик уведомлений и добавление редактора --- */
+.sched-bell-btn {
+  position: relative;
+}
+.sched-tg-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.sched-tg-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+.sched-tg-add button {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sched-tg-add button:active {
+  transform: scale(0.97);
+}
+
+/* --- аватарка вместо шестерёнки и аккаунт в настройках --- */
+.sched-settings-trigger .sched-trigger-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: none;
+}
+.sched-settings-trigger.is-avatar {
+  padding: 2px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--sched-raised), var(--sched-raised)) padding-box,
+    linear-gradient(150deg, #a55bff, #2e9bff) border-box;
+}
+.sched-settings-trigger.is-avatar .sched-trigger-avatar {
+  display: block;
+}
+.sched-settings-trigger.is-avatar > svg {
+  display: none;
+}
+.sched-settings.is-open .sched-settings-trigger.is-avatar {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--sched-raised), var(--sched-raised)) padding-box,
+    linear-gradient(150deg, #a55bff, #2e9bff) border-box;
+  color: var(--sched-text);
+}
+
+/* --- профиль: «герой» аккаунта после входа через Telegram --- */
+.sched-profile-hero {
+  display: flex;
+  padding: 14px 20px 4px;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.sched-profile-hero-avatar {
+  display: grid;
+  width: 84px;
+  height: 84px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #58c7ff, #1689ec);
+  box-shadow:
+    0 0 0 3px var(--sched-raised, #242429),
+    0 0 0 5.5px var(--sched-accent, #2e9bff),
+    0 10px 26px color-mix(in srgb, var(--sched-accent, #2e9bff) 26%, transparent) !important;
+  color: #fff;
+  overflow: visible;
+}
+.sched-profile-hero-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.sched-profile-hero-avatar b {
+  font-size: 32px;
+}
+.sched-profile-hero-name {
+  margin-top: 12px;
+  font-size: 19px;
+}
+.sched-profile-hero-username {
+  margin-top: 2px;
+  color: var(--sched-secondary);
+  font-size: 13px;
+}
+.sched-profile-hero-role {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 4px 11px;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sched-green) 16%, transparent);
+  color: var(--sched-green);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sched-profile-hero-role svg {
+  width: 13px;
+  height: 13px;
+}
+.sched-profile-hero-role.is-editor {
+  background: color-mix(in srgb, var(--sched-blue) 14%, transparent);
+  color: var(--sched-blue);
+}
+.sched-profile-hero-role.is-owner {
+  background: color-mix(in srgb, #b884ff 18%, transparent);
+  color: #b884ff;
+}
+.sched-profile-hero-id {
+  margin-top: 8px;
+  max-width: 300px;
+  color: var(--sched-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.sched-profile-hero-actions {
+  margin-top: 12px;
+}
+
+/* --- памятка про /start боту --- */
+.sched-tg-memo-backdrop {
+  position: fixed;
+  z-index: 460;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  place-items: center;
+  background: #00000047;
+  animation: sched-profile-backdrop-in 0.18s ease-out both;
+}
+.sched-tg-memo {
+  width: min(100%, 320px);
+  padding: 22px 18px 14px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--sched-raised) 97%, var(--sched-bg));
+  box-shadow: 0 18px 48px #0000003d;
+  color: var(--sched-text);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  text-align: center;
+  animation: sched-profile-in 0.24s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.sched-tg-memo-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sched-blue) 13%, transparent);
+  color: var(--sched-blue);
+}
+.sched-tg-memo-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.sched-tg-memo strong {
+  font-size: 16px;
+}
+.sched-tg-memo p {
+  margin: 7px 0 0;
+  color: var(--sched-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.sched-tg-memo-actions {
+  display: flex;
+  margin-top: 16px;
+  gap: 8px;
+}
+.sched-tg-memo-actions a,
+.sched-tg-memo-actions button {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 0 12px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  background: var(--sched-fill);
+  color: var(--sched-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.sched-tg-memo-actions .is-primary {
+  background: var(--sched-blue);
+  color: #fff;
+}
+.sched-account-row .sched-settings-icon.is-account {
+  overflow: hidden;
+  border-radius: 50%;
+}
+.sched-account-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+/* --- профиль: аккаунт, вход TG, управление, уведомления --- */
+.sched-profile-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.sched-profile-avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #58c7ff, #1689ec);
+  color: #fff;
+}
+.sched-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sched-profile-avatar b {
+  font-size: 17px;
+}
+.sched-profile-account-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.sched-profile-account-text strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-profile-account-text small {
+  margin-top: 2px;
+  color: var(--sched-secondary);
+  font-size: 11px;
+}
+.sched-profile-mini {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--sched-fill);
+  color: var(--sched-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.sched-profile-manage {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-top: 1px solid var(--sched-separator);
+  background: transparent;
+  color: var(--sched-blue);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sched-profile-manage svg {
+  width: 16px;
+  height: 16px;
+  color: var(--sched-tertiary);
+}
+.sched-profile-count {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--sched-danger);
+  color: #fff;
+  font-size: 11px;
+}
+.sched-profile-auth {
+  display: grid;
+  padding: 18px 14px;
+  justify-items: stretch;
+  gap: 10px;
+}
+.sched-profile-auth-btn {
+  display: flex;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 14px 8px 10px;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid color-mix(in srgb, var(--sched-blue) 24%, var(--sched-separator));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--sched-blue) 10%, var(--sched-raised));
+  color: var(--sched-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    transform 0.11s ease;
+}
+.sched-profile-auth-btn:active {
+  background: color-mix(in srgb, var(--sched-blue) 15%, var(--sched-raised));
+  transform: scale(0.985);
+}
+.sched-profile-auth-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #7f7aff, #5a5af0);
+  color: #fff;
+}
+.sched-profile-auth-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.sched-profile-auth-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.sched-profile-auth-text strong {
+  font-size: 14.5px;
+}
+.sched-profile-auth-text small {
+  margin-top: 2px;
+  color: var(--sched-secondary);
+  font-size: 11px;
+}
+.sched-profile-auth-btn > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--sched-tertiary);
+}
+.sched-profile-auth-wrap {
+  position: relative;
+  width: 100%;
+}
+.sched-profile-auth-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  opacity: 0.001;
+  pointer-events: auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sched-profile-auth-overlay:empty {
+  display: none;
+  pointer-events: none;
+}
+.sched-profile-auth-overlay iframe {
+  width: 100% !important;
+  height: 100% !important;
+  transform: scale(3.5);
+  transform-origin: center center;
+  cursor: pointer;
+}
+.sched-profile-auth-legacy {
+  display: grid;
+  min-height: 40px;
+  justify-items: center;
+}
+.sched-profile-auth-legacy iframe {
+  display: block;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px color-mix(in srgb, #2aabee 34%, transparent);
+}
+.sched-profile-auth small {
+  max-width: none;
+  color: var(--sched-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* --- профиль: раскрывающийся список тумблеров --- */
+.sched-profile-notifs-head > svg {
+  transition: transform 0.22s ease;
+}
+.sched-profile-notifs-head[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.sched-profile-notifs-head[aria-expanded="true"] {
+  border-bottom: 1px solid var(--sched-separator);
+}
+.sched-profile-notifs-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sched-profile-notifs-panel.is-open {
+  grid-template-rows: 1fr;
+}
+.sched-profile-notifs-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.sched-profile-group .sched-settings-row {
+  min-height: 50px;
+}
+
+/* --- профиль: контент скроллится без всплывающего скроллбара --- */
+.sched-profile .sched-profile-content {
+  scrollbar-width: none;
+}
+.sched-profile .sched-profile-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- копируемый telegram id --- */
+.sched-profile button.sched-profile-hero-id {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sched-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.sched-profile button.sched-profile-hero-id b {
+  color: var(--sched-text);
+  font-weight: 650;
+}
+.sched-profile button.sched-profile-hero-id:active {
+  opacity: 0.55;
+}
+.sched-replace-sheet .sched-tg-copy-id {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.sched-replace-sheet .sched-tg-copy-id b {
+  color: var(--sched-text);
+  font-weight: 650;
+}
+.sched-replace-sheet .sched-tg-copy-id:active {
+  opacity: 0.55;
+}
+.sched-profile .sched-tg-copy-id {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.sched-profile .sched-tg-copy-id b {
+  color: var(--sched-text);
+  font-weight: 650;
+}
+.sched-profile .sched-tg-copy-id:active {
+  opacity: 0.55;
+}
+
+/* --- кнопка «выйти»: маленькая, справа сверху карточки профиля --- */
+.sched-profile .sched-profile-hero {
+  position: relative;
+}
+.sched-profile .sched-profile-hero-actions {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  margin: 0;
+}
+.sched-profile button.sched-profile-mini {
+  min-height: 0;
+  padding: 4px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sched-fill);
+  color: var(--sched-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.sched-profile button.sched-profile-mini:active {
+  opacity: 0.6;
+}
+
+/* --- перерыв между парами: чуть больше воздуха над и под линией --- */
+.agenda-list .agenda-break {
+  margin: 6px 0;
+}
+
+/* --- лоадер: фон и иконка следуют теме/акценту ещё до загрузки app.js --- */
+#loader.app-loading-state {
+  background: var(--sched-bg, #f5f5f7);
+}
+#loader .app-loading-mark-blur,
+#loader .app-loading-mark-surface {
+  background: var(--sched-accent, #6578f6);
+}
+
+/* --- кольцо аватарки следует акцентному цвету темы с зазором --- */
+.sched-settings-trigger.is-avatar,
+.sched-settings.is-open .sched-settings-trigger.is-avatar {
+  border: none !important;
+  background: transparent !important;
+  box-shadow:
+    0 0 0 2px var(--sched-header-bg, var(--sched-surface, #18181b)),
+    0 0 0 4px var(--sched-accent, #2e9bff) !important;
+}
+
+/* --- заявки и редакторы: раскрытие внутри профиля --- */
+.sched-profile-notifs-panel-inner #profile-tg-inline {
+  padding: 4px 2px 6px;
+}
+/* подсказка под полем id редактора — чуть ниже */
+.sched-tg-add + .sched-tg-add-hint {
+  display: block;
+  margin-top: 8px;
+}
+
+/* --- профиль: слои диалогов и оформление кнопок --- */
+.sched-profile-backdrop {
+  z-index: 120;
+}
+.sched-profile {
+  max-height: min(940px, calc(100dvh - 20px));
+  transform-origin: center center;
+  animation: sched-profile-in 0.24s cubic-bezier(0.18, 1.12, 0.32, 1) both;
+}
+@keyframes sched-profile-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.sched-profile-group .sched-settings-row + .sched-settings-row {
+  border-top: 1px solid var(--sched-separator);
+}
+@media (max-width: 640px) {
+  .sched-profile-backdrop {
+    padding: 8px;
+  }
+  .sched-profile {
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+.sched-profile-header h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sched-profile-title-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+}
+.sched-profile-title-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
+}
+.sched-profile-title-icon.is-notifs {
+  background: linear-gradient(180deg, #ffcb55, #ff9500);
+}
+.sched-profile-title-icon.is-editors {
+  background: linear-gradient(180deg, #59c8ff, #1689ec);
+}
+
+/* --- лента уведомлений: цветные иконки по типу события --- */
+.sched-notif-row {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+.sched-notif-ico {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  place-items: center;
+  border-radius: 9px;
+  color: #fff;
+}
+.sched-notif-ico svg {
+  width: 17px;
+  height: 17px;
+}
+.sched-notif-row.is-cancel .sched-notif-ico {
+  background: linear-gradient(180deg, #ff6b61, #d70015);
+}
+.sched-notif-row.is-swap .sched-notif-ico {
+  background: linear-gradient(180deg, #59c8ff, #1689ec);
+}
+.sched-notif-row.is-reset .sched-notif-ico {
+  background: linear-gradient(180deg, #a9b1bb, #777f89);
+}
+.sched-notif-row.is-pending .sched-notif-ico {
+  background: linear-gradient(180deg, #ffcb55, #ff9500);
+}
+.sched-notif-row.is-schedule .sched-notif-ico {
+  background: linear-gradient(180deg, #5ae87e, #28b957);
+}
+.sched-notif-row.is-cancel .sched-tg-row-text > strong {
+  color: var(--sched-danger);
+}
+
+/* --- мини-карточка дня в уведомлении --- */
+.sched-notif-frag {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  border: 1px solid var(--sched-separator);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sched-surface) 70%, transparent);
+}
+.sched-notif-frag-day {
+  display: block;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--sched-separator);
+  background: color-mix(in srgb, var(--sched-fill) 60%, transparent);
+  color: var(--sched-secondary);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.sched-notif-frag-lesson {
+  display: flex;
+  padding: 8px 10px;
+  align-items: center;
+  gap: 10px;
+}
+.sched-notif-frag-lesson time {
+  flex: 0 0 auto;
+  color: var(--sched-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.sched-notif-frag-main {
+  min-width: 0;
+}
+.sched-notif-frag-main b {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+}
+.sched-notif-frag-main i {
+  display: block;
+  color: var(--sched-tertiary);
+  font-size: 11px;
+  font-style: normal;
+}
+.sched-notif-row.is-cancel .sched-notif-frag {
+  border-color: color-mix(in srgb, var(--sched-danger) 30%, var(--sched-separator));
+}
+.sched-notif-row.is-cancel .sched-notif-frag-lesson b {
+  color: var(--sched-danger);
+  text-decoration: line-through;
+}
+
+/* --- сегмент пары в заявке (без времени) --- */
+.sched-pending-segment {
+  display: block;
+  margin-top: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--sched-separator);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sched-surface) 70%, transparent);
+}
+.sched-pending-segment strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.sched-pending-segment span {
+  display: block;
+  margin-top: 2px;
+  color: var(--sched-secondary);
+  font-size: 12px;
+}
+.sched-pending-segment small {
+  display: block;
+  margin-top: 3px;
+  color: var(--sched-tertiary);
+  font-size: 11px;
+}
+
+/* --- плавное раскрытие разделов профиля без мерцаний --- */
+.sched-profile .sched-profile-notifs-head {
+  overflow: hidden;
+  max-height: 72px;
+  opacity: 1;
+  transition:
+    max-height 0.26s ease,
+    opacity 0.2s ease,
+    padding 0.26s ease;
+}
+.sched-profile.is-expanded .sched-profile-notifs-head {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+/* --- раскрытый раздел на телефоне — карточка по центру со скруглением, как на ПК --- */
+@media (max-width: 740px) {
+  .sched-profile-backdrop:has(.sched-profile.is-expanded) {
+    padding: 18px;
+    place-items: center;
+  }
+  .sched-profile.is-expanded {
+    width: min(100%, 500px);
+    height: auto;
+    min-height: 0;
+    max-height: calc(var(--sched-viewport-height, 100dvh) - 36px);
+    border: 1px solid color-mix(in srgb, var(--sched-separator) 82%, transparent);
+    border-radius: 28px;
+    box-shadow: 0 28px 80px #0000003d;
+    transition:
+      border-radius 0.26s ease,
+      max-height 0.26s ease;
+  }
+}
+
+/* --- ленивый день-плейсхолдер (дорисовывается при прокрутке) --- */
+.sched-lazy-day {
+  min-height: 240px;
+}
+
+/* --- иконки «сообщить об ошибке» и режима производительности --- */
+.sched-settings-icon.is-bug {
+  background: linear-gradient(180deg, #ff9f8a, #e04a3a);
+}
+.sched-settings-icon.is-perf {
+  background: linear-gradient(180deg, #ffd76a, #f0a020);
+}
+
+/* --- iOS (WebKit): облегчаем тяжёлые blur-эффекты, чтобы не лагала прокрутка --- */
+@supports (-webkit-touch-callout: none) {
+  .sched-date-controls {
+    backdrop-filter: blur(8px) saturate(140%);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
+  }
+  .sched-dock:before {
+    backdrop-filter: blur(8px) saturate(1.05);
+    -webkit-backdrop-filter: blur(8px) saturate(1.05);
+  }
+  .live-card-glass {
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+  }
+  .sched-days-scene.is-date-scrubbing .sched-active-day-stage,
+  .sched-days-scene.is-date-settling .sched-active-day-stage {
+    filter: none;
+  }
+}
+
+/* --- режим производительности: отключение анимаций и эффектов без влияния на логотип --- */
+:root[data-perf] :where(*:not(.sched-header-brand):not(.sched-header-brand *):not(#stage):not(#selection):not(.sched-swipe-peek)) {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+:root[data-perf] .sched-date-controls,
+:root[data-perf] .sched-settings-popover,
+:root[data-perf] .sched-tab-bar,
+:root[data-perf] .sched-dock-refresh,
+:root[data-perf] .live-card-glass,
+:root[data-perf] .sched-profile-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+:root[data-perf] .sched-date-controls {
+  background: var(--sched-bg);
+}
+:root[data-perf] .sched-dock:before,
+:root[data-perf] .live-card-particles,
+:root[data-perf] .live-card-backglow {
+  display: none !important;
+}
+:root[data-perf] .sched-days-scene.is-date-scrubbing .sched-active-day-stage,
+:root[data-perf] .sched-days-scene.is-date-settling .sched-active-day-stage {
+  filter: none !important;
+}
+
+/* Восстановление и гарантия полноценной анимации логотипа в режиме производительности */
+:root[data-perf] .sched-header-brand,
+:root[data-perf] .sched-header-brand * {
+  will-change: auto;
+}
+:root[data-perf] .sched-header-word {
+  transition:
+    opacity 0.3s ease,
+    transform 0.45s cubic-bezier(0.22, 0.72, 0.16, 1),
+    clip-path 0.45s cubic-bezier(0.22, 0.72, 0.16, 1) !important;
+}
+:root[data-perf] .sched-header-brand.is-playing .sched-header-mark {
+  animation: sched-header-brand-mark 3.6s cubic-bezier(0.22, 0.72, 0.16, 1) both !important;
+}
+:root[data-perf] .sched-header-brand.is-playing .sched-header-spark.is-first {
+  animation: sched-header-spark-first 3.6s ease-out both !important;
+}
+:root[data-perf] .sched-header-brand.is-playing .sched-header-spark.is-second {
+  animation: sched-header-spark-second 3.6s ease-out both !important;
+}
+
+/* --- интерактивные строки окон --- */
+.agenda-row.is-window-row {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.16s ease;
+}
+.agenda-row.is-window-row:hover {
+  background: color-mix(in srgb, var(--sched-blue, #0a84ff) 7%, transparent);
+}
+.agenda-row.is-window-row:active {
+  background: color-mix(in srgb, var(--sched-blue, #0a84ff) 12%, transparent);
+}
+.agenda-row.is-window-row:hover .lesson-swap-btn {
+  opacity: 1;
+  color: var(--sched-blue);
+}
+
+/* ---------- форма сообщения об ошибке (увеличенные отступы) ---------- */
+#report-backdrop,
+#reports-backdrop {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.sched-report-sheet {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 30px 28px;
+  border-radius: 24px;
+}
+
+/* анимация задана общим блоком #report-backdrop выше */
+
+#report-sheet-content {
+  display: grid;
+  gap: 28px;
+}
+
+.sched-report-sheet .sched-replace-head {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+.sched-report-sheet .sched-replace-head strong {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--sched-text);
+  letter-spacing: -0.2px;
+}
+.sched-report-sheet .sched-replace-head span {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--sched-secondary);
+}
+
+.sched-report-sheet .sched-replace-field {
+  display: grid;
+  gap: 14px;
+}
+.sched-report-sheet .sched-replace-field > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sched-secondary);
+  letter-spacing: 0.15px;
+}
+
+.sched-report-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.55;
+  min-height: 120px;
+  resize: vertical;
+  padding: 15px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--sched-separator);
+  background: var(--sched-raised);
+  color: var(--sched-text);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.sched-report-textarea:focus {
+  outline: none;
+  border-color: var(--sched-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sched-blue) 18%, transparent);
+}
+
+.sched-report-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1.5px dashed var(--sched-separator);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--sched-fill) 45%, transparent);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+.sched-report-dropzone:hover,
+.sched-report-dropzone:focus,
+.sched-report-dropzone.is-dragover {
+  border-color: var(--sched-blue);
+  background: color-mix(in srgb, var(--sched-blue) 12%, transparent);
+  transform: scale(1.008);
+}
+.sched-report-dropzone-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--sched-fill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--sched-blue);
+}
+.sched-report-dropzone-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.sched-report-dropzone-text {
+  display: grid;
+  gap: 5px;
+}
+.sched-report-dropzone-text strong {
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--sched-text);
+}
+.sched-report-dropzone-text small {
+  font-size: 12px;
+  color: var(--sched-secondary);
+  line-height: 1.45;
+}
+
+.sched-report-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--sched-blue) 10%, var(--sched-surface));
+  border: 1px solid color-mix(in srgb, var(--sched-blue) 30%, transparent);
+}
+.sched-report-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--sched-fill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--sched-blue);
+}
+.sched-report-file-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.sched-report-file-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.sched-report-file-info strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sched-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-report-file-info small {
+  font-size: 12px;
+  color: var(--sched-secondary);
+}
+.sched-report-file-remove {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--sched-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+.sched-report-file-remove:hover {
+  color: var(--sched-danger, #ff453a);
+  background: color-mix(in srgb, var(--sched-danger, #ff453a) 12%, transparent);
+}
+.sched-report-file-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sched-report-file-error,
+.sched-report-form-error {
+  font-size: 13px;
+  color: var(--sched-danger, #ff453a);
+  line-height: 1.45;
+  padding: 8px 2px;
+}
+
+.sched-report-details {
+  border: 1px solid var(--sched-separator);
+  border-radius: 15px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--sched-fill) 28%, transparent);
+  margin-top: 6px;
+}
+.sched-report-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--sched-secondary);
+  user-select: none;
+}
+.sched-report-diag-pre {
+  margin: 12px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--sched-tertiary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.sched-report-sheet .sched-replace-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+}
+.sched-report-sheet .sched-replace-actions button {
+  flex: 1;
+  min-height: 46px;
+}
+
+@media (max-width: 640px) {
+  #report-backdrop {
+    place-items: start center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .sched-report-sheet {
+    box-sizing: border-box;
+    width: min(100%, 520px);
+    max-height: calc(
+      100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom))
+    );
+    padding: 18px 16px;
+    border-radius: 20px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #report-sheet-content {
+    gap: 20px;
+  }
+
+  .sched-report-textarea {
+    font-size: 16px;
+    min-height: 128px;
+  }
+
+  .sched-report-dropzone {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .sched-report-dropzone-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .sched-report-file-preview {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 15px;
+  }
+
+  .sched-report-file-remove {
+    margin-left: auto;
+  }
+
+  .sched-report-details {
+    padding: 12px 14px;
+  }
+
+  .sched-report-diag-pre {
+    max-height: 120px;
+  }
+}
+
+@media (max-width: 430px) {
+  .sched-report-sheet .sched-replace-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .sched-report-sheet .sched-replace-actions button {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
+.sched-report-success-view {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 20px 10px;
+}
+.sched-report-success-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sched-blue) 18%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sched-blue);
+  margin-bottom: 4px;
+}
+.sched-report-success-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.sched-report-success-view strong {
+  font-size: 18px;
+  color: var(--sched-text);
+}
+.sched-report-success-view span {
+  font-size: 13.5px;
+  color: var(--sched-secondary);
+}
+
+/* --- список отчетов для владельца --- */
+.sched-reports-sheet {
+  width: min(600px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 26px 24px;
+  border-radius: 24px;
+}
+.sched-reports-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+}
+.sched-report-card {
+  border: 1px solid var(--sched-separator);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: var(--sched-raised);
+  display: grid;
+  gap: 12px;
+}
+.sched-report-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sched-report-card-sender strong {
+  display: block;
+  font-size: 14px;
+  color: var(--sched-text);
+}
+.sched-report-card-sender span {
+  font-size: 11.5px;
+  color: var(--sched-tertiary);
+}
+.sched-report-card-msg {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--sched-text);
+  white-space: pre-wrap;
+}
+.sched-report-del-btn {
+  border: 0;
+  background: transparent;
+  color: var(--sched-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+.sched-report-del-btn:hover {
+  color: var(--sched-danger, #ff453a);
+  background: color-mix(in srgb, var(--sched-danger, #ff453a) 12%, transparent);
+}
+.sched-report-del-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.sched-report-card-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sched-report-card-thumb img {
+  max-width: 180px;
+  max-height: 120px;
+  border-radius: 10px;
+  border: 1px solid var(--sched-separator);
+  object-fit: cover;
+}
+.sched-report-file-link {
+  font-size: 12.5px;
+  color: var(--sched-blue);
+  text-decoration: none;
+}
+.sched-report-file-link:hover {
+  text-decoration: underline;
+}
+.sched-report-card-diag {
+  border-top: 1px solid var(--sched-separator);
+  padding-top: 8px;
+}
+.sched-report-card-diag summary {
+  font-size: 11.5px;
+  color: var(--sched-secondary);
+  cursor: pointer;
+}
+.sched-report-card-diag pre {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--sched-tertiary);
+  white-space: pre-wrap;
+}
+
+/* ---------- Интерактивная подсветка при наведении (мягкий hover на всех кликабельных элементах) ---------- */
+
+/* Группы настроек и профиля аккуратно удерживают подсветку внутри скруглений */
+.sched-settings-group {
+  overflow: hidden;
+}
+
+/* 1. Строки меню настроек, профиля и строки с переключателями */
+button.sched-settings-row,
+a.sched-settings-row,
+.sched-profile-group .sched-settings-row,
+.sched-settings-row:has(.sched-setting-switch),
+.sched-settings-row:has(.sched-accent-input) {
+  cursor: pointer;
+  border-radius: 10px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.sched-settings-row:hover,
+  a.sched-settings-row:hover,
+  .sched-profile-group .sched-settings-row:hover,
+  .sched-settings-row:has(.sched-setting-switch):hover,
+  .sched-settings-row:has(.sched-accent-input):hover {
+    background: var(--sched-hover-fill);
+  }
+}
+
+/* 2. Шапка: кнопка-логотип, обновление, колокольчик и аватар/настройки */
+.sched-header-brand {
+  cursor: pointer;
+  border-radius: 10px;
+  transition:
+    opacity 0.16s ease,
+    filter 0.16s ease;
+}
+
+.sched-header-actions .sched-settings-trigger,
+.sched-header-actions .sched-bell-btn,
+.sched-header-actions .sched-tg-btn,
+#refresh-btn,
+#bell-btn,
+#settings-trigger {
+  cursor: pointer;
+  border-radius: 50%;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease,
+    filter 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sched-header-brand:hover {
+    opacity: 0.85;
+    filter: brightness(1.05);
+  }
+  .sched-header-actions .sched-settings-trigger:not(.is-avatar):hover,
+  .sched-header-actions .sched-bell-btn:hover,
+  .sched-header-actions .sched-tg-btn:hover,
+  #refresh-btn:hover,
+  #bell-btn:hover,
+  #settings-trigger:not(.is-avatar):hover {
+    background: var(--sched-hover-fill);
+  }
+  .sched-settings-trigger.is-avatar:hover {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--sched-blue) 45%, transparent);
+    filter: brightness(1.06);
+  }
+}
+
+/* 3. Рулетка дат: дни недели, стрелки переключения недель, кнопка «сегодня» */
+.date-strip button[data-date-index] {
+  cursor: pointer;
+  border-radius: 14px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+.date-strip-week-arrow {
+  cursor: pointer;
+  border-radius: 10px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+.date-strip-today {
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.16s ease,
+    transform 0.22s var(--sched-motion-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .date-strip button[data-date-index]:not(.is-selected):hover {
+    background: var(--sched-hover-fill);
+  }
+  .date-strip-week-arrow:not(:disabled):hover {
+    background: var(--sched-hover-fill);
+    color: var(--sched-text);
+  }
+  .date-strip-today:hover {
+    background: color-mix(in srgb, var(--sched-hover-fill) 40%, var(--sched-raised));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sched-blue) 40%, var(--sched-separator));
+  }
+}
+
+/* 4. Тумблеры и сегментированные переключатели (темы) */
+.sched-setting-switch {
+  cursor: pointer;
+  transition:
+    filter 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.sched-theme-modes button {
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.sched-accent-input {
+  cursor: pointer;
+  border-radius: 8px;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sched-setting-switch:hover {
+    filter: brightness(1.08);
+  }
+  .sched-theme-modes button:not(.is-active):not([aria-pressed="true"]):hover {
+    background: var(--sched-hover-fill);
+    color: var(--sched-text);
+  }
+  .sched-accent-input:hover {
+    border-color: var(--sched-blue);
+    transform: scale(1.04);
+  }
+}
+
+/* 5. Расписание: прошедшие пары (аккордеон) и кнопки замены пар */
+.completed-lessons-toggle {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+.lesson-swap-btn {
+  cursor: pointer;
+  border-radius: 8px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .completed-lessons-toggle:hover {
+    background: var(--sched-hover-fill);
+  }
+  .lesson-swap-btn:hover {
+    background: var(--sched-hover-fill);
+  }
+}
+
+/* 6. Модальные окна, шторки, действия и кнопки профиля */
+.sched-sheet-header-close,
+.sched-replace-sheet button[data-act="close"],
+.sched-replace-sheet button[data-notifs-act="close"],
+.sched-replace-sheet button[data-tg="close"],
+.sched-replace-sheet button[data-swap="close"],
+.sched-replace-sheet button[data-bells="close"],
+.sched-faculty-notice-close,
+.sched-notifications-panel > header button,
+.schedule-request-dialog > header button {
+  cursor: pointer;
+  border-radius: 10px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.sched-replace-actions button,
+.sched-profile button.sched-profile-mini,
+.sched-profile button.sched-profile-hero-id,
+.sched-tg-copy-id,
+.sched-onboarding-back,
+#bug-file-btn,
+#bug-file-remove,
+.sched-tg-row-actions button {
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sched-sheet-header-close:hover,
+  .sched-replace-sheet button[data-act="close"]:hover,
+  .sched-replace-sheet button[data-notifs-act="close"]:hover,
+  .sched-replace-sheet button[data-tg="close"]:hover,
+  .sched-replace-sheet button[data-swap="close"]:hover,
+  .sched-replace-sheet button[data-bells="close"]:hover,
+  .sched-faculty-notice-close:hover,
+  .sched-notifications-panel > header button:hover,
+  .schedule-request-dialog > header button:hover {
+    background: var(--sched-hover-fill);
+  }
+  .sched-replace-actions button:not(.is-primary):hover,
+  .sched-onboarding-back:hover,
+  #bug-file-btn:hover,
+  .sched-tg-row-actions button:hover {
+    background: var(--sched-hover-fill);
+  }
+  .sched-profile button.sched-profile-hero-id:hover,
+  .sched-tg-copy-id:hover {
+    background: var(--sched-hover-fill);
+    border-radius: 6px;
+  }
+  .sched-profile button.sched-profile-mini:hover {
+    background: color-mix(in srgb, var(--sched-fill) 85%, var(--sched-text));
+    filter: brightness(1.08);
+  }
+  .sched-profile-auth-btn:hover {
+    background: color-mix(in srgb, var(--sched-blue) 14%, var(--sched-raised));
+    border-color: color-mix(in srgb, var(--sched-blue) 38%, var(--sched-separator));
+  }
+  /* Акцентные/основные кнопки */
+  .sched-replace-actions button.is-primary:hover,
+  .sched-action-btn.is-primary:hover,
+  .sched-primary-btn:hover,
+  .sched-onboarding-action:hover,
+  .schedule-request-submit:hover,
+  #bug-submit:hover {
+    filter: brightness(1.07);
+  }
+  .sched-report-card-diag summary:hover {
+    color: var(--sched-text);
+  }
+}
+
+/* ====================================================================
+   PATCH BATCH — сентябрь 2026
+   ==================================================================== */
+
+/* ---------- 1. Шапка при открытых настройках — без серой подложки ---------- */
+.sched-app.is-settings-open .sched-title-row,
+.sched-app.is-settings-open .sched-header,
+.sched-app.is-settings-open .date-strip {
+  background: transparent !important;
+}
+/* Мягкая тень поповера вместо жёсткой */
+.sched-settings-popover {
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.22),
+    0 0 0 1px var(--sched-separator) !important;
+}
+
+/* ---------- 2. Уведомления: карточка пары не затемнена ---------- */
+/* Дата в шапке карточки — полная яркость */
+.sched-notif-frag-day {
+  color: var(--sched-text) !important;
+  opacity: 1 !important;
+}
+/* Подпись времени в карточке — нормальная */
+.sched-notif-frag-lesson time {
+  opacity: 1;
+  color: var(--sched-secondary);
+}
+/* Строка даты/времени уведомления (fmtDateTime) — чуть приглушена, не 0.65 */
+.sched-notif-row .sched-tg-row-text > span:last-child {
+  opacity: 0.5;
+  font-size: 11px;
+}
+/* Основной текст уведомления — полная яркость (не наследует opacity от .sched-tg-row-text span) */
+.sched-notif-row .sched-tg-row-text > strong {
+  opacity: 1;
+}
+
+/* ---------- 3. Редакторы: имя и id сдвинуты правее ---------- */
+.sched-tg-section.is-editors .sched-tg-row .sched-tg-row-text {
+  padding-left: 8px;
+}
+
+/* ---------- 4. Отступы между подсказками в разделе редакторов ---------- */
+.sched-tg-add-hint + .sched-tg-add-hint {
+  margin-top: 6px;
+}
+/* Оба абзаца чуть крупнее */
+.sched-tg-add-hint {
+  line-height: 1.55 !important;
+}
+
+/* ---------- 5. «Мой id» в профиле — для всех ролей ---------- */
+.sched-profile-hero-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(128, 128, 128, 0.22);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sched-profile-hero-id b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sched-profile-hero-id:hover {
+    background: color-mix(in srgb, var(--sched-fill) 60%, transparent);
+  }
+}
+
+/* ===== v78: устойчивые жесты, компактная шапка и согласованные темы ===== */
+
+/* Только один вертикальный transform. Нижний край закреплён, верх растёт.
+   Нет perspective, translateY + clip-path и масштаба больше 1 — в том числе в WebKit. */
+:root .date-strip,
+:root .date-strip * {
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+:root .date-strip {
+  perspective: none;
+  overscroll-behavior-x: none;
+}
+:root .date-strip-selection {
+  animation: none !important;
+  filter: none !important;
+  transform-origin: center bottom;
+}
+:root #strip #selection::before {
+  inset: 0;
+  clip-path: none !important;
+  transform-origin: 50% 100% !important;
+  /* 3 / 59 — число вместо деления CSS-длин, совместимо со старым iOS Safari. */
+  transform: scaleY(0.050847458) !important;
+  border-radius: 14px;
+  box-shadow: none !important;
+  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+:root
+  #strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-releasing, .is-hop)
+  #selection::before,
+:root #strip #selection.is-hop::before {
+  transform: scaleY(1) !important;
+  transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+}
+:root
+  .date-strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-releasing)
+  .date-strip-selection {
+  transition: none !important;
+}
+:root .date-strip button[data-date-index]:active {
+  transform: none;
+}
+:root .sched-days-scene:is(.is-date-scrubbing, .is-date-settling) .sched-active-day-stage {
+  transform: none;
+  filter: none;
+  opacity: 1;
+  will-change: auto;
+}
+#stage,
+#day-scene,
+.sched-lazy-day {
+  overflow-anchor: none;
+}
+.sched-active-day-scene.is-leaving {
+  contain: layout style;
+}
+.sched-active-day-scene.is-leaving .live-card-particles i,
+.sched-active-day-scene.is-leaving .sched-future-days,
+.sched-active-day-scene.is-leaving .sched-day-block {
+  animation-play-state: paused;
+}
+/* На входе сохраняем каскад контента, не раскручиваем каждую SVG-кнопку.
+   Строки, окна и текстовые элементы в покое и при смене дня удерживаем на GPU-слое
+   (translateZ(0) + backface-visibility: hidden), устраняя подёргивание текста во всех режимах. */
+#stage .agenda-row,
+#stage .agenda-row-time,
+#stage .agenda-row-content,
+#stage .agenda-row strong,
+#stage .agenda-row span,
+#stage .agenda-row small,
+#stage .agenda-row .agenda-row-sub,
+#stage .agenda-row .lesson-room,
+#stage .live-lesson-card,
+#stage .live-card-glass,
+#stage .live-card-status,
+#stage .live-card-timing,
+#stage .live-card-range,
+#stage #live-left,
+#stage #live-passed,
+#stage #live-clock,
+#stage .live-card-progress,
+#stage .agenda-row.is-window-row,
+#stage .agenda-row.is-window-row strong,
+#stage .sched-day-block,
+#stage .sched-day-heading,
+#stage .t-stagger-line,
+#stage .sched-day-heading-copy,
+#stage .sched-day-heading-copy > *,
+:root[data-sched-schedule-view="light"] #stage .agenda-row,
+:root[data-sched-schedule-view="light"] #stage .agenda-row-time,
+:root[data-sched-schedule-view="light"] #stage .agenda-row-content,
+:root[data-sched-schedule-view="light"] #stage .live-lesson-card,
+:root[data-sched-schedule-view="light"] #stage .live-card-glass,
+:root[data-sched-schedule-view="light"] #stage .sched-day-heading,
+:root[data-sched-schedule-view="light"] #stage .lesson-room,
+:root[data-sched-schedule-view="light"] #stage .agenda-list,
+:root[data-perf] #stage .agenda-row {
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Центрирование чипа перерыва: сохраняем точный translate(-50%, -50%) на GPU-слое */
+#stage .agenda-break-chip {
+  transform: translate3d(-50%, -50%, 0) !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+#stage .agenda-break-chip * {
+  transform: none !important;
+}
+
+/* ---------- Лёгкий вид: целочисленные высоты и базовые линии ----------
+   Устраняем субпиксельные смещения шрифта (ClearType/DirectWrite) при смене дня
+   и активной паре. Все строки и заголовки попадают в чётную пиксельную сетку. */
+:root[data-sched-schedule-view="light"] .sched-schedule-view .sched-day-heading {
+  min-height: 38px;
+  margin-bottom: 6px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .sched-day-heading h2 {
+  font-size: 18px;
+  line-height: 22px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .sched-day-heading-copy > span {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row {
+  min-height: 62px;
+  padding: 9px 0;
+  gap: 8px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row-time time {
+  font-size: 12px;
+  line-height: 15px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row-time time span {
+  font-size: 11px;
+  line-height: 14px;
+  margin-top: 2px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row-content > span {
+  font-size: 12px;
+  line-height: 15px;
+  margin-top: 3px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-row small {
+  font-size: 11px;
+  line-height: 14px;
+  margin-top: 2px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .lesson-room {
+  min-height: 20px;
+  padding: 2px 7px !important;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* ---------- Карточка активной / следующей пары: целочисленные размеры ----------
+   Исключаем дробные высоты (144.59px / 156.18px из-за line-height 1.2 на 18px
+   и 1.35 на 14px), которые сдвигали расписание на доли пикселя при наличии
+   активной или следующей пары («далее» / «сейчас»). */
+.live-lesson-card {
+  margin-bottom: 10px;
+  padding: 14px;
+}
+.live-lesson-card h3 {
+  font-size: 18px;
+  line-height: 22px;
+  margin-bottom: 4px;
+}
+.live-lesson-card .lesson-meta {
+  font-size: 14px;
+  line-height: 18px;
+}
+.live-card-status {
+  font-size: 12px;
+  line-height: 16px;
+  margin-bottom: 6px;
+}
+.live-card-timing {
+  font-size: 11px;
+  line-height: 15px;
+}
+.live-card-progress {
+  height: 4px;
+  margin: 12px 0 6px;
+}
+
+/* Метки происхождения пары («сам. работа», «сейчас», «далее») и метаданные — целочисленные строки */
+.lesson-origin-mark {
+  font-size: 11px;
+  line-height: 14px;
+}
+.lesson-meta {
+  line-height: 18px;
+}
+.lesson-advisory {
+  line-height: 14px;
+}
+
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-lesson-card {
+  margin-bottom: 8px;
+  padding: 12px 12px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-lesson-card.is-current {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+:root[data-sched-schedule-view="light"]
+  .sched-schedule-view
+  .live-lesson-card.is-current
+  .live-card-glass {
+  padding: 12px 13px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-lesson-card h3 {
+  font-size: 16px;
+  line-height: 20px;
+  margin-bottom: 4px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-lesson-card .lesson-meta {
+  font-size: 13px;
+  line-height: 17px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-card-status {
+  font-size: 12px;
+  line-height: 16px;
+  margin-bottom: 6px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-card-timing {
+  font-size: 11px;
+  line-height: 15px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .live-card-progress {
+  height: 4px;
+  margin: 10px 0 6px;
+}
+:root #stage,
+:root #stage * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+#stage .lesson-swap-btn,
+#stage .lesson-swap-btn svg,
+#stage .lesson-swap-btn svg * {
+  animation: none !important;
+  transform: none !important;
+  transition-property: color, background-color, opacity !important;
+}
+#stage .sched-active-day-scene.is-entering .live-lesson-card {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: var(--duration-stagger, 70ms) !important;
+}
+#stage .sched-active-day-scene.is-entering .agenda-row {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) {
+  animation-delay: calc(var(--duration-stagger, 70ms) * 2);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) {
+  animation-delay: calc(var(--duration-stagger, 70ms) * 3);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) {
+  animation-delay: calc(var(--duration-stagger, 70ms) * 4);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) {
+  animation-delay: calc(var(--duration-stagger, 70ms) * 5);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 5) {
+  animation-delay: calc(var(--duration-stagger, 70ms) * 6);
+}
+.sched-future-days {
+  animation: none;
+}
+/* Новые будущие дни сохраняют собственное плавное появление; при начале/конце
+   жеста их animation-name, delay и transform больше не изменяются. */
+.sched-future-days > .sched-day-block {
+  animation: sched-future-in var(--duration-medium, 0.42s) var(--ease-smooth-out) both;
+}
+
+.sched-day-heading h2 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Окна темнее обычных строк, с одной надписью в геометрическом центре. */
+:root {
+  --sched-window-bg: #111113;
+  --sched-window-hover: #171719;
+}
+:root[data-theme="light"] {
+  --sched-window-bg: #e4e4e8;
+  --sched-window-hover: #dcdce2;
+}
+:root[data-theme="dark"][data-sched-palette] {
+  --sched-window-bg: color-mix(in srgb, var(--sched-accent) 3%, #010104);
+  --sched-window-hover: color-mix(in srgb, var(--sched-accent) 6%, #08080c);
+}
+:root[data-theme="light"][data-sched-palette] {
+  --sched-window-bg: color-mix(in srgb, var(--sched-accent) 12%, #dedee5);
+  --sched-window-hover: color-mix(in srgb, var(--sched-accent) 16%, #d8d8df);
+}
+:root #stage .agenda-row.is-window-row {
+  position: relative;
+  display: grid;
+  min-height: 75px;
+  padding: 12px 13px;
+  align-items: start;
+  cursor: pointer;
+  pointer-events: auto !important;
+  background: var(--sched-window-bg) !important;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root[data-sched-schedule-view="light"] #stage .agenda-row.is-window-row {
+  min-height: 62px;
+  padding: 9px 0;
+}
+/* Текст «окно» слева, как у обычных пар: не центрируем и не растягиваем
+   содержимое на всю строку. При клике на строку или текст срабатывает действие строки. */
+:root #stage .agenda-row.is-window-row .agenda-row-content {
+  position: static;
+  inset: auto;
+  display: block;
+  padding: 0;
+  place-items: start;
+  pointer-events: none;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root #stage .agenda-row.is-window-row .agenda-row-time {
+  pointer-events: none;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root #stage .agenda-row.is-window-row strong {
+  margin: 0;
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 550;
+  color: var(--sched-secondary);
+  text-align: left;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:root[data-sched-schedule-view="light"] #stage .agenda-row.is-window-row strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+:root #stage .agenda-row.is-window-row .lesson-swap-btn {
+  top: 7px;
+  translate: 0 0;
+  pointer-events: none;
+}
+:root #stage .agenda-row.is-window-row:hover,
+:root #stage .agenda-row.is-window-row:focus-visible {
+  background: var(--sched-window-hover) !important;
+}
+.agenda-row.is-window-row:focus-visible,
+#brand:focus-visible,
+.sched-profile-notifs-head:focus-visible,
+.sched-setting-switch:focus-visible {
+  outline: 2px solid var(--sched-blue);
+  outline-offset: -2px;
+}
+
+/* Раскрытие уведомлений остаётся внутри профиля, без второго диалога. */
+.sched-profile .sched-profile-notifs-head {
+  max-height: none;
+  min-height: 56px;
+}
+.sched-profile-notifs-head > svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--sched-secondary);
+  transition: transform 300ms cubic-bezier(0.22, 0.72, 0.16, 1);
+}
+.sched-profile-notifs-head[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.sched-profile-notifs-head[aria-expanded="true"] {
+  border-bottom: 0;
+}
+.sched-profile-notifs-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 300ms cubic-bezier(0.22, 0.72, 0.16, 1),
+    visibility 0s 300ms;
+}
+.sched-profile-notifs-panel.is-open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.sched-profile-notifs-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.sched-profile-notifs-options {
+  opacity: 0;
+  transform: translate3d(0, -6px, 0);
+  transition:
+    opacity 220ms ease,
+    transform 300ms cubic-bezier(0.22, 0.72, 0.16, 1);
+}
+.sched-profile-notifs-panel.is-open .sched-profile-notifs-options {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+.sched-profile-notifs-options .sched-settings-row {
+  border-top: 1px solid var(--sched-separator);
+  padding: 12px 14px;
+  gap: 12px;
+}
+.sched-profile-notifs-options .sched-setting-switch {
+  flex: 0 0 auto;
+}
+.sched-profile-notifs-options .sched-settings-copy {
+  min-width: 0;
+}
+.sched-profile-notifs-options .sched-settings-copy span {
+  white-space: normal;
+}
+
+/* Логотип работает штатно на дефолтных правилах из sched-*.css:
+   знак сдвигается, слово «sched» проявляется через clip-path, искры и блик
+   проигрывают свои анимации. Специальных override-правил #brand здесь нет. */
+
+@media (max-width: 430px) {
+  .sched-header {
+    padding-inline: 12px;
+  }
+  .sched-title-row {
+    gap: 4px;
+  }
+  .sched-header-actions {
+    gap: 0;
+  }
+  .sched-header-actions .sched-settings-trigger,
+  .sched-header-actions .sched-bell-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  .sched-header-actions .sched-theme-toggle {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  .sched-header {
+    padding-inline: 8px;
+  }
+  .sched-week-switch.is-header-leading {
+    padding-inline: 6px;
+  }
+}
+
+/* Акцент+: выбранный оттенок, светлый блик и более глубокая тень того же цвета.
+   Фон статичен; небольшой перелив рисуется только на видимой пилюле. */
+:root[data-sched-palette="accent-plus"] {
+  transition:
+    background 0.3s ease,
+    background-color 0.3s ease;
+  --sched-accent-gradient: linear-gradient(
+    135deg,
+    var(--sched-gradient-light),
+    var(--sched-accent) 42%,
+    var(--sched-gradient-dark) 82%,
+    var(--sched-gradient-light)
+  );
+  --sched-plus-canvas:
+    radial-gradient(
+      ellipse at 0 0,
+      color-mix(in srgb, var(--sched-accent) 16%, transparent),
+      transparent 65%
+    ),
+    linear-gradient(150deg, color-mix(in srgb, var(--sched-accent) 13%, #020207), #030308 70%);
+}
+:root[data-theme="light"][data-sched-palette="accent-plus"] {
+  transition:
+    background 0.3s ease,
+    background-color 0.3s ease;
+  --sched-plus-canvas:
+    radial-gradient(
+      ellipse at 0 0,
+      color-mix(in srgb, var(--sched-accent) 14%, transparent),
+      transparent 65%
+    ),
+    linear-gradient(150deg, color-mix(in srgb, var(--sched-accent) 19%, #ffffff), #fbfbfd 80%);
+}
+:root[data-sched-palette="accent-plus"] .sched-page,
+:root[data-sched-palette="accent-plus"] #app {
+  background: var(--sched-plus-canvas) !important;
+}
+:root[data-sched-palette="accent-plus"] .sched-header {
+  background: transparent;
+}
+:root[data-sched-palette="accent-plus"] #brand .sched-header-mark,
+:root[data-sched-palette="accent-plus"] .sched-theme-modes button.is-active,
+:root[data-sched-palette="accent-plus"] .sched-setting-switch[aria-pressed="true"],
+:root[data-sched-palette="accent-plus"] .sched-settings-icon:not(.is-danger):not(.is-bug),
+:root[data-sched-palette="accent-plus"] .sched-replace-actions button.is-primary,
+:root[data-sched-palette="accent-plus"] .sched-freshness-done,
+:root[data-sched-palette="accent-plus"] .sched-external-schedule-link,
+:root[data-sched-palette="accent-plus"] .sched-profile-title-icon,
+:root[data-sched-palette="accent-plus"] #live-progress {
+  background: var(--sched-accent-gradient) !important;
+  color: var(--sched-on-accent) !important;
+}
+:root[data-sched-palette="accent-plus"] .date-strip .date-strip-selection::before {
+  background: var(--sched-accent-gradient) !important;
+  background-size: 180% 180% !important;
+  animation: sched-accent-sheen 7s ease-in-out infinite;
+}
+:root[data-theme="dark"][data-sched-palette="accent-plus"] #stage .agenda-list,
+:root[data-theme="dark"][data-sched-palette="accent-plus"]
+  #stage
+  .live-lesson-card:not(.is-current) {
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--sched-accent) 12%, #05050b),
+    color-mix(in srgb, var(--sched-accent) 4%, #040407)
+  ) !important;
+}
+:root[data-theme="light"][data-sched-palette="accent-plus"] #stage .agenda-list,
+:root[data-theme="light"][data-sched-palette="accent-plus"]
+  #stage
+  .live-lesson-card:not(.is-current) {
+  background: linear-gradient(
+    125deg,
+    #ffffff,
+    color-mix(in srgb, var(--sched-accent) 9%, #ffffff)
+  ) !important;
+}
+@keyframes sched-accent-sheen {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Звонки не наследуют розовый акцент домашнего задания или сетку обычных пар. */
+.bells-view,
+#aux-view {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+#aux-view .bells-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+#aux-view > .sched-day-block {
+  padding-top: 10px;
+}
+#aux-view .sched-day-heading {
+  margin-bottom: 14px;
+}
+#aux-view .sched-day-heading h2 {
+  font-size: 21px;
+}
+#aux-view .sched-onboarding-back {
+  min-height: 40px;
+  padding-left: 0;
+}
+#aux-view .bells-section-head {
+  min-height: 34px;
+  margin-bottom: 8px;
+  gap: 6px;
+}
+#aux-view .bells-section-head strong {
+  font-size: 16px;
+}
+#aux-view .bells-section-head span {
+  font-size: 12px;
+  line-height: 1.25;
+}
+#aux-view .bells-grid .agenda-list {
+  border: 1px solid var(--sched-separator);
+  border-radius: 12px;
+  overflow: hidden;
+}
+#aux-view .bells-grid .agenda-row {
+  display: block;
+  min-height: 0;
+  padding: 8px 10px;
+  gap: 0;
+}
+#aux-view .bells-grid .agenda-row-time {
+  padding-left: 0;
+}
+#aux-view .bells-grid .agenda-row-time time {
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 550;
+}
+#aux-view .bells-grid .agenda-row-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+}
+#aux-view .bells-grid .agenda-row strong {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.18;
+  white-space: nowrap;
+  letter-spacing: -0.3px;
+}
+#aux-view .bells-grid .agenda-row small {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.1;
+}
+#aux-view .bells-grid .agenda-break {
+  margin: 7px 0;
+  border-color: var(--sched-separator);
+}
+#aux-view .bells-grid .agenda-break-chip {
+  max-width: calc(100% - 12px);
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--sched-raised);
+  color: var(--sched-secondary);
+  font-size: 10px;
+  line-height: 1.15;
+  gap: 3px;
+  white-space: nowrap;
+}
+#aux-view .bells-grid .agenda-break-chip strong {
+  font: inherit;
+  font-weight: 600;
+}
+@media (max-width: 360px) {
+  #aux-view .bells-grid {
+    gap: 8px;
+  }
+  #aux-view .sched-day-heading h2 {
+    font-size: 20px;
+  }
+  #aux-view .bells-grid .agenda-row {
+    padding: 7px 8px;
+  }
+}
+
+/* Настройки пользователя имеют приоритет над новой анимацией.
+   Бренд сюда не включаем: его анимации играют штатно из sched-*.css. */
+@media (prefers-reduced-motion: reduce) {
+  :root #stage *,
+  :root #strip #selection::before,
+  :root .sched-profile-notifs-panel,
+  :root .sched-profile-notifs-options,
+  :root .sched-profile-notifs-head > svg {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+:root[data-perf] #stage *,
+:root[data-perf] #strip #selection::before {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Выбранная дата читается и на тонкой линии, и внутри раскрытой пилюли. */
+:root #strip button[data-date-index].is-selected:not(.is-day-off) {
+  color: var(--sched-blue) !important;
+}
+:root
+  #strip:is(.is-pressing, .is-hop, .is-releasing)
+  button[data-date-index].is-selected:not(.is-day-off),
+:root
+  #strip:is(.is-scrubbing, .is-settling, .is-releasing)
+  button[data-date-index][data-under-selection="true"] {
+  color: var(--strip-selection-on) !important;
+}
+
+/* Статичный бейдж недели — информация, а не недоступное действие: не бледнеет. */
+:root[data-theme="light"][data-sched-palette] #week-switch.is-static,
+:root[data-theme="light"][data-sched-palette] #week-number,
+:root[data-theme="light"][data-sched-palette] #week-parity {
+  opacity: 1 !important;
+  color: var(--sched-accent-readable, var(--sched-blue)) !important;
+}
+
+/* Промежутки между списками пар, окнами и карточкой активной пары */
+.sched-day-block > .agenda-list:not(:last-child) {
+  margin-bottom: 10px;
+}
+:root[data-sched-schedule-view="light"]
+  .sched-schedule-view
+  .sched-day-block
+  > .agenda-list:not(:last-child) {
+  margin-bottom: 7px;
+}
+.agenda-list + .completed-lessons {
+  margin-top: 10px;
+}
+:root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-list + .completed-lessons {
+  margin-top: 7px;
+}
+#live-host:empty {
+  display: none;
+}
+
+/* Уведомления и настройки — круглые кнопки */
+.sched-header-actions .sched-settings-trigger,
+.sched-header-actions .sched-bell-btn,
+.sched-header-actions .sched-tg-btn,
+#refresh-btn,
+#bell-btn,
+#settings-trigger {
+  border-radius: 50% !important;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  overflow: visible !important;
+}
+.sched-header-actions .sched-settings-trigger.is-avatar,
+#settings-trigger.is-avatar {
+  border-radius: 50% !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow:
+    0 0 0 2px var(--sched-header-bg, var(--sched-surface, #18181b)),
+    0 0 0 4px var(--sched-accent, #2e9bff) !important;
+}
+.sched-header-actions .sched-settings-trigger.is-avatar .sched-trigger-avatar,
+#settings-trigger.is-avatar .sched-trigger-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+@media (max-width: 430px) {
+  .sched-header-actions .sched-settings-trigger,
+  .sched-header-actions .sched-bell-btn,
+  .sched-header-actions .sched-tg-btn,
+  #bell-btn,
+  #settings-trigger {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 50% !important;
+  }
+}
+
+/* Каскад появления: перерывы и live-host вместе с парами */
+#stage .sched-active-day-scene.is-entering .agenda-break,
+#stage .sched-active-day-scene.is-entering #live-host {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+}
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row,
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-break {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+}
+/* Завершённые пары сегодня при входе в день — лёгкое появление блока */
+#stage .sched-active-day-scene.is-entering .completed-lessons {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(var(--duration-stagger, 70ms) * 1) !important;
+}
+#stage .sched-active-day-scene.is-entering .completed-lessons:not(.is-expanding) .agenda-row {
+  animation: none !important;
+}
+
+/* ===== Акцент+: плавные градиенты при «все пары» и «окна» ===== */
+/* Плавный переход самого акцентного цвета (и всех color-mix от него). */
+@property --sched-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a84ff;
+}
+@property --sched-accent-readable {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0a84ff;
+}
+:root[data-sched-palette="accent-plus"],
+:root[data-sched-palette="accent"] {
+  transition-property: --sched-accent, --sched-accent-readable;
+  transition-duration: 0.35s;
+  transition-timing-function: ease;
+}
+
+/* Единый неподвижный холст: градиент фона рисуется один раз на весь экран
+   и не перерисовывается при листании дней, скролле и пересоздании списков. */
+:root[data-sched-palette="accent-plus"] html.sched-page {
+  background: transparent !important;
+}
+:root[data-sched-palette="accent-plus"] body {
+  background: transparent !important;
+}
+:root[data-sched-palette="accent-plus"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--sched-plus-canvas);
+  pointer-events: none;
+  animation: sched-plus-canvas-in 0.4s ease-out both;
+}
+@keyframes sched-plus-canvas-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+:root[data-sched-palette="accent-plus"] #root,
+:root[data-sched-palette="accent-plus"] .sched-app,
+:root[data-sched-palette="accent-plus"] .sched-page,
+:root[data-sched-palette="accent-plus"] #app {
+  background: transparent !important;
+}
+
+/* Подложки под парами: градиент не дёргается — ограничиваем перерисовку рамкой блока
+   и плавно проявляем при пересоздании (переключение «все пары» / «окна»). */
+:root[data-sched-palette="accent-plus"] #stage .agenda-list {
+  contain: paint;
+}
+:root[data-sched-palette="accent-plus"] #stage .live-lesson-card:not(.is-current):not(.is-overlap) {
+  contain: paint;
+}
+:root[data-sched-palette="accent-plus"] #stage .agenda-list,
+:root[data-sched-palette="accent-plus"] #stage .live-lesson-card:not(.is-current),
+:root[data-sched-palette="accent-plus"] #stage .live-card-glass {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Перерывы и строки окон в акцент+ получают тот же тонированный фон, что и список, —
+   иначе на стыках видны «полосы» при каскадном появлении. */
+:root[data-sched-palette="accent-plus"] #stage .agenda-break {
+  background: transparent;
+}
+
+/* Перелив пилюли выбранного дня не крутится во время самого жеста —
+   экономим кадры на свайпе и убираем микродёргания. */
+:root[data-sched-palette="accent-plus"]
+  .date-strip:is(.is-scrubbing, .is-settling, .is-pressing, .is-swiping, .is-swipe-linked)
+  .date-strip-selection::before {
+  animation-play-state: paused;
+}
+
+/* Сцена при листании в акцент+: старый день не остаётся под новым с градиентом —
+   оба слоя одинаково полупрозрачны только в момент перехода. */
+:root[data-sched-palette="accent-plus"] .sched-active-day-scene.is-leaving,
+:root[data-sched-palette="accent-plus"] .sched-active-day-scene.is-entering {
+  background: transparent;
+}
+
+/* Окна в парах: фон перетекает плавно при переключении палитры/акцента */
+:root #stage .agenda-row.is-window-row {
+  transition: background-color 0.35s ease;
+}
+
+/* --- свайп: соседний день подглядывает сбоку + больше зоны жеста --- */
+.sched-days-scene {
+  position: relative;
+  /* Когда пар мало, пустое место ниже тоже работает зоной свайпа. */
+  min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
+}
+
+.sched-days-scene:is(.is-swiping, .is-swipe-commit) .live-card-particles i {
+  animation-play-state: paused !important;
+}
+
+.sched-swipe-peek {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 3;
+  pointer-events: none;
+  transform: translate3d(100%, 0, 0);
+  transition: none;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  contain: layout style;
+}
+
+.sched-swipe-peek.is-returning {
+  transition: transform var(--swipe-anim-dur, 0.22s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sched-swipe-peek.is-fading {
+  transition: opacity 0.16s ease-out;
+  opacity: 0;
+}
+
+/* Пасхалка: текст «привет=)» при попытке свайпнуть левее самого первого дня */
+.sched-swipe-peek.is-easter-egg {
+  height: 100%;
+  min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.sched-swipe-peek.is-easter-egg .sched-easter-egg-wrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--easter-egg-width, 100%);
+  height: 100%;
+  min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 16px;
+}
+
+.sched-swipe-peek.is-easter-egg .sched-easter-egg-msg {
+  white-space: nowrap;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--sched-secondary);
+  opacity: var(--easter-egg-opacity, 0);
+  transform: scale(var(--easter-egg-scale, 0.86));
+  will-change: transform, opacity;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.15s ease-out;
+}
+
+.sched-days-scene.is-swipe-return .sched-swipe-peek.is-easter-egg .sched-easter-egg-msg {
+  opacity: 0 !important;
+  transition: opacity var(--swipe-anim-dur, 0.22s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sched-days-scene.is-swipe-commit .sched-active-day-stage {
+  transform: translate3d(var(--swipe-x, 0px), 0, 0);
+  transition: transform var(--swipe-anim-dur, 0.26s) cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.sched-days-scene.is-swipe-commit .sched-swipe-peek {
+  transition: transform var(--swipe-anim-dur, 0.26s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sched-days-scene.is-swipe-commit .sched-active-day-stage,
+  .sched-days-scene.is-swipe-commit .sched-swipe-peek,
+  .sched-swipe-peek.is-returning,
+  .sched-swipe-peek.is-fading {
+    transition: none;
+  }
+}
+
+/* Полоска выбора дня следует за свайпом без отставания */
+.date-strip.is-swipe-linked .date-strip-selection {
+  transition: none;
+}
+
+/* Подглядывающий день: окна и акцент+ подложки сразу нужного цвета
+   (правила основной сцены привязаны к #stage, а peek живёт в #scene) */
+.sched-swipe-peek .agenda-row.is-window-row,
+.sched-swipe-peek .agenda-row.is-window-row:hover,
+.sched-swipe-peek .agenda-row.is-window-row:active {
+  background: var(--sched-window-bg) !important;
+}
+:root[data-sched-schedule-view="light"] .sched-swipe-peek .agenda-row.is-window-row {
+  min-height: 62px;
+  padding: 9px 0;
+}
+:root[data-theme="dark"][data-sched-palette="accent-plus"] .sched-swipe-peek .agenda-list,
+:root[data-theme="dark"][data-sched-palette="accent-plus"]
+  .sched-swipe-peek
+  .live-lesson-card:not(.is-current) {
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--sched-accent) 12%, #05050b),
+    color-mix(in srgb, var(--sched-accent) 4%, #040407)
+  ) !important;
+}
+:root[data-theme="light"][data-sched-palette="accent-plus"] .sched-swipe-peek .agenda-list,
+:root[data-theme="light"][data-sched-palette="accent-plus"]
+  .sched-swipe-peek
+  .live-lesson-card:not(.is-current) {
+  background: linear-gradient(
+    125deg,
+    #ffffff,
+    color-mix(in srgb, var(--sched-accent) 9%, #ffffff)
+  ) !important;
+}
+
+/* При переключении палитры акцентный цвет не анимируем — иначе синяя вспышка
+   от initial #0a84ff при включении акцентной темы. */
+:root.sched-no-accent-anim {
+  transition-property: none !important;
+}
+
+/* ---------- номер пары слева от времени ---------- */
+.agenda-row-time {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.agenda-row-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--sched-blue) 15%, transparent);
+  color: var(--sched-blue);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.agenda-row.is-window-row .agenda-row-num {
+  background: var(--sched-fill);
+  color: var(--sched-tertiary);
+}
+
+/* ---------- перетаскивание пары (зажать кнопку замены) ---------- */
+.lesson-swap-btn {
+  touch-action: none;
+}
+.agenda-row.is-drag-src {
+  visibility: hidden;
+}
+.agenda-row.is-drop-target {
+  background: color-mix(in srgb, var(--sched-blue) 12%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sched-blue) 55%, transparent);
+  border-radius: 10px;
+}
+.agenda-row.is-drag-float {
+  position: fixed;
+  z-index: 90;
+  margin: 0;
+  pointer-events: none;
+  background: var(--sched-surface);
+  border: 1px solid var(--sched-separator);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  letter-spacing: 0;
+  color: var(--sched-text);
+}
+
+/* Линия вставки при переносе пары на край дня */
+.agenda-row.is-drop-before {
+  box-shadow: inset 0 3px 0 var(--sched-blue);
+  border-radius: 10px;
+}
+.agenda-row.is-drop-after {
+  box-shadow: inset 0 -3px 0 var(--sched-blue);
+  border-radius: 10px;
+}
+
+/* Окна-цели при перетаскивании пары: призрачные и не интерактивные */
+.agenda-row.is-drag-ghost {
+  pointer-events: none;
+  opacity: 0.65;
+  outline: 1px dashed color-mix(in srgb, var(--sched-blue) 45%, transparent);
+  outline-offset: -3px;
+  border-radius: 10px;
+}
+
+/* Drag clone keeps the exact original border-box width outside the stage. */
+.agenda-row.is-drag-float { box-sizing: border-box; }
+.sched-day-block.is-pair-dragging .agenda-break { display: none; }
+
+/* Кнопка замены в карточке текущей / следующей пары */
+.live-card-status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.live-lesson-card .lesson-swap-btn {
+  position: static;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.16s ease, background 0.16s ease;
+  padding: 0;
+}
+.live-lesson-card .lesson-swap-btn svg {
+  width: 15px;
+  height: 15px;
+}
+.live-lesson-card .lesson-swap-btn:hover,
+.live-lesson-card .lesson-swap-btn:active {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* Действие сброса в настройках владельца */
+.sched-settings-icon.is-danger {
+  background: color-mix(in srgb, #e5484d 14%, transparent) !important;
+  color: #e5484d !important;
+}
+.sched-warn-action:hover .sched-settings-copy strong {
+  color: #e5484d;
+}
+.sched-pending-readonly-label {
+  font-size: 11px;
+  color: var(--sched-secondary, #8e8e93);
+  padding: 4px 6px;
+}
+
+
