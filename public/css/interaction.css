@@ -41,19 +41,23 @@
 :root #stage .sched-drag-board { contain: none !important; }
 :root #stage .sched-drag-board > .agenda-row { opacity: 1; }
 :root .sched-drag-board > .agenda-row.is-drag-ghost {
-  opacity: 1; outline: 0; border-style: dashed; color: var(--sched-secondary); background: var(--sched-fill);
+  opacity: 1; border-color: transparent; color: var(--sched-secondary); background: var(--sched-fill);
+  outline: 1px dashed color-mix(in srgb, var(--sched-blue) 45%, transparent); outline-offset: -5px;
 }
 :root .sched-drag-board > .agenda-row.is-drag-src {
-  visibility: visible; opacity: 1; border: 1px dashed var(--sched-blue);
+  visibility: visible; opacity: 1; border: 1px solid transparent;
+  outline: 1px dashed var(--sched-blue); outline-offset: -5px;
   background: color-mix(in srgb, var(--sched-blue) 6%, var(--sched-surface)); box-shadow: none;
 }
 :root .sched-drag-board > .agenda-row.is-drag-src .agenda-row-content,
 :root .sched-drag-board > .agenda-row.is-drag-src .lesson-swap-btn { visibility: hidden; }
-:root .sched-drag-board > .agenda-row.is-drop-target { border: 2px dashed var(--sched-blue); }
+:root .sched-drag-board > .agenda-row.is-drop-target {
+  border: 1px solid transparent; outline: 2px dashed var(--sched-blue); outline-offset: -5px;
+}
 :root .sched-drag-board .lesson-swap-btn { visibility: hidden; }
 :root .is-drag-float.agenda-row, :root .is-drag-float.live-lesson-card {
   position: fixed !important; z-index: 900; box-sizing: border-box; margin: 0 !important;
-  pointer-events: none; visibility: visible; opacity: 1; transform: none !important;
+  pointer-events: none; visibility: visible; opacity: 1; transform: scale(.975) !important;
   animation: none !important; transition: none !important; max-width: 100vw;
   border-radius: 12px; box-shadow: 0 2px 6px #0001, 0 12px 30px #0002;
 }
@@ -272,8 +276,8 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 }
 
 /* Smaller lesson number and replacement affordance. */
-:root .agenda-row-num { width: 34px; min-width: 34px; height: 34px; border-radius: 7px; font-size: 14px; }
-:root .agenda-row:not(.is-bell-pair):not(.is-bell-break) { grid-template-columns: 86px minmax(0,1fr); }
+:root .agenda-row-num { width: 32px; min-width: 32px; height: 32px; border-radius: 7px; font-size: 12px; font-weight: 700; }
+:root .agenda-row:not(.is-bell-pair):not(.is-bell-break) { grid-template-columns: 82px minmax(0,1fr); }
 :root .lesson-swap-btn { width: 24px; height: 24px; border-radius: 7px; }
 :root .lesson-swap-btn svg { width: 14px; height: 14px; }
 :root .live-lesson-card .lesson-swap-btn { width: 24px; height: 24px; }
@@ -295,18 +299,20 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 }
 
 /* “Дополнительно” looks like the other settings rows (for example, bell schedule). */
+.sched-settings-more-group { overflow: hidden; }
+.sched-settings-more { width: 100%; }
 .sched-settings-more > summary.sched-settings-more-summary {
   margin: 0;
-  padding: 0 14px !important;
-  min-height: 62px;
+  padding: 5px 9px !important;
+  min-height: 46px;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--sched-text);
 }
 .sched-settings-more > summary.sched-settings-more-summary:hover { background: var(--sched-fill); }
-.sched-settings-more > summary .sched-settings-more-chevron { flex: none; width: 18px; height: 18px; color: var(--sched-secondary); }
-.sched-settings-more[open] > summary .sched-settings-more-chevron { transform: rotate(180deg); }
+.sched-settings-more > summary .sched-settings-more-chevron { flex: none; width: 18px; height: 18px; color: var(--sched-secondary); transform: rotate(0); }
+.sched-settings-more[open] > summary .sched-settings-more-chevron { transform: rotate(90deg); }
 
 /* Theme choices never consume the copy column on narrow devices. */
 .sched-theme-row { gap: 8px; align-items: stretch; flex-direction: column; }
@@ -318,11 +324,11 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 @media (max-width: 360px) { .sched-replace-meta-grid { grid-template-columns: 1fr; } }
 
 /* Avatar stays prominent but is slightly smaller than the header actions. */
-#settings-trigger.is-avatar { width: 42px !important; min-width: 42px !important; height: 42px !important; padding: 0 !important; }
+#settings-trigger.is-avatar { width: 40px !important; min-width: 40px !important; height: 40px !important; padding: 0 !important; }
 #settings-trigger.is-avatar .sched-trigger-avatar {
   width: 100% !important; height: 100% !important; margin: 0 !important;
   border: 0 !important;
-  box-shadow: 0 0 0 2px var(--sched-header-bg,var(--sched-surface)), 0 0 0 4px var(--sched-accent,var(--sched-blue)) !important;
+  box-shadow: 0 0 0 1.5px var(--sched-header-bg,var(--sched-surface)), 0 0 0 3px var(--sched-accent,var(--sched-blue)) !important;
 }
 
 /* Align the day reset action with the “today” action baseline. */
@@ -337,4 +343,98 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 #scene:is(.is-swiping,.is-swipe-return,.is-swipe-commit) :is(.agenda-row,.agenda-row *, .agenda-break-chip, .sched-day-heading *) {
   -webkit-backface-visibility: visible;
   backface-visibility: visible;
+}
+
+
+/* v1.4 direct-manipulation and notification polish. */
+:root .is-drag-float.is-magnetized.agenda-row,
+:root .is-drag-float.is-magnetized.live-lesson-card {
+  transition: left 135ms cubic-bezier(.2,.86,.24,1), top 135ms cubic-bezier(.2,.86,.24,1) !important;
+}
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  background: color-mix(in srgb, #000 18%, var(--sched-surface)) !important;
+}
+
+/* Performance mode removes wheel/list and roulette motion, while the dedicated
+   horizontal phone swipe keeps its inexpensive compositor transition. */
+:root[data-perf] :where(html, body, #scene, #stage, .agenda-list) { scroll-behavior: auto !important; }
+:root[data-perf] #scene:not(.is-swiping):not(.is-swipe-return):not(.is-swipe-commit) #stage .sched-active-day-scene,
+:root[data-perf] #scene:not(.is-swiping):not(.is-swipe-return):not(.is-swipe-commit) #stage .sched-active-day-scene * {
+  animation: none !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+}
+:root[data-perf] #strip:not(.is-day-swiping):not(.is-swipe-settling):not(.is-swipe-linked) #selection,
+:root[data-perf] #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* The attachment target has a thicker inset dashed frame instead of a border
+   glued to its outer edge. */
+#report-backdrop .sched-report-dropzone {
+  position: relative;
+  box-sizing: border-box;
+  border: 0 !important;
+}
+#report-backdrop .sched-report-dropzone::before {
+  position: absolute;
+  inset: 5px;
+  border: 2px dashed var(--sched-separator);
+  border-radius: 10px;
+  content: "";
+  pointer-events: none;
+  transition: border-color var(--sched-motion-state,160ms) ease;
+}
+#report-backdrop .sched-report-dropzone:is(:hover,:focus-visible,.is-dragover)::before {
+  border-color: var(--sched-blue);
+}
+
+/* A restrained glow separates the logo from every palette without changing its motion. */
+:root .sched-header-mark {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sched-blue) 32%, transparent)) !important;
+}
+
+/* The idle touch selector is a geometrically flat 2px line. Direct roulette
+   interaction expands it, while day digits always stay above the blue shape. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root #strip #selection { z-index: 0 !important; }
+  :root #strip button[data-date-index] { position: relative; z-index: 2 !important; isolation: isolate; }
+  :root #strip button[data-date-index] > span:first-child,
+  :root #strip button[data-date-index] > strong { position: relative; z-index: 3; }
+  :root #strip.date-strip #selection::before {
+    clip-path: inset(calc(100% - 2px) 5px 0 5px round 1px) !important;
+    transform: none !important;
+    transform-origin: 50% 100% !important;
+    transition: clip-path 120ms cubic-bezier(.2,.9,.3,1) !important;
+  }
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+    clip-path: inset(0 round 17px) !important;
+    transform: none !important;
+  }
+  :root[data-perf] #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+    transition: none !important;
+  }
+}
+
+/* Replacement notifications show old and new lessons vertically. */
+:root .sched-notif-frag-change { display: grid; }
+:root .sched-notif-frag-change .sched-notif-frag-lesson + .sched-notif-frag-lesson {
+  border-top: 1px solid color-mix(in srgb, var(--sched-separator) 72%, transparent);
+}
+:root .sched-notif-frag-arrow {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  margin: -4px auto;
+  place-items: center;
+  position: relative;
+  z-index: 1;
+  border: 1px solid color-mix(in srgb, var(--sched-blue) 24%, var(--sched-separator));
+  border-radius: 50%;
+  background: var(--sched-surface);
+  color: var(--sched-blue);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
 }

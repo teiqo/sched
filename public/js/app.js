@@ -99,7 +99,7 @@ function applyPerfMode() {
   const sw = $("#perf-switch");
   if (sw) sw.setAttribute("aria-pressed", state.perfMode ? "true" : "false");
   const hint = $("#perf-hint");
-  if (hint) hint.textContent = state.perfMode ? "плавные свайпы без тяжёлых эффектов" : "все эффекты";
+  if (hint) hint.textContent = "для слабых устройств";
 }
 
 var state = {
@@ -1255,7 +1255,7 @@ function save() {
       }),
     );
   } catch (e) {
-    /* приватный режим */
+    /* пр������ватный режим */
   }
 }
 
@@ -1435,7 +1435,7 @@ function scrubFrameStep(now) {
   if (!scrub) return;
 
   if (!scrub.pointerDown) {
-    /* Плавное выравнивание на день после отпускания пальца */
+    /* Плавное выравнивание на день после отпускания пальц�� */
     const elapsed = Math.max(0, now - (scrub.settleStartTime || now));
     const duration = scrub.settleDuration || 260;
     const progress = Math.min(1, elapsed / duration);
@@ -1617,7 +1617,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
+    /* Предыдущий жест мог не успеть доиграть (резко отпустили и ��разу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
     dragClick = false;
@@ -2468,7 +2468,7 @@ function openProfile() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
             </span>
             <span class="sched-settings-copy">
-              <strong>настроить уведомления</strong>
+              <strong>настроить уведом��ения</strong>
               <span>что показывать и куда дублировать</span>
             </span>
           </span>
@@ -3001,7 +3001,7 @@ function openMoveSheet(dIso, n) {
   backdrop.querySelector("[data-move-to]:not(:disabled)")?.focus({ preventScroll: true });
 }
 
-/* Базовое расписание лежит в slotsForBase, а здесь накладываются замены. */
+/* Базовое расписание лежит в slotsForBase, а здесь накладыва��тся замены. */
 function slotsFor(d) {
   const list = slotsForBase(d);
   if (!list.length) return list;
@@ -3473,7 +3473,7 @@ function scheduleModule() {
 
 function scheduleStamp(payload) {
   if (payload && payload.updatedAt) {
-    notifyAboutScheduleStamp(payload.updatedAt);
+    notifyAboutScheduleStamp(payload.updatedAt, payload.groups);
     scheduleUpdatedAt = payload.checkedAt || payload.updatedAt;
   }
   renderDataStamp();
@@ -3954,7 +3954,7 @@ function prepareTelegramLogin() {
 }
 function startTelegramLogin() {
   if (LOCAL_PREVIEW) { startLocalTelegramLogin(); return true; }
-  if (!tgConfigured()) { toast("вход пока не настроен администратором."); return false; }
+  if (!tgConfigured()) { toast("в��од пока не настроен администратором."); return false; }
   telegramLogin.start(); return true;
 }
 
@@ -4104,6 +4104,8 @@ function notifyCloudEvent(path, body) {
   } else {
     const rest = key.split("|")[1] || "";
     const when = rest.split(":");
+    const dIso = when[0] || "";
+    const n = Number(when[1]) || 0;
     const what =
       type === "pending"
         ? "🕐 заявка на проверку"
@@ -4114,9 +4116,22 @@ function notifyCloudEvent(path, body) {
             : body.cancelled
               ? "🔕 отмена пары"
               : body.moved ? "↪️ перенос" : "🔔 замена";
-    text = what + " · " + group + " · " + when[0] + " · " + when[1] + " пара";
-    const details = [body.subject, body.teacher, body.room].filter(Boolean);
-    if (details.length) text += "\n" + details.join(" · ");
+    let original = null;
+    try { original = slotsForBase(dateFromIso(dIso)).find((slot) => slot.n === n) || null; } catch (e) {}
+    const lessonLine = (slot) => {
+      const value = slot || {};
+      const details = value.makeWindow || value.window || value.empty
+        ? ["окно"]
+        : [value.subject, value.teacher, value.room].filter(Boolean);
+      return [dIso, n ? n + " пара" : "", ...details].filter(Boolean).join(" · ");
+    };
+    text = what;
+    if (!body.cancelled && !body.deleted && !body.moved && !body.makeWindow && original) {
+      text += "\n" + lessonLine(original) + "\n↓\n" + lessonLine(body);
+    } else {
+      const shown = body.cancelled || body.deleted ? original : body;
+      if (shown) text += "\n" + lessonLine(shown);
+    }
   }
   queueBotEvent({ type, event_id: path + ":" + stamp, text, group }).catch(reportPushError);
 }
@@ -4866,7 +4881,7 @@ function saveNotifs() {
   try {
     localStorage.setItem(NOTIF_KEY, JSON.stringify(notifList || []));
   } catch (e) {
-    /* приватный режим */
+    /* приватный ��ежим */
   }
 }
 
@@ -4992,15 +5007,26 @@ function notifyAboutPending() {
   } catch (e) {}
 }
 
-/* Смена штампа данных -> «обновились пары». */
-function notifyAboutScheduleStamp(updatedAt) {
+/* Уведомляем только при изменении самих пар, а не checkedAt/updatedAt. */
+function scheduleContentStamp(groups) {
+  const raw = JSON.stringify(Array.isArray(groups) ? groups : []);
+  let hash = 2166136261;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return "content:" + (hash >>> 0).toString(36) + ":" + raw.length;
+}
+function notifyAboutScheduleStamp(updatedAt, groups) {
   if (!updatedAt) return;
   try {
-    var prev = localStorage.getItem(NOTIF_SEEN_SCHEDULE_KEY);
-    if (prev && prev !== updatedAt) {
+    const current = scheduleContentStamp(groups);
+    const prev = localStorage.getItem(NOTIF_SEEN_SCHEDULE_KEY);
+    /* Старые версии хранили timestamp: миграция на content-hash проходит тихо. */
+    if (prev && prev.indexOf("content:") === 0 && prev !== current) {
       pushNotif("обновились пары — базовое расписание обновлено", "schedule", "schedule");
     }
-    localStorage.setItem(NOTIF_SEEN_SCHEDULE_KEY, updatedAt);
+    localStorage.setItem(NOTIF_SEEN_SCHEDULE_KEY, current);
   } catch (e) {}
 }
 
@@ -5035,30 +5061,41 @@ function buildNotifFrag(key, entry) {
   if (!m) return null;
   const dIso = m[1];
   const n = Number(m[2]);
-  let subject = entry.subject || "";
-  let teacher = entry.teacher || "";
-  let room = entry.room || "";
-  if (!entry.makeWindow && !subject && !teacher && !room) {
-    try {
-      const slot = slotsForBase(dateFromIso(dIso)).find((s) => s.n === n);
-      if (slot) {
-        subject = slot.subject || "";
-        teacher = slot.teacher || "";
-        room = slot.room || "";
+  let base = null;
+  try {
+    base = slotsForBase(dateFromIso(dIso)).find((slot) => slot.n === n) || null;
+  } catch (e) {}
+  const before = base
+    ? {
+        subject: base.subject || "",
+        teacher: base.teacher || "",
+        room: base.room || "",
+        self: !!base.self,
+        window: !!(base.window || base.empty),
       }
-    } catch (e) {}
-  }
+    : null;
+  const replacement = {
+    subject: entry.subject || "",
+    teacher: entry.teacher || "",
+    room: entry.room || "",
+    self: !!entry.self,
+    window: !!entry.makeWindow,
+  };
+  const useBase = !entry.makeWindow && !replacement.subject && !replacement.teacher && !replacement.room;
+  const after = useBase && before ? { ...before } : replacement;
   return {
     d: dIso,
     n: n,
-    subject: subject,
-    teacher: teacher,
-    room: room,
+    subject: after.subject,
+    teacher: after.teacher,
+    room: after.room,
     cancelled: !!entry.cancelled,
     deleted: !!entry.deleted,
     moved: !!entry.moved,
-    self: !!entry.self,
-    window: !!entry.makeWindow,
+    self: after.self,
+    window: after.window,
+    before: before,
+    after: after,
   };
 }
 
@@ -5079,27 +5116,40 @@ function lessonDurationLabel(dIso, n) {
 
 /* Мини-карточка дня в уведомлении: дата, время и сама пара —
    отменённая зачёркнута. Вместо «полотна текста». */
+function notifLessonHtml(f, lesson, cancelled) {
+  const d = dateFromIso(f.d);
+  const bell = BELLS.find((b) => b.n === Number(f.n));
+  const time = bell ? (d.getDay() === 6 ? bell.sat : bell.week) : "";
+  const value = lesson || {};
+  const meta = [value.teacher, value.room, value.self ? "самостоятельная работа" : ""].filter(Boolean).join(" · ");
+  return (
+    '<span class="sched-notif-frag-lesson' + (cancelled ? " is-cancelled" : "") + '">' +
+    (time ? "<time>" + escapeHtml(time) + "</time>" : "") +
+    '<span class="sched-notif-frag-main"><b>' +
+    escapeHtml(f.n + " пара" + (value.window ? " · окно" : value.subject ? " · " + value.subject : "")) +
+    "</b>" +
+    (meta ? "<i>" + escapeHtml(meta) + "</i>" : "") +
+    "</span></span>"
+  );
+}
 function notifFragHtml(n) {
   const f = n && n.frag;
   if (!f || !f.d || !f.n) return "";
   const d = dateFromIso(f.d);
   if (!d || Number.isNaN(d.getTime())) return "";
-  const bell = BELLS.find((b) => b.n === Number(f.n));
-  const time = bell ? (d.getDay() === 6 ? bell.sat : bell.week) : "";
-  const meta = [f.teacher, f.room, f.self ? "самостоятельная работа" : ""].filter(Boolean).join(" · ");
+  const ordinarySwap = !f.cancelled && !f.deleted && !f.moved && f.before && f.after;
+  const single = f.cancelled && f.before ? f.before : f.after || f;
   return (
     '<span class="sched-notif-frag">' +
-    '<span class="sched-notif-frag-day">' +
-    escapeHtml(dateLabel(d)) +
-    '</span><span class="sched-notif-frag-lesson' +
-    (f.cancelled ? " is-cancelled" : "") +
-    '">' +
-    (time ? "<time>" + escapeHtml(time) + "</time>" : "") +
-    '<span class="sched-notif-frag-main"><b>' +
-    escapeHtml(f.n + " пара" + (f.window ? " · окно" : f.subject ? " · " + f.subject : "")) +
-    "</b>" +
-    (meta ? "<i>" + escapeHtml(meta) + "</i>" : "") +
-    "</span></span></span>"
+    '<span class="sched-notif-frag-day">' + escapeHtml(dateLabel(d)) + "</span>" +
+    (ordinarySwap
+      ? '<span class="sched-notif-frag-change">' +
+        notifLessonHtml(f, f.before, false) +
+        '<span class="sched-notif-frag-arrow" aria-hidden="true">↓</span>' +
+        notifLessonHtml(f, f.after, false) +
+        "</span>"
+      : notifLessonHtml(f, single, !!f.cancelled)) +
+    "</span>"
   );
 }
 
@@ -5110,6 +5160,12 @@ function closeBellSheet() {
   window.setTimeout(function () {
     backdrop.remove();
   }, 160);
+}
+
+function notifTitle(n, tone) {
+  if (tone === "swap") return "замена";
+  if (tone === "cancel") return "отмена пары";
+  return (n && n.text) || "";
 }
 
 function renderBellBody() {
@@ -5132,7 +5188,7 @@ function renderBellBody() {
         '<span class="sched-notif-ico" aria-hidden="true">' +
         (NOTIF_ICONS[tone] || NOTIF_ICONS.schedule) +
         '</span><div class="sched-tg-row-text"><strong>' +
-        escapeHtml(n.text) +
+        escapeHtml(notifTitle(n, tone)) +
         "</strong>" +
         notifFragHtml(n) +
         "<span>" +
@@ -5376,7 +5432,7 @@ function openReportSheet() {
     <div class="sched-report-file-preview" id="report-file-preview" hidden><div class="sched-report-file-info"><strong id="report-file-name"></strong><small id="report-file-size"></small></div><button type="button" id="report-file-remove" aria-label="удалить файл">×</button></div>
     <p id="report-file-error" class="sched-report-file-error" role="alert" hidden></p>
     <label class="sched-report-include"><input id="report-include-diag" type="checkbox" checked><span>прикрепить диагностику</span></label>
-    <details class="sched-report-details"><summary>что войдёт в диагностику</summary><p class="sched-report-privacy">полные настройки пользователя, включая уведомления; выбранный день и пары, версия приложения, устройство, состояние подключения и последние ошибки. без токенов, паролей и истории браузера.</p><pre class="sched-report-diag-pre">${escapeHtml(diag)}</pre><button type="button" class="sched-report-download" id="report-download-diag">скачать диагностику</button></details>
+    <details class="sched-report-details"><summary>что войдёт в диагнос��ику</summary><p class="sched-report-privacy">полные настройки польз��вателя, включая уведомления; выбранный день и пары, версия приложения, устройство, состояние подключения и последние ошибки. без токенов, паролей и истории ��раузера.</p><pre class="sched-report-diag-pre">${escapeHtml(diag)}</pre><button type="button" class="sched-report-download" id="report-download-diag">скачать диагностику</button></details>
     <p class="sched-report-form-error" id="report-form-error" role="alert" hidden></p>
     <div class="sched-replace-actions"><button type="button" data-report="close">отмена</button><button type="button" class="is-primary" id="report-submit-btn">отправить</button></div>
   </div></div>`;

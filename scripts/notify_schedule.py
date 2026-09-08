@@ -9,6 +9,9 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 def main():
+    if os.environ.get("SCHEDULE_CHANGED", "").strip().lower() != "true":
+        print("Schedule push skipped: schedule.json content did not change.")
+        return 0
     endpoint=os.environ.get("SCHED_NOTIFY_URL", "").strip()
     secret=os.environ.get("NOTIFY_SECRET", "").strip()
     if not endpoint or not secret:

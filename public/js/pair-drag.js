@@ -62,32 +62,52 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
         { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
   };
+  const followPointer = () => {
+    const d = drag;
+    if (!d) return;
+    d.clone.classList.remove('is-magnetized');
+    d.clone.style.left = Math.max(0, Math.min(innerWidth - d.clone.offsetWidth, d.x - d.grabX)) + 'px';
+    d.clone.style.top = d.y - d.grabY + 'px';
+  };
   const centerCloneOnPlaceholder = () => {
     const d = drag, placeholder = d?.items.get(d.fromN);
     if (!placeholder?.isConnected) return;
     const targetRect = placeholder.getBoundingClientRect();
-    const cloneRect = d.clone.getBoundingClientRect();
-    d.clone.style.left = targetRect.left + (targetRect.width - cloneRect.width) / 2 + 'px';
-    d.clone.style.top = targetRect.top + (targetRect.height - cloneRect.height) / 2 + 'px';
+    d.clone.style.left = targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2 + 'px';
+    d.clone.style.top = targetRect.top + (targetRect.height - d.clone.offsetHeight) / 2 + 'px';
   };
   const updateTarget = () => {
     const d = drag;
-    if (!d || !d.moved) return;
+    if (!d || !d.moved) return false;
     const boardRect = d.board.getBoundingClientRect();
     const inside = d.x >= boardRect.left - 16 && d.x <= boardRect.right + 16 &&
       d.y >= boardRect.top - 20 && d.y <= boardRect.bottom + 20;
-    if (!inside) { d.targetN = null; announce('в пределах этого дня · Esc — отмена'); return; }
+    if (!inside) {
+      d.targetN = null;
+      d.clone.classList.remove('is-magnetized');
+      announce('в пределах этого дня · Esc — отмена');
+      return false;
+    }
     // Layout coordinates exclude FLIP transforms, so an animating neighbour cannot flicker the target.
     const row = [...d.board.children].find(row => {
       const top = boardRect.top + row.offsetTop;
       return d.y >= top - 4 && d.y <= top + row.offsetHeight + 4;
     });
-    if (!row) return;
+    if (!row) {
+      d.targetN = null;
+      d.clone.classList.remove('is-magnetized');
+      return false;
+    }
     const targetN = Number(row.dataset.dropN);
     d.targetN = targetN;
     applyOrder(targetN);
+    if (!d.clone.classList.contains('is-magnetized')) {
+      d.clone.classList.add('is-magnetized');
+      void d.clone.offsetWidth;
+    }
     centerCloneOnPlaceholder();
     announce(targetN === d.fromN ? 'исходное место · Esc — отмена' : `отпусти на ${targetN}-ю пару · Esc — отмена`);
+    return true;
   };
   const animate = () => {
     if (!drag) return;
@@ -97,7 +117,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const edge = 64;
     const speed = !d.moved ? 0 : d.y < viewport.top + edge ? -Math.min(13, (viewport.top + edge - d.y) / 5)
       : d.y > viewport.bottom - edge ? Math.min(13, (d.y - viewport.bottom + edge) / 5) : 0;
-    if (speed) { d.scroller.scrollTop += speed; updateTarget(); }
+    if (speed) {
+      d.scroller.scrollTop += speed;
+      if (!updateTarget()) followPointer();
+    }
     frame = requestAnimationFrame(animate);
   };
   const start = () => {
@@ -185,9 +208,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       const d = drag;
       d.moved ||= Math.hypot(x - d.x, y - d.y) > 3;
       d.x = x; d.y = y;
-      d.clone.style.left = Math.max(0, Math.min(innerWidth - d.clone.offsetWidth, x - d.grabX)) + 'px';
-      d.clone.style.top = y - d.grabY + 'px';
-      updateTarget();
+      if (!updateTarget()) followPointer();
     } else if (pending && Math.hypot(x - pending.x, y - pending.y) > 7) {
       if (pending.handle) { start(); if (drag) move(x, y, event); }
       else { clearPending(); removeListeners(); } // A swipe on the card scrolls normally before the hold.
