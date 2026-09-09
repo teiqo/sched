@@ -1,0 +1,70 @@
+/* Optional first-run Telegram link and compact basics tour. */
+.sched-onboarding-slide.is-telegram-link {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.sched-onboarding-slide.is-telegram-link .sched-onboarding-back {
+  margin-right: auto;
+}
+.sched-onboarding-telegram-mark {
+  display: grid;
+  width: 88px;
+  height: 88px;
+  margin: 12px auto 20px;
+  place-items: center;
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--sched-blue) 14%, var(--sched-raised));
+  box-shadow: 0 18px 38px color-mix(in srgb, var(--sched-blue) 14%, transparent);
+  color: var(--sched-blue);
+}
+.sched-onboarding-telegram-mark svg { width: 38px; height: 38px; }
+.sched-onboarding-slide.is-telegram-link [data-login-panel] {
+  max-width: 430px;
+  margin: 24px auto 0;
+}
+.sched-onboarding-linked {
+  display: block;
+  padding: 15px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--sched-green) 12%, var(--sched-raised));
+  color: var(--sched-green);
+  font-size: 14px;
+}
+.sched-onboarding-finish-actions {
+  width: min(100%, 430px);
+  margin: 0 auto;
+}
+.sched-onboarding-finish-actions .sched-onboarding-text-action { width: 100%; }
+
+.sched-tour-copy { pointer-events: auto; cursor: default; }
+.sched-tour-actions {
+  display: flex;
+  margin-top: 10px;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.sched-tour-actions button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--sched-fill);
+  color: var(--sched-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.sched-tour-actions button.is-primary {
+  background: var(--sched-blue);
+  color: #fff;
+}
+.sched-tour-actions button:focus-visible {
+  outline: 2px solid var(--sched-blue);
+  outline-offset: 2px;
+}
+
+@media (max-height: 720px) {
+  .sched-onboarding-telegram-mark { width: 68px; height: 68px; margin: 4px auto 10px; border-radius: 22px; }
+  .sched-onboarding-telegram-mark svg { width: 30px; height: 30px; }
+  .sched-onboarding-slide.is-telegram-link [data-login-panel] { margin-top: 14px; }
+}

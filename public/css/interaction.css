@@ -952,10 +952,13 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   color: var(--sched-secondary);
 }
 .sched-swipe-panel.is-blocked .sched-easter-egg-wrap {
+  position: absolute;
+  inset: 0 0 0 auto;
   display: grid;
-  width: 100%;
+  width: var(--blocked-reveal, 0px);
   min-height: inherit;
   place-items: center;
+  overflow: hidden;
 }
 .sched-swipe-panel.is-blocked .sched-easter-egg-msg {
   font-size: 24px;

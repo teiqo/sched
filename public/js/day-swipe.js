@@ -119,6 +119,7 @@ export function bindDaySwipe({
     if (Math.abs(g.target - g.visual) < 0.08) g.visual = g.target;
 
     carousel.style.transform = `translate3d(${(-g.width + g.visual).toFixed(2)}px, 0, 0)`;
+    carousel.style.setProperty("--blocked-reveal", `${g.blocked ? Math.max(0, g.visual).toFixed(2) : 0}px`);
     selection.style.transform = `translate3d(${selectionOffset(g.blocked ? 0 : -g.visual / g.width).toFixed(2)}%, 0, 0)`;
 
     if (Math.abs(g.target - g.visual) >= 0.08) {
@@ -147,6 +148,7 @@ export function bindDaySwipe({
     if (carousel) {
       carousel.classList.remove("is-active", "is-settling");
       carousel.style.removeProperty("transition-duration");
+      carousel.style.removeProperty("--blocked-reveal");
       carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
     }
     setActive(false);

@@ -381,7 +381,11 @@ function visibleSlotsFor(d) {
   const preferences = state.editorMode
     ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
     : state;
-  return slotsFor(d).filter((s) => isSlotVisible(s, preferences));
+  return slotsFor(d)
+    .map((slot) => slot.cancelled
+      ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
+      : slot)
+    .filter((s) => isSlotVisible(s, preferences));
 }
 
 function mins(hhmm) {
@@ -2016,6 +2020,7 @@ function bindEvents() {
     state.tab = "bells";
     render();
   });
+  $("#repeat-tutorial")?.addEventListener("click", startBasicsTour);
 
   document.addEventListener("click", (e) => {
     if (!state.settingsOpen) return;
@@ -2045,6 +2050,10 @@ function bindEvents() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      if (basicsTourStep >= 0) {
+        finishBasicsTour();
+        return;
+      }
       const rep = document.getElementById("report-backdrop");
       if (rep) {
         closeReportSheet();
@@ -2106,7 +2115,7 @@ function bindEvents() {
   });
 
   /* На iOS Safari innerHeight меняется при скролле (прячется/показывается тулбар) —
-     если пересчитывать высоту на каждый resize, вся раскладка «подпрыгивает».
+     если пересчитывать высоту на каждый resize, вся раскладка «подпр��гивает».
      Пересчитываем только при реальной смене ширины (поворот, сплит-вью). */
   let lastViewportWidth = window.innerWidth;
   const vh = (force) => {
@@ -2341,7 +2350,7 @@ function notifPreferencesHtml() {
   const prefs = loadNotifPrefs();
   const rows = [
     ["swaps", "замены и отмены", "изменения пар твоей группы"],
-    ["schedule", "обновления расписания", "когда появляется новое расписание"],
+    ["schedule", "обновления рас��исания", "когда появляется новое расписание"],
     ["pending", "заявки на проверку", "для владельца и редакторов"],
     [
       "telegram",
@@ -2700,7 +2709,7 @@ function closeProfile() {
 /* ---------- онбординг ---------- */
 
 function onboardingHtml() {
-  const total = 2;
+  const total = 3;
   const offset = `-${state.onboardingStep * (100 / total)}%`;
   const dots = [];
   for (let i = 0; i < total; i += 1) {
@@ -2714,6 +2723,7 @@ function onboardingHtml() {
   const count = lessonCount(draft);
   return `<div class="sched-onboarding-top">
     <div class="sched-onboarding-progress">${dots.join("")}</div>
+    <button class="sched-onboarding-browser-skip" type="button" data-act="skip-onboarding">пропустить</button>
   </div>
   <div class="sched-onboarding-slides" style="--onboarding-count:${total};--onboarding-slide-width:${
     100 / total
@@ -2747,7 +2757,21 @@ function onboardingHtml() {
           </label>
         </div>
       </div>
-      <button class="sched-onboarding-action" type="button" data-act="finish">${draft ? "подтвердить группу" : "продолжить без группы"}</button>
+      <button class="sched-onboarding-action" type="button" data-act="next-telegram">${draft ? "подтвердить группу" : "продолжить без группы"}</button>
+    </div>
+    <div class="sched-onboarding-slide is-telegram-link" aria-hidden="${state.onboardingStep === 2 ? "false" : "true"}">
+      <div class="sched-onboarding-copy is-centered">
+        <button class="sched-onboarding-back" type="button" data-act="back">${ICON_CHEVRON}<span>назад</span></button>
+        <div class="sched-onboarding-telegram-mark">${ICON_BELL}</div>
+        <span class="sched-onboarding-kicker">необязательно</span>
+        <h1>привязать telegram?</h1>
+        <p>можно привязать telegram, чтобы предложения были подписаны твоим именем и туда приходили уведомления. без входа предложения тоже работают.</p>
+        <div data-login-panel>${tgSession ? `<strong class="sched-onboarding-linked">telegram уже привязан</strong>` : authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW)}</div>
+      </div>
+      <div class="sched-onboarding-finish-actions">
+        <button class="sched-onboarding-action" type="button" data-act="finish-tour">показать обучение</button>
+        <button class="sched-onboarding-text-action" type="button" data-act="finish-no-tour">пропустить обучение</button>
+      </div>
     </div>
   </div>`;
 }
@@ -2772,6 +2796,70 @@ function closeOnboarding() {
   state.onboarded = true;
   save();
   applyTheme();
+}
+
+var basicsTourStep = -1;
+var basicsTourOpenedEditor = false;
+const BASICS_TOUR = [
+  { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
+  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это капец как залипательно." },
+  { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления. отсюда же обучение можно запустить ещё раз." },
+];
+
+function finishBasicsTour() {
+  document.getElementById("basics-tour")?.remove();
+  basicsTourStep = -1;
+  if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) finishEditorMode();
+  basicsTourOpenedEditor = false;
+}
+
+function renderBasicsTour() {
+  const step = BASICS_TOUR[basicsTourStep];
+  const target = step && document.querySelector(step.selector);
+  if (!step || !target) { finishBasicsTour(); return; }
+  let host = document.getElementById("basics-tour");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "basics-tour";
+    host.className = "sched-tour";
+    host.setAttribute("role", "dialog");
+    host.setAttribute("aria-modal", "true");
+    host.setAttribute("aria-label", "обучение");
+    document.body.appendChild(host);
+  }
+  const rect = target.getBoundingClientRect();
+  const pad = 7;
+  const left = Math.max(8, rect.left - pad);
+  const top = Math.max(8, rect.top - pad);
+  const width = Math.min(innerWidth - left - 8, rect.width + pad * 2);
+  const height = rect.height + pad * 2;
+  const copyWidth = Math.min(340, innerWidth - 24);
+  const below = top + height + 14;
+  const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
+  const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
+  host.innerHTML = `<div class="sched-tour-spotlight" style="left:${left}px;top:${top}px;width:${width}px;height:${height}px;border-radius:${basicsTourStep === 1 ? 20 : 16}px"></div>
+    <div class="sched-tour-copy" style="left:${copyLeft}px;top:${copyTop}px;width:${copyWidth}px">
+      <span>шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span><strong>${step.title}</strong><small>${step.text}</small>
+      <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
+    </div>`;
+  host.onclick = event => {
+    const action = event.target.closest("[data-tour]")?.dataset.tour;
+    if (action === "skip") finishBasicsTour();
+    if (action === "next") {
+      basicsTourStep += 1;
+      if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
+      else renderBasicsTour();
+    }
+  };
+  requestAnimationFrame(() => host.classList.add("is-ready"));
+}
+
+function startBasicsTour() {
+  closeSettings();
+  closeProfile();
+  if (!state.editorMode) { startEditorMode(); basicsTourOpenedEditor = true; }
+  basicsTourStep = 0;
+  renderBasicsTour();
 }
 
 /* ---------- события разделов ---------- */
@@ -2930,10 +3018,26 @@ function bindExtra() {
       renderOnboarding();
       return;
     }
-    if (kind === "finish") {
+    if (kind === "next-telegram") {
+      state.group = state.draftGroup;
+      state.onboardingStep = 2;
+      save();
+      render();
+      renderOnboarding();
+      prepareTelegramLogin();
+      return;
+    }
+    if (kind === "skip-onboarding" || kind === "finish-no-tour") {
       state.group = state.draftGroup;
       closeOnboarding();
       render();
+      return;
+    }
+    if (kind === "finish-tour") {
+      state.group = state.draftGroup;
+      closeOnboarding();
+      render();
+      window.setTimeout(startBasicsTour, 340);
       return;
     }
   });
@@ -3023,7 +3127,7 @@ function init() {
 
   if (!LOCAL_PREVIEW && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
     /* Новая версия должна заменить уже открытую старую страницу, иначе в памяти
-       остаются прежние строки и анимации даже после обновления файлов на GitHub. */
+       остаются прежние строки и анимации даже после обновления фай��ов на GitHub. */
     const hadController = Boolean(navigator.serviceWorker.controller);
     let swReloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -3137,11 +3241,9 @@ async function saveEditorMode() {
   saveSwaps();
   const role = myRole();
   finishEditorMode();
-  if (sharedSwapsEnabled() && role !== "anon") {
+  if (sharedSwapsEnabled()) {
     const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
     if (!ok) toast(cloudFailHint());
-  } else if (role === "anon" && sharedSwapsEnabled()) {
-    toast("сохранено у тебя · войди через telegram, чтобы отправить редакторам");
   } else {
     toast("изменения сохранены на этом устройстве");
   }
@@ -3651,7 +3753,9 @@ function openSwapSheet(dIso, n) {
       return;
     }
     if (act === "reset") {
-      setSwap(dIso, n, null);
+      const key = swapKey(dIso, n);
+      const confirmed = state.editorMode && editorSession ? editorSession.baseline[key] : null;
+      setSwap(dIso, n, confirmed ? cloneSwapMap(confirmed) : null);
 
       commit();
       return;
@@ -4070,7 +4174,11 @@ var telegramLogin = new TelegramLogin({
   onSession: result => applyTgSession(result), onChange: () => renderLoginPanels(),
 });
 function renderLoginPanels() {
-  document.querySelectorAll('[data-login-panel]').forEach(el => { el.innerHTML = authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW); });
+  document.querySelectorAll('[data-login-panel]').forEach(el => {
+    el.innerHTML = tgSession
+      ? '<strong class="sched-onboarding-linked">telegram уже привязан</strong>'
+      : authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW);
+  });
 }
 document.addEventListener('click', event => {
   const action = event.target.closest('[data-auth-action]');
@@ -4323,12 +4431,12 @@ function myRole() {
 function swapPrimaryLabel() {
   if (state.editorMode) return "применить";
   const role = myRole();
-  return role === "owner" || role === "editor" ? "опубликовать" : role === "user" ? "предложить" : "сохранить у себя";
+  return role === "owner" || role === "editor" ? "опубликовать" : "предложить";
 }
 
 function swapAccessHint() {
   if (!sharedSwapsEnabled()) return "";
-  if (myRole() === "anon") return '<p class="sched-replace-hint">сохранится на этом устройстве. для общих замен войди через телеграм в профиле.</p>';
+  if (myRole() === "anon") return '<p class="sched-replace-hint">предложение сохранится у тебя и отправится редакторам без входа. telegram можно привязать позже.</p>';
   if (myRole() === "user") return '<p class="sched-replace-hint">у тебя применится сразу, у остальных — после проверки владельцем.</p>';
   return "";
 }
@@ -4577,23 +4685,76 @@ function sanitizeSwapPayload(entry) {
   return e;
 }
 
+async function anonymousProposalIdentity() {
+  const raw = statsVisitorId();
+  if (!raw) return "";
+  try {
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+    return "anon:" + [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, "0")).join("");
+  } catch (_) {
+    let seed = 2166136261;
+    for (const char of raw) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619) >>> 0;
+    return "anon:" + Array.from({ length: 8 }, (_, index) => ((seed ^ Math.imul(index + 1, 2654435761)) >>> 0).toString(16).padStart(8, "0")).join("");
+  }
+}
+
+async function cloudWriteAnonymousPending(payloads) {
+  if (!sharedSwapsEnabled() || LOCAL_PREVIEW) return false;
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(cloudRoot() + "/" + CLOUD_PATHS.pending + ".json", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payloads),
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      signal: controller.signal,
+    });
+    lastCloudStatus = response.status;
+    if (!response.ok) {
+      lastCloudMessage = response.status === 401 || response.status === 403
+        ? "опубликуй новые firebase rules — анонимные предложения пока запрещены базой"
+        : "не удалось отправить предложение (" + response.status + ")";
+      return false;
+    }
+    lastCloudStatus = 0;
+    lastCloudMessage = "";
+    return true;
+  } catch (error) {
+    lastCloudStatus = -1;
+    lastCloudMessage = "не отправилось — проверь интернет";
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* One atomic Firebase PATCH for a move/reset. No half-move and one bot event. */
 async function publishSwapBatch(entries, label = "изменены пары") {
   if (!sharedSwapsEnabled()) return false;
   const role = myRole();
-  if (role === "anon") return false;
+  const anonymous = role === "anon";
   const section = role === "owner" || role === "editor" ? CLOUD_PATHS.swaps : CLOUD_PATHS.pending;
-  const identity = tgSession?.id;
+  const identity = anonymous ? await anonymousProposalIdentity() : tgSession?.id;
   if (!identity) return false;
   const payloads = {};
   Object.entries(entries).forEach(([key, entry]) => {
     /* Keep the encoded Firebase key in the JSON PATCH body. Decoding it here
        reintroduced forbidden characters such as "." and made the whole batch fail. */
-    payloads[encodeSwapKey(key)] = sanitizeSwapPayload({ ...entry, by: identity, byName: tgDisplayName(tgSession) });
+    payloads[encodeSwapKey(key)] = sanitizeSwapPayload({
+      ...entry,
+      by: identity,
+      byName: anonymous ? "без авторизации" : tgDisplayName(tgSession),
+      ...(anonymous ? { anonymous: true } : {}),
+    });
   });
-  await waitTgRoles();
-  if (tgSession?.id !== identity || !tgSessionVerified && !LOCAL_PREVIEW) return false;
-  const ok = await cloudWrite(section, payloads, { method: "PATCH", notify: false });
+  if (!anonymous) {
+    await waitTgRoles();
+    if (tgSession?.id !== identity || !tgSessionVerified && !LOCAL_PREVIEW) return false;
+  }
+  const ok = anonymous
+    ? await cloudWriteAnonymousPending(payloads)
+    : await cloudWrite(section, payloads, { method: "PATCH", notify: false });
   const map = loadSwaps();
   for (const [key, entry] of Object.entries(entries)) {
     if (map[key] !== entry) continue; // A late response must never replace a newer edit.
@@ -4601,7 +4762,7 @@ async function publishSwapBatch(entries, label = "изменены пары") {
     else entry.pendingSync = true;
   }
   saveSwaps();
-  if (ok) {
+  if (ok && !anonymous) {
     const list = Object.entries(entries);
     if (list.length === 1) {
       const [key, entry] = list[0];
@@ -4623,8 +4784,8 @@ async function publishSwapBatch(entries, label = "изменены пары") {
         event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text,
       }).catch(reportPushError);
     }
-    if (section === CLOUD_PATHS.pending) toast("изменения отправлены на проверку одним действием");
   }
+  if (ok && section === CLOUD_PATHS.pending) toast("изменения отправлены на проверку и сохранены у тебя");
   return ok;
 }
 
