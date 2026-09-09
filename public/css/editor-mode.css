@@ -57,10 +57,15 @@
   border: 1.5px dashed color-mix(in srgb, var(--sched-blue) 38%, var(--sched-separator));
   border-radius: 12px;
   background: color-mix(in srgb, var(--sched-blue) 7%, var(--sched-surface));
+  will-change: auto;
+}
+.sched-editor-toolbar.is-opening {
   animation: sched-editor-toolbar-slide-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity, max-height;
 }
-.sched-active-day-scene.is-entering .sched-editor-toolbar {
+.sched-active-day-scene.is-entering .sched-editor-toolbar,
+.sched-swipe-carousel .sched-editor-toolbar,
+.sched-swipe-panel .sched-editor-toolbar {
   animation: none !important;
 }
 body.is-tour-active .sched-editor-toolbar {

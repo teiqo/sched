@@ -183,3 +183,32 @@ body.is-editor-closing #stage {
 .live-lesson-card.is-break .lesson-type-accent {
   color: var(--sched-blue);
 }
+
+.sched-swipe-carousel .agenda-row,
+.sched-swipe-carousel .agenda-break,
+.sched-swipe-carousel .agenda-break-chip,
+.sched-swipe-carousel .live-lesson-card,
+.sched-swipe-carousel .live-card-glass,
+.sched-swipe-carousel .live-card-particles i,
+.sched-swipe-carousel .sched-editor-toolbar,
+.sched-swipe-panel .agenda-row,
+.sched-swipe-panel .agenda-break,
+.sched-swipe-panel .agenda-break-chip,
+.sched-swipe-panel .live-lesson-card,
+.sched-swipe-panel .live-card-glass,
+.sched-swipe-panel .sched-editor-toolbar {
+  animation: none !important;
+  transition: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+.sched-swipe-carousel,
+.sched-swipe-panel {
+  contain: paint;
+}
+
+:root #scene.is-motion-lite #stage *,
+:root #scene.is-motion-lite #stage *::before,
+:root #scene.is-motion-lite #stage *::after {
+  animation: none !important;
+}

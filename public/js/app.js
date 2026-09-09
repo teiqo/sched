@@ -2180,6 +2180,15 @@ function bindEvents() {
 
   /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
   const scene = $("#scene");
+  let motionLiteTimer = null;
+  const holdMotionLite = (ms = 420) => {
+    scene.classList.add("is-motion-lite");
+    window.clearTimeout(motionLiteTimer);
+    motionLiteTimer = window.setTimeout(() => {
+      scene.classList.remove("is-motion-lite");
+      motionLiteTimer = null;
+    }, ms);
+  };
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
@@ -2188,17 +2197,15 @@ function bindEvents() {
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
       // The neighbour has already slid into place: do not play a second entrance.
-      scene.classList.add("is-motion-lite");
+      holdMotionLite();
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
-      scene.classList.remove("is-motion-lite");
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
         daySwipeRenderPending = false;
-        scene.classList.add("is-motion-lite");
+        holdMotionLite();
         render();
-        scene.classList.remove("is-motion-lite");
       }
     },
   });
@@ -3678,6 +3685,13 @@ function activeSwapMap() {
   return state.editorMode && editorSession ? editorSession.draft : loadSwaps();
 }
 
+function playEditorToolbarOpen() {
+  const toolbar = document.querySelector("#scene .sched-editor-toolbar");
+  if (!toolbar || editorReducedMotion()) return;
+  toolbar.classList.add("is-opening");
+  window.setTimeout(() => toolbar.classList.remove("is-opening"), 420);
+}
+
 function startEditorMode() {
   if (state.editorMode) return;
   closeSettings();
@@ -3688,6 +3702,7 @@ function startEditorMode() {
   completedOpen = false;
   applyFlags();
   render();
+  playEditorToolbarOpen();
 }
 
 function finishEditorMode() {
