@@ -1157,3 +1157,13 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   .sched-stat-card { min-height: 104px; padding: 13px; }
   .sched-stat-card strong { font-size: 27px; }
 }
+
+
+/* Background sync after returning to the tab must be visually silent. */
+:root.is-passive-refresh #day-scene,
+:root.is-passive-refresh #day-scene *,
+:root.is-passive-refresh #strip,
+:root.is-passive-refresh #strip * {
+  animation: none !important;
+  transition: none !important;
+}

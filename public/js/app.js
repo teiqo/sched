@@ -911,15 +911,6 @@ function setScene(html, direction) {
     if (old._schedHtml !== html) {
       old._schedHtml = html;
       old.innerHTML = html;
-      /* Мягкое проявление вместо резкой подмены (акцент+, «вся неделя», окна):
-         градиенты не «щёлкают», а коротко доезжают по прозрачности. */
-      if (!reduced && !state.perfMode) {
-        try {
-          old.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, easing: "ease-out" });
-        } catch (err) {
-          /* ignore */
-        }
-      }
     }
     old.inert = false;
     old.removeAttribute("aria-hidden");
@@ -1134,6 +1125,18 @@ function render(direction) {
   window.requestAnimationFrame(checkCompactHeading);
 }
 if (typeof window !== "undefined") window.render = render;
+
+var passiveRefreshTimer = null;
+function renderPassive() {
+  const root = document.documentElement;
+  root.classList.add("is-passive-refresh");
+  window.clearTimeout(passiveRefreshTimer);
+  render();
+  passiveRefreshTimer = window.setTimeout(() => {
+    root.classList.remove("is-passive-refresh");
+    passiveRefreshTimer = null;
+  }, 120);
+}
 
 function liveSignature() {
   const live = liveState(state.selected);
@@ -2800,13 +2803,42 @@ function closeOnboarding() {
 
 var basicsTourStep = -1;
 var basicsTourOpenedEditor = false;
+var basicsTourRouletteAnimation = null;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это капец как залипательно." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления. отсюда же обучение можно запустить ещё раз." },
 ];
 
+function stopBasicsTourRoulette() {
+  basicsTourRouletteAnimation?.cancel();
+  basicsTourRouletteAnimation = null;
+  document.getElementById("strip")?.classList.remove("is-tour-demo");
+}
+
+function startBasicsTourRoulette() {
+  stopBasicsTourRoulette();
+  const strip = document.getElementById("strip");
+  const selection = document.getElementById("selection");
+  if (!strip || !selection) return;
+  const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
+  const forward = current <= 3 ? Math.min(6, current + 2) : Math.max(0, current - 2);
+  const middle = current <= 4 ? Math.min(6, current + 1) : Math.max(0, current - 1);
+  strip.classList.add("is-tour-demo");
+  basicsTourRouletteAnimation = selection.animate([
+    { transform: `translate3d(${current * 100}%,0,0)`, offset: 0 },
+    { transform: `translate3d(${middle * 100}%,0,0)`, offset: 0.28 },
+    { transform: `translate3d(${forward * 100}%,0,0)`, offset: 0.56 },
+    { transform: `translate3d(${current * 100}%,0,0)`, offset: 1 },
+  ], {
+    duration: 3600,
+    iterations: Infinity,
+    easing: "cubic-bezier(.45,0,.2,1)",
+  });
+}
+
 function finishBasicsTour() {
+  stopBasicsTourRoulette();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
   if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) finishEditorMode();
@@ -2814,6 +2846,7 @@ function finishBasicsTour() {
 }
 
 function renderBasicsTour() {
+  stopBasicsTourRoulette();
   const step = BASICS_TOUR[basicsTourStep];
   const target = step && document.querySelector(step.selector);
   if (!step || !target) { finishBasicsTour(); return; }
@@ -2851,7 +2884,10 @@ function renderBasicsTour() {
       else renderBasicsTour();
     }
   };
-  requestAnimationFrame(() => host.classList.add("is-ready"));
+  requestAnimationFrame(() => {
+    host.classList.add("is-ready");
+    if (basicsTourStep === 1) startBasicsTourRoulette();
+  });
 }
 
 function startBasicsTour() {
@@ -3130,11 +3166,20 @@ function init() {
        остаются прежние строки и анимации даже после обновления фай��ов на GitHub. */
     const hadController = Boolean(navigator.serviceWorker.controller);
     let swReloading = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!hadController || swReloading) return;
+    let swReloadPending = false;
+    const applyWorkerUpdateOffscreen = () => {
+      if (!swReloadPending || swReloading || !document.hidden) return;
       swReloading = true;
       location.reload();
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || swReloading) return;
+      /* Не перезагружаем страницу перед глазами. Если вкладка сейчас видна,
+         ждём её скрытия и применяем обновление в фоне. */
+      swReloadPending = true;
+      applyWorkerUpdateOffscreen();
     });
+    document.addEventListener("visibilitychange", applyWorkerUpdateOffscreen);
     navigator.serviceWorker
       .register("sw.js", { updateViaCache: "none" })
       .then((registration) => {
@@ -3933,8 +3978,7 @@ function applySchedulePayload(payload) {
       save();
     }
     scheduleStamp(payload);
-    render();
-    renderStrip();
+    renderPassive();
     return true;
   });
 }
@@ -4990,7 +5034,7 @@ async function pullSharedSwaps() {
     const changedLocal = mergeSwapMaps(map, remote) || pruneSwapMap(map);
     if (changedLocal) {
       saveSwaps();
-      if (!scrub && !document.getElementById("swap-backdrop")) render();
+      if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
     /* Редакторы дожимают записи, не ушедшие из-за офлайна. */
     if (myRole() === "owner" || myRole() === "editor") {
