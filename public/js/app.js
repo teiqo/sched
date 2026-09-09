@@ -1612,7 +1612,7 @@ function endScrub(options = {}) {
   const keepVisual = Boolean(options.keepVisual);
   const skipRender = Boolean(options.skipRender);
   /* Работает и без активного scrub: используется как полный сброс состояния,
-     чтобы после резкого о��пускания не оставались инлайн-трансформ и блюр. */
+     чтобы после резкого о������пускания не оставались инлайн-трансформ и блюр. */
   const stripEl = (scrub && scrub.strip) || $("#strip");
   if (!stripEl) return;
   const wasActive = Boolean(scrub && (scrub.active || scrub.targetIndex !== undefined));
@@ -3812,27 +3812,40 @@ function undoEditorAction() {
   render();
 }
 
+function editorDayPrefix(dIso) {
+  return (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+}
+
+function publishedSwapMap() {
+  return loadSwaps();
+}
+
 function editorDayKeys(dIso) {
-  const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+  const prefix = editorDayPrefix(dIso);
   return [...new Set([
-    ...Object.keys(editorSession?.baseline || {}).filter(key => key.startsWith(prefix)),
+    ...Object.keys(publishedSwapMap()).filter(key => key.startsWith(prefix)),
     ...Object.keys(editorSession?.draft || {}).filter(key => key.startsWith(prefix)),
   ])];
 }
 
+function publishedSwap(key) {
+  const entry = publishedSwapMap()[key];
+  return entry && !entry.deleted ? entry : null;
+}
+
 function restoreEditorSwap(key) {
-  const confirmed = editorSession?.baseline?.[key];
+  const confirmed = publishedSwap(key);
   if (confirmed) editorSession.draft[key] = cloneSwapMap(confirmed);
   else delete editorSession.draft[key];
 }
 
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
-  /* «Исходный день» = утверждённое расписание на входе в редактор:
-     черновые правки сбрасываем, подтверждённые замены из baseline оставляем. */
+  /* «Исходный день» = официальное расписание + текущие опубликованные замены,
+     а не снимок черновика на входе в редактор. */
   const dayKeys = editorDayKeys(dIso);
   const changed = dayKeys.filter(key =>
-    JSON.stringify(editorSession.baseline[key] || null) !== JSON.stringify(editorSession.draft[key] || null)
+    JSON.stringify(publishedSwap(key) || null) !== JSON.stringify(editorSession.draft[key] && !editorSession.draft[key].deleted ? editorSession.draft[key] : null)
   );
   if (!changed.length) {
     toast("этот день и так исходный");
@@ -4383,7 +4396,7 @@ function openSwapSheet(dIso, n) {
     }
     if (act === "reset") {
       const key = swapKey(dIso, n);
-      const confirmed = state.editorMode && editorSession ? editorSession.baseline[key] : null;
+      const confirmed = state.editorMode && editorSession ? publishedSwap(key) : null;
       setSwap(dIso, n, confirmed ? cloneSwapMap(confirmed) : null);
 
       commit();
@@ -5694,7 +5707,7 @@ async function pullSharedSwaps() {
         if (!batches.has(id)) batches.set(id, {});
         batches.get(id)[key] = entry;
       }
-      for (const batch of batches.values()) publishSwapBatch(batch, "повторная отправка изменений");
+      for (const batch of batches.values()) publishSwapBatch(batch, "повторн��я отправка изменений");
     }
   } catch (e) {
     /* офлайн — повторим в следующий тик */
@@ -5846,7 +5859,7 @@ function pendingRowHtml(enc, entry, role) {
         '">+ редактор</button>';
     }
   } else {
-    actions = '<span class="sched-pending-readonly-label">на проверке у редакторов</span>';
+    actions = '<span class="sched-pending-readonly-label">н�� проверке у редакторов</span>';
   }
   return (
     '<div class="sched-tg-row"><div class="sched-tg-row-text"><strong>' +
