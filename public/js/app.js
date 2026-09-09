@@ -3814,16 +3814,19 @@ function undoEditorAction() {
 
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
-  editorSession.history.push(cloneSwapMap(editorSession.draft));
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-  Object.keys(editorSession.draft).forEach(key => {
-    if (key.startsWith(prefix)) delete editorSession.draft[key];
-  });
-  Object.entries(editorSession.baseline).forEach(([key, entry]) => {
-    if (key.startsWith(prefix)) editorSession.draft[key] = cloneSwapMap(entry);
-  });
+  /* «Исходный день» = базовое расписание парсера: сносим все правки дня,
+     а не возвращаем уже подтверждённые замены из baseline. */
+  const dayKeys = Object.keys(editorSession.draft).filter(key => key.startsWith(prefix));
+  const live = dayKeys.filter(key => editorSession.draft[key] && !editorSession.draft[key].deleted);
+  if (!live.length) {
+    toast("этот день и так исходный");
+    return;
+  }
+  editorSession.history.push(cloneSwapMap(editorSession.draft));
+  dayKeys.forEach(key => { delete editorSession.draft[key]; });
   render();
-  toast("день возвращён к подтверждённому расписанию");
+  toast("день возвращён к исходному расписанию");
 }
 
 async function saveEditorMode() {
@@ -4101,7 +4104,7 @@ function slotsFor(d) {
 
 function hasDaySwaps(dIso) {
   if (!dIso) return false;
-  const map = loadSwaps();
+  const map = activeSwapMap();
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   for (const key in map) {
     if (key.indexOf(prefix) === 0 && map[key] && !map[key].deleted) {
@@ -4115,7 +4118,7 @@ async function resetDaySwaps(dIso) {
   if (!dIso) return;
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   const changes = {};
-  for (const [key, value] of Object.entries(loadSwaps())) {
+  for (const [key, value] of Object.entries(activeSwapMap())) {
     if (key.startsWith(prefix) && value && !value.deleted) changes[Number(key.slice(prefix.length))] = null;
   }
   if (!applyDayChanges(dIso, changes, "возвращено исходное расписание дня")) return;
