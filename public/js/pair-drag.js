@@ -62,18 +62,24 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
         { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
   };
+  const CLONE_EDGE = 8;
+  const cloneWidth = width => Math.min(width, Math.max(160, innerWidth - CLONE_EDGE * 2));
+  const clampLeft = (left, width) => {
+    const max = Math.max(CLONE_EDGE, innerWidth - width - CLONE_EDGE);
+    return Math.min(Math.max(left, CLONE_EDGE), max);
+  };
   const followPointer = () => {
     const d = drag;
     if (!d) return;
     d.clone.classList.remove('is-magnetized');
-    d.clone.style.left = Math.max(0, Math.min(innerWidth - d.clone.offsetWidth, d.x - d.grabX)) + 'px';
+    d.clone.style.left = clampLeft(d.x - d.grabX, d.clone.offsetWidth) + 'px';
     d.clone.style.top = d.y - d.grabY + 'px';
   };
   const centerCloneOnPlaceholder = () => {
     const d = drag, placeholder = d?.items.get(d.fromN);
     if (!placeholder?.isConnected) return;
     const targetRect = placeholder.getBoundingClientRect();
-    d.clone.style.left = targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2 + 'px';
+    d.clone.style.left = clampLeft(targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2, d.clone.offsetWidth) + 'px';
     d.clone.style.top = targetRect.top + (targetRect.height - d.clone.offsetHeight) / 2 + 'px';
   };
   const updateTarget = () => {
@@ -136,7 +142,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
     clone.setAttribute('aria-hidden', 'true'); clone.inert = true;
-    Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: rect.left + 'px', top: rect.top + 'px' });
+    const cloneW = cloneWidth(rect.width);
+    Object.assign(clone.style, { width: cloneW + 'px', height: rect.height + 'px', left: clampLeft(rect.left, cloneW) + 'px', top: rect.top + 'px' });
     document.body.appendChild(clone);
     const status = document.createElement('div');
     status.className = 'sched-drag-status is-sr-only'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
