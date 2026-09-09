@@ -44,7 +44,9 @@ export function bindDaySwipe({
 
   const dayPanel = (date, position, blocked = false) => {
     const panel = document.createElement("div");
-    panel.className = `sched-swipe-panel is-${position}`;
+    // Namespaced state: generic .is-current is used by live-lesson styles and
+    // made the whole carousel's centre panel inherit today's green colors.
+    panel.className = `sched-swipe-panel is-swipe-${position}`;
     panel.setAttribute("aria-hidden", "true");
     panel.inert = true;
     if (blocked) {
