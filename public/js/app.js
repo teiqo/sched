@@ -5310,6 +5310,32 @@ async function anonymousProposalIdentity() {
   }
 }
 
+async function cloudWriteAnonymousPendingPerKey(payloads, signal) {
+  const keys = Object.keys(payloads || {});
+  if (!keys.length) return false;
+  let sent = 0;
+  for (const key of keys) {
+    try {
+      const response = await fetch(
+        cloudRoot() + "/" + CLOUD_PATHS.pending + "/" + encodeURIComponent(key) + ".json",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloads[key]),
+          credentials: "omit",
+          referrerPolicy: "no-referrer",
+          signal,
+        },
+      );
+      if (response.ok) sent += 1;
+      else lastCloudStatus = response.status;
+    } catch (_) {
+      lastCloudStatus = -1;
+    }
+  }
+  return sent === keys.length;
+}
+
 async function cloudWriteAnonymousPending(payloads) {
   if (!sharedSwapsEnabled() || LOCAL_PREVIEW) return false;
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
@@ -5324,9 +5350,19 @@ async function cloudWriteAnonymousPending(payloads) {
     });
     lastCloudStatus = response.status;
     if (!response.ok) {
-      lastCloudMessage = response.status === 401 || response.status === 403
-        ? "опубликуй новые firebase rules — анонимные предложения пока запрещены базой"
-        : "не удалось отправить предложение (" + response.status + ")";
+      /* Многопутевой PATCH в корень weeqo-pending база проверяет по правилам
+         родителя, а разрешение для анонимных описано на $key. Дожимаем каждый ключ отдельно. */
+      if (response.status === 401 || response.status === 403) {
+        const perKey = await cloudWriteAnonymousPendingPerKey(payloads, controller.signal);
+        if (perKey) {
+          lastCloudStatus = 0;
+          lastCloudMessage = "";
+          return true;
+        }
+        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или войди через телеграм";
+        return false;
+      }
+      lastCloudMessage = "не удалось отправить предложение (" + response.status + ")";
       return false;
     }
     lastCloudStatus = 0;
@@ -5397,7 +5433,26 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       }).catch(reportPushError);
     }
   }
-  if (ok && section === CLOUD_PATHS.pending) toast("изменения отправлены на проверку и сохранены у тебя");
+  if (section === CLOUD_PATHS.pending) {
+    const count = Object.keys(entries).length;
+    const word = plural(count, "пару", "пары", "пар");
+    const author = anonymous ? "без авторизации" : tgDisplayName(tgSession);
+    if (ok) {
+      toast("предложено " + count + " " + word + " — ждём проверку редакторов");
+      pushNotif(
+        "ты предложил " + count + " " + word + " · на проверке у редакторов (" + author + ")",
+        "pending",
+        "pending",
+      );
+    } else {
+      toast("предложение сохранено у тебя, но не ушло: " + cloudFailHint());
+      pushNotif(
+        "предложение не ушло редакторам: " + cloudFailHint() + " · повторим автоматически",
+        "pending",
+        "cancel",
+      );
+    }
+  }
   return ok;
 }
 
@@ -5604,8 +5659,9 @@ async function pullSharedSwaps() {
       saveSwaps();
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
-    /* Редакторы дожимают записи, не ушедшие из-за офлайна. */
-    if (myRole() === "owner" || myRole() === "editor") {
+    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
+       тоже есть право записи в weeqo-pending. */
+    {
       const batches = new Map();
       for (const [key, entry] of Object.entries(map)) {
         if (!entry?.pendingSync) continue;
@@ -6336,6 +6392,7 @@ function closeBellSheet() {
 function notifTitle(n, tone) {
   if (tone === "swap") return "замена";
   if (tone === "cancel") return "отмена пары";
+  if (tone === "pending") return "предложено на проверку";
   return (n && n.text) || "";
 }
 
