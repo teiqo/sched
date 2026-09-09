@@ -2853,12 +2853,15 @@ function stopBasicsTourRoulette(options = {}) {
   basicsTourRouletteAnimation = null;
   if (basicsTourRouletteFrame !== null) cancelAnimationFrame(basicsTourRouletteFrame);
   basicsTourRouletteFrame = null;
+  document.body.classList.remove("is-tour-roulette-active");
   const strip = document.getElementById("strip");
   const selection = document.getElementById("selection");
+  const stage = document.getElementById("stage");
   strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
   strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
   selection?.style.removeProperty("will-change");
   selection?.style.removeProperty("transform");
+  stage?.style.removeProperty("min-height");
   if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
     selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
   }
@@ -2871,7 +2874,13 @@ function startBasicsTourRoulette(options = {}) {
 
   const strip = document.getElementById("strip");
   const selection = document.getElementById("selection");
+  const stage = document.getElementById("stage");
   if (!strip || !selection) return;
+
+  if (stage && stage.offsetHeight) {
+    stage.style.minHeight = `${stage.offsetHeight}px`;
+  }
+  document.body.classList.add("is-tour-roulette-active");
 
   const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
   const originalDate = new Date(state.selected);
@@ -2943,10 +2952,15 @@ function startBasicsTourRoulette(options = {}) {
           lastUnderIndex = nearestIndex;
         }
 
-        // Обновляем превью расписания только при смене целого дня
+        // Обновляем превью расписания с полноценной анимацией появления пар
         if (nearestIndex !== lastIndex) {
+          const dir = nearestIndex > lastIndex ? "forward" : "backward";
           lastIndex = nearestIndex;
-          selectDate(addDays(originalWeek, nearestIndex), null, { silent: true, preview: true, animated: false });
+          selectDate(addDays(originalWeek, nearestIndex), dir, {
+            silent: true,
+            preview: true,
+            animated: true,
+          });
         }
 
         if (progress < 1) {
@@ -2954,9 +2968,12 @@ function startBasicsTourRoulette(options = {}) {
           return;
         }
 
-        selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+        const finalDir = originalDate > state.selected ? "forward" : originalDate < state.selected ? "backward" : null;
+        selectDate(originalDate, finalDir, { silent: true, preview: true, animated: true });
+        document.body.classList.remove("is-tour-roulette-active");
         selection.style.removeProperty("will-change");
         selection.style.removeProperty("transform");
+        stage?.style.removeProperty("min-height");
         strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
         buttons.forEach(button => button.removeAttribute("data-under-selection"));
         basicsTourRouletteOriginalDate = null;
@@ -2975,7 +2992,8 @@ function triggerTourRoulette(clickedDate) {
   basicsTourLastTriggerTime = now;
   stopBasicsTourRoulette({ keepDate: true });
   if (clickedDate) {
-    selectDate(clickedDate, null, { silent: true, preview: true, animated: false });
+    const dir = clickedDate > state.selected ? "forward" : clickedDate < state.selected ? "backward" : null;
+    selectDate(clickedDate, dir, { silent: true, preview: true, animated: true });
   }
   startBasicsTourRoulette({ delay: 160, keepDate: true });
 }

@@ -211,6 +211,30 @@
   }
 }
 
+/* Анимация появления пар при прокрутке рулетки в обучении */
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row,
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .live-lesson-card,
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .sched-empty-day {
+  animation: sched-tour-pair-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) { animation-delay: 25ms !important; }
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) { animation-delay: 55ms !important; }
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) { animation-delay: 85ms !important; }
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) { animation-delay: 115ms !important; }
+body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 5) { animation-delay: 145ms !important; }
+
+@keyframes sched-tour-pair-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @media (max-height: 720px) {
   .sched-onboarding-telegram-mark { width: 68px; height: 68px; margin: 4px auto 10px; border-radius: 22px; }
   .sched-onboarding-telegram-mark svg { width: 30px; height: 30px; }
