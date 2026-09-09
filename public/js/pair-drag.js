@@ -141,7 +141,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const status = document.createElement('div');
     status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     status.textContent = 'перетащи пару · Esc — отмена'; document.body.appendChild(status);
-    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading'));
+    /* The heading and the editor toolbar stay in place: hiding the toolbar
+       collapsed the day on a phone and the whole screen jumped on hold. */
+    const original = [...scope.children].filter(el =>
+      !el.classList.contains('sched-day-heading') && !el.classList.contains('sched-editor-toolbar'));
     const hidden = original.map(el => [el, el.hidden]);
     const board = document.createElement('div'); board.className = 'agenda-list sched-drag-board';
     const items = new Map();
@@ -171,21 +174,14 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.body.classList.add('is-dragging-pair'); scope.classList.add('is-pair-dragging');
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
     scope.appendChild(board);
-    // Reveal windows above the source without moving the grabbed card under the finger.
-    const delta = items.get(p.n).getBoundingClientRect().top - rect.top;
-    scroller.scrollTop += delta;
-    const residual = items.get(p.n).getBoundingClientRect().top - rect.top;
-    if (residual < -1) board.style.marginTop = -residual + 'px';
-    if (residual > 1) {
-      const spacer = document.createElement('div');
-      spacer.className = 'sched-drag-scroll-space'; spacer.setAttribute('aria-hidden', 'true');
-      spacer.style.cssText = `height:${innerHeight + residual}px;min-height:${innerHeight + residual}px;flex:none;pointer-events:none`;
-      (scroller === document.scrollingElement ? document.body : scroller).appendChild(spacer);
-      drag.scrollSpacer = spacer;
-      scroller.scrollTop += items.get(p.n).getBoundingClientRect().top - rect.top;
-    }
-    /* The drag board can be wider or shift after windows are revealed. Recenter
-       the scaled card against the actual dashed source placeholder, not the old row. */
+    /* Windows are revealed above the grabbed pair, so the preview board is
+       taller than the static day. The page is never scrolled and never padded
+       with a spacer for that: on a phone this jumped the layout, blanked the
+       screen and left the finger over an empty area. The floating card keeps
+       its own fixed position and magnetises to the placeholder instead.
+
+       Recenter the card against the actual dashed source placeholder, because
+       the board can be wider or shifted after the windows appear. */
     centerCloneOnPlaceholder();
     if (!p.touchBody) { try { scene.setPointerCapture(p.pointerId); } catch (_) {} }
     try { navigator.vibrate?.(10); } catch (_) {}
@@ -199,10 +195,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const target = d.targetN;
     drag = null;
     try { if (scene.hasPointerCapture(d.pointerId)) scene.releasePointerCapture(d.pointerId); } catch (_) {}
-    d.clone.remove(); d.status.remove(); d.board.remove(); d.scrollSpacer?.remove();
+    d.clone.remove(); d.status.remove(); d.board.remove();
     d.hidden.forEach(([el, hidden]) => { el.hidden = hidden; el.classList.remove('sched-drag-original'); });
     d.scope.classList.remove('is-pair-dragging'); document.body.classList.remove('is-dragging-pair');
-    d.scroller.scrollTop = d.originalScroll;
     d.scroller.style.scrollBehavior = d.oldScrollBehavior;
     suppressUntil = Date.now() + 450;
     onActiveChange(false);
@@ -267,7 +262,14 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   scene.addEventListener('contextmenu', e => { if (drag || pending || e.target.closest('.lesson-swap-btn')) e.preventDefault(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && (drag || pending)) { e.preventDefault(); finish(false); } });
   window.addEventListener('blur', () => finish(false));
-  window.addEventListener('resize', () => finish(false));
+  /* Only a real relayout cancels a drag. Mobile browsers fire resize when the
+     address bar collapses during a drag, which used to abort the move. */
+  let lastWidth = innerWidth;
+  window.addEventListener('resize', () => {
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    finish(false);
+  });
   document.addEventListener('visibilitychange', () => { if (document.hidden) finish(false); });
   return { cancel: () => finish(false) };
 }

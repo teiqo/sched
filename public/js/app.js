@@ -466,7 +466,7 @@ function metaHtml(slot) {
     const teacher = escapeHtml(slot.teacher);
     const vacancy = isVacancy(slot);
     parts.push(
-      `<span class="lesson-type-accent${vacancy ? " is-vacancy" : ""}">• ${teacher}</span>`,
+      `<span class="lesson-type-accent${vacancy ? " is-vacancy" : ""}">�� ${teacher}</span>`,
     );
   }
   if (slot.room) parts.push(`<span class="lesson-room">ауд. ${escapeHtml(slot.room)}</span>`);
@@ -2121,7 +2121,7 @@ function bindEvents() {
     if (e.key === "ArrowLeft") shiftDay(-1);
   });
 
-  /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
+  /* Свайпы используют только transform; экономичный режим сохраняет плавную дов��дку. */
   const scene = $("#scene");
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
@@ -2790,7 +2790,7 @@ function onboardingHtml() {
       <div class="sched-onboarding-copy">
         <button class="sched-onboarding-back" type="button" data-act="back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-          назад
+          н��зад
         </button>
         <h1>какая группа?</h1>
         <p>выбор можно поменять потом в настройках</p>
@@ -3667,17 +3667,57 @@ function finishEditorMode() {
   render();
 }
 
-function cancelEditorMode(options = {}) {
-  if (!state.editorMode) return;
-  const changed = editorChangedEntries().length > 0;
-  if (changed && !confirm("выйти из редактора и отменить несохранённые изменения?")) return;
-  const toolbar = document.querySelector(".sched-editor-toolbar");
-  if (toolbar && !options.immediate) {
-    toolbar.classList.add("is-closing");
-    window.setTimeout(() => finishEditorMode(), 300);
+/* Закрытие редактора: панель и окна уезжают плавно, а не исчезают кадром.
+   Окна сворачиваются по высоте с небольшим каскадом сверху вниз. */
+const EDITOR_CLOSE_MS = 300;
+let editorClosing = false;
+
+function playEditorClose(done) {
+  const scene = document.getElementById("scene");
+  const toolbar = scene?.querySelector(".sched-editor-toolbar");
+  const rows = scene ? [...scene.querySelectorAll(".agenda-row.is-window-row")] : [];
+  const reduced =
+    document.documentElement.hasAttribute("data-perf") ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced || (!toolbar && !rows.length)) {
+    done();
     return;
   }
-  finishEditorMode();
+  toolbar?.classList.add("is-closing");
+  rows.forEach((row, i) => {
+    row.style.setProperty("--sched-window-leave-height", `${row.offsetHeight}px`);
+    row.style.setProperty("--sched-window-leave-delay", `${Math.min(i * 26, 104)}ms`);
+    row.classList.add("is-window-leaving");
+  });
+  window.setTimeout(done, EDITOR_CLOSE_MS);
+}
+
+function closeEditorAnimated() {
+  if (!state.editorMode || editorClosing) {
+    if (!editorClosing) finishEditorMode();
+    return Promise.resolve();
+  }
+  editorClosing = true;
+  document.body.classList.add("is-editor-closing");
+  return new Promise(resolve => {
+    playEditorClose(() => {
+      editorClosing = false;
+      document.body.classList.remove("is-editor-closing");
+      finishEditorMode();
+      resolve();
+    });
+  });
+}
+
+function cancelEditorMode(options = {}) {
+  if (!state.editorMode || editorClosing) return;
+  const changed = editorChangedEntries().length > 0;
+  if (changed && !confirm("выйти из редактора и отменить несохранённые изменения?")) return;
+  if (options.immediate) {
+    finishEditorMode();
+    return;
+  }
+  closeEditorAnimated();
 }
 
 function editorChangedEntries() {
@@ -3711,7 +3751,7 @@ async function saveEditorMode() {
   const changedKeys = editorChangedEntries();
   if (!changedKeys.length) {
     toast("изменений нет");
-    finishEditorMode();
+    await closeEditorAnimated();
     return;
   }
   const map = loadSwaps();
@@ -3730,7 +3770,7 @@ async function saveEditorMode() {
   });
   saveSwaps();
   const role = myRole();
-  finishEditorMode();
+  await closeEditorAnimated();
   if (sharedSwapsEnabled()) {
     const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
     if (!ok) toast(cloudFailHint());
@@ -3888,7 +3928,7 @@ function openMoveSheet(dIso, n) {
   backdrop.id = "move-backdrop";
   backdrop.className = "sched-replace-backdrop is-open";
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
-    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
+    <div class="sched-replace-head"><strong id="move-title">куда пер��нести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
     <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n ? 'disabled aria-current="true"' : ""}>
       <span class="sched-move-number">${slot.n}</span><span class="sched-move-target-copy"><strong>${escapeHtml(slot.window || slot.cancelled ? "окно" : slot.subject)}</strong>
