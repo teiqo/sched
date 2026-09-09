@@ -2804,6 +2804,7 @@ function closeOnboarding() {
 var basicsTourStep = -1;
 var basicsTourOpenedEditor = false;
 var basicsTourRouletteAnimation = null;
+var basicsTourRouletteFrame = null;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это капец как залипательно." },
@@ -2813,7 +2814,11 @@ const BASICS_TOUR = [
 function stopBasicsTourRoulette() {
   basicsTourRouletteAnimation?.cancel();
   basicsTourRouletteAnimation = null;
-  document.getElementById("strip")?.classList.remove("is-tour-demo");
+  if (basicsTourRouletteFrame !== null) cancelAnimationFrame(basicsTourRouletteFrame);
+  basicsTourRouletteFrame = null;
+  const strip = document.getElementById("strip");
+  strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
+  strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
 }
 
 function startBasicsTourRoulette() {
@@ -2822,19 +2827,31 @@ function startBasicsTourRoulette() {
   const selection = document.getElementById("selection");
   if (!strip || !selection) return;
   const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
-  const forward = current <= 3 ? Math.min(6, current + 2) : Math.max(0, current - 2);
-  const middle = current <= 4 ? Math.min(6, current + 1) : Math.max(0, current - 1);
-  strip.classList.add("is-tour-demo");
+  strip.classList.add("is-tour-demo", "is-pressing", "is-scrubbing");
   basicsTourRouletteAnimation = selection.animate([
-    { transform: `translate3d(${current * 100}%,0,0)`, offset: 0 },
-    { transform: `translate3d(${middle * 100}%,0,0)`, offset: 0.28 },
-    { transform: `translate3d(${forward * 100}%,0,0)`, offset: 0.56 },
+    { transform: `translate3d(${current * 100}%,0,0)`, offset: 0, easing: "cubic-bezier(.45,0,.18,1)" },
+    { transform: "translate3d(600%,0,0)", offset: 0.38, easing: "cubic-bezier(.45,0,.18,1)" },
+    { transform: "translate3d(0%,0,0)", offset: 0.76, easing: "cubic-bezier(.45,0,.18,1)" },
     { transform: `translate3d(${current * 100}%,0,0)`, offset: 1 },
   ], {
-    duration: 3600,
+    duration: 6200,
     iterations: Infinity,
-    easing: "cubic-bezier(.45,0,.2,1)",
+    easing: "linear",
   });
+  const followSelection = () => {
+    if (!basicsTourRouletteAnimation || !selection.isConnected) return;
+    const center = selection.getBoundingClientRect().left + selection.getBoundingClientRect().width / 2;
+    const buttons = [...strip.querySelectorAll("button[data-date-index]")];
+    let nearest = null, distance = Infinity;
+    buttons.forEach(button => {
+      const rect = button.getBoundingClientRect();
+      const nextDistance = Math.abs(rect.left + rect.width / 2 - center);
+      if (nextDistance < distance) { nearest = button; distance = nextDistance; }
+    });
+    buttons.forEach(button => button.toggleAttribute("data-under-selection", button === nearest));
+    basicsTourRouletteFrame = requestAnimationFrame(followSelection);
+  };
+  basicsTourRouletteFrame = requestAnimationFrame(followSelection);
 }
 
 function finishBasicsTour() {
@@ -2851,6 +2868,8 @@ function renderBasicsTour() {
   const target = step && document.querySelector(step.selector);
   if (!step || !target) { finishBasicsTour(); return; }
   let host = document.getElementById("basics-tour");
+  const previousSpot = host?.querySelector(".sched-tour-spotlight")?.getBoundingClientRect();
+  const previousCopy = host?.querySelector(".sched-tour-copy")?.getBoundingClientRect();
   if (!host) {
     host = document.createElement("div");
     host.id = "basics-tour";
@@ -2870,8 +2889,9 @@ function renderBasicsTour() {
   const below = top + height + 14;
   const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  host.innerHTML = `<div class="sched-tour-spotlight" style="left:${left}px;top:${top}px;width:${width}px;height:${height}px;border-radius:${basicsTourStep === 1 ? 20 : 16}px"></div>
-    <div class="sched-tour-copy" style="left:${copyLeft}px;top:${copyTop}px;width:${copyWidth}px">
+  const spotRadius = basicsTourStep === 1 ? 20 : 999;
+  host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${previousSpot ? previousSpot.left : left}px;top:${previousSpot ? previousSpot.top : top}px;width:${previousSpot ? previousSpot.width : width}px;height:${previousSpot ? previousSpot.height : height}px;border-radius:${spotRadius}px"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect pathLength="100" /></svg></div>
+    <div class="sched-tour-copy" style="left:${previousCopy ? previousCopy.left : copyLeft}px;top:${previousCopy ? previousCopy.top : copyTop}px;width:${previousCopy ? previousCopy.width : copyWidth}px">
       <span>шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span><strong>${step.title}</strong><small>${step.text}</small>
       <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
     </div>`;
@@ -2886,6 +2906,15 @@ function renderBasicsTour() {
   };
   requestAnimationFrame(() => {
     host.classList.add("is-ready");
+    const spotlight = host.querySelector(".sched-tour-spotlight");
+    const copy = host.querySelector(".sched-tour-copy");
+    spotlight.style.left = `${left}px`;
+    spotlight.style.top = `${top}px`;
+    spotlight.style.width = `${width}px`;
+    spotlight.style.height = `${height}px`;
+    copy.style.left = `${copyLeft}px`;
+    copy.style.top = `${copyTop}px`;
+    copy.style.width = `${copyWidth}px`;
     if (basicsTourStep === 1) startBasicsTourRoulette();
   });
 }
