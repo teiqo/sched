@@ -783,36 +783,3 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   box-shadow: none !important;
   filter: none !important;
 }
-
-
-/* ==========================================================================
-   Ключевая iOS-правка: не двигаем весь #stage. В режиме «неделя» внутри него
-   лежат текущий день плюс до шести полностью отрисованных будущих дней.
-   Safari создавал огромную текстуру и перетайлил её на протяжении всего
-   свайпа. Рулетка плавная именно потому, что этот контейнер не двигает.
-   Теперь едет только первый (активный) .sched-day-block.
-   ========================================================================== */
-:root.is-day-swiping #stage {
-  transform: none !important;
-  will-change: auto !important;
-  contain: none !important;
-}
-:root.is-day-swiping .is-swipe-mover {
-  position: relative;
-  z-index: 2;
-  contain: layout paint style;
-  will-change: transform;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-#scene:is(.is-swipe-return, .is-swipe-commit) .is-swipe-mover {
-  transition: transform var(--swipe-anim-dur, 260ms) cubic-bezier(.22, 1, .36, 1) !important;
-}
-/* Будущие дни остаются обычным неподвижным потоком и не входят в
-   композитную текстуру активного дня. */
-:root.is-day-swiping #day-scene > .sched-future-days {
-  position: relative;
-  z-index: 0;
-  will-change: auto !important;
-  contain: none !important;
-}

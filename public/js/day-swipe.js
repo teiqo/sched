@@ -9,9 +9,6 @@ export function bindDaySwipe({
   let gesture = null, peek = null, settling = null, timer = null, active = false;
   let viewportWidth = innerWidth;
   let stageWidth = 0;
-  // On iOS, moving #stage is expensive because it also contains every future
-  // day in week mode. Move only the currently visible day instead.
-  let mover = stage;
   let frame = null, frameHandle = null;
   let warm = null, warmHandle = null;
   const idle = globalThis.requestIdleCallback || (fn => setTimeout(() => fn(), 1));
@@ -34,7 +31,7 @@ export function bindDaySwipe({
   // of the whole subtree that inherits --swipe-x on every frame.
   // Whole pixels only: WebKit re-rasterises text layers on fractional offsets,
   // which is exactly what makes a slow drag look like dropped frames on iOS.
-  const shiftStage = x => { mover.style.transform = `translate3d(${Math.round(x)}px, 0, 0)`; };
+  const shiftStage = x => { stage.style.transform = `translate3d(${Math.round(x)}px, 0, 0)`; };
   const selectionOffset = progress => {
     const index = Number(strip.dataset.selectedIndex) || 0;
     return Math.max(0, Math.min(6, index + progress)) * 100;
@@ -133,9 +130,6 @@ export function bindDaySwipe({
     peek = null;
     scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
     scene.style.removeProperty("--swipe-anim-dur");
-    mover.style.removeProperty("transform");
-    mover.classList.remove("is-swipe-mover");
-    mover = stage;
     stage.style.removeProperty("transform");
     stage.style.removeProperty("--swipe-x");
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
@@ -182,8 +176,6 @@ export function bindDaySwipe({
     complete(true);
     const date = new Date(getDate());
     gesture = { x: touch.clientX, y: touch.clientY, shift: 0, axis: null, date, blocked: false };
-    mover = stage.querySelector("#day-scene > .sched-day-block:first-child") || stage;
-    mover.classList.add("is-swipe-mover");
     measure();
     prewarm(date);
   }, { passive: true });
@@ -239,7 +231,7 @@ export function bindDaySwipe({
     const distance = commit ? w - Math.abs(g.shift) : Math.abs(g.shift);
     const duration = reduced() ? 0 : Math.round(Math.min(320, Math.max(170, 140 + distance * 0.45)));
     // Flush the last finger position before enabling the settle transition.
-    mover.getBoundingClientRect();
+    stage.getBoundingClientRect();
     peek?.getBoundingClientRect();
     scene.style.setProperty("--swipe-anim-dur", `${duration}ms`);
     strip.style.setProperty("--strip-swipe-duration", `${duration}ms`);
