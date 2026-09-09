@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-09-v30-smooth-day-swipe";
+const CACHE = CACHE_PREFIX + "2026-09-09-v28-firebase-swap-auth";
 const ASSETS = [
   "./",
   "./index.html",

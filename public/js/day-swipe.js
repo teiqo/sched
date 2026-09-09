@@ -1,30 +1,107 @@
-/* One gesture owns the scene until it settles. Only transforms are animated. */
+/* One gesture owns the scene until it settles. Only transforms are animated.
+   Per-frame work is batched into a single rAF write pass: no layout reads and
+   no custom-property writes while the finger is down, so a slow drag stays at
+   display frame rate. */
 export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
   renderDay, onCommit, onActiveChange, onFinish,
 }) {
-  let gesture = null, peek = null, settling = null, timer = null, drawFrame = null, active = false;
+  let gesture = null, peek = null, settling = null, timer = null, active = false;
   let viewportWidth = innerWidth;
+  let stageWidth = 0;
+  let frame = null, frameHandle = null;
+  let warm = null, warmHandle = null;
+  const idle = globalThis.requestIdleCallback || (fn => setTimeout(() => fn(), 1));
+  const unidle = globalThis.cancelIdleCallback || clearTimeout;
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const width = () => stage.offsetWidth || innerWidth;
+  // Measured once per gesture: reading offsetWidth inside touchmove forces a
+  // synchronous layout on every finger move.
+  const measure = () => { stageWidth = stage.offsetWidth || innerWidth; return stageWidth; };
+  const width = () => stageWidth || measure();
   const setActive = value => {
     if (active === value) return;
     active = value;
     strip.classList.toggle("is-day-swiping", value);
     onActiveChange?.(value);
   };
-  /* A direct transform does not invalidate inherited custom properties in the
-     whole schedule tree. It stays on the compositor while the finger moves. */
-  const shiftStage = x => { stage.style.transform = `translate3d(${x.toFixed(2)}px, 0, 0)`; };
-  const shiftSelection = progress => {
+  // Inline transforms beat the CSS var rules and avoid invalidating the style
+  // of the whole subtree that inherits --swipe-x on every frame.
+  const shiftStage = x => { stage.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`; };
+  const selectionOffset = progress => {
     const index = Number(strip.dataset.selectedIndex) || 0;
-    selection.style.transform = `translate3d(${Math.max(0, Math.min(6, index + progress)) * 100}%, 0, 0)`;
+    return Math.max(0, Math.min(6, index + progress)) * 100;
+  };
+  const shiftSelection = progress => {
+    selection.style.transform = `translate3d(${selectionOffset(progress).toFixed(2)}%, 0, 0)`;
+  };
+  const cancelFrame = () => {
+    if (frameHandle !== null) cancelAnimationFrame(frameHandle);
+    frameHandle = null;
+    frame = null;
+  };
+  const paint = () => {
+    frameHandle = null;
+    const f = frame;
+    frame = null;
+    if (!f || !gesture) return;
+    shiftStage(f.shift);
+    f.preview.style.transform = `translate3d(${f.previewX.toFixed(1)}px, 0, 0)`;
+    if (f.blocked) {
+      f.preview.style.setProperty("--easter-egg-width", `${f.eggWidth}px`);
+      f.preview.style.setProperty("--easter-egg-opacity", f.eggOpacity);
+    }
+    selection.style.transform = `translate3d(${f.selection.toFixed(2)}%, 0, 0)`;
+  };
+  const schedule = next => {
+    // Coalesce: pointer events can outpace the display (120 Hz panels), and
+    // only the last position of a frame is ever visible.
+    frame = next;
+    if (frameHandle === null) frameHandle = requestAnimationFrame(paint);
+  };
+  const dropWarm = () => {
+    if (warmHandle !== null) unidle(warmHandle);
+    warmHandle = null;
+    warm = null;
+  };
+  const buildPeek = (date, direction, blocked) => {
+    const node = document.createElement("div");
+    node.className = "sched-swipe-peek";
+    node.dataset.direction = String(direction);
+    node.setAttribute("aria-hidden", "true");
+    node.inert = true;
+    if (blocked) {
+      node.classList.add("is-easter-egg");
+      node.innerHTML = '<div class="sched-easter-egg-wrap"><span class="sched-easter-egg-msg">привет=)</span></div>';
+      node.style.setProperty("--easter-egg-scale", "1");
+    } else {
+      node.innerHTML = renderDay(addDays(date, direction));
+      // The preview is inert and must not duplicate live clock / button IDs.
+      node.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+    }
+    return node;
+  };
+  // Rendering a whole day inside the first move frame is the one heavy step of
+  // the gesture; build both neighbours while the finger is still resting.
+  const prewarm = date => {
+    dropWarm();
+    warmHandle = idle(() => {
+      warmHandle = null;
+      if (!gesture) return;
+      const forwardBlocked = addDays(date, 1) < minDate();
+      const backBlocked = addDays(date, -1) < minDate();
+      warm = {
+        date,
+        1: buildPeek(date, 1, forwardBlocked),
+        "-1": buildPeek(date, -1, backBlocked),
+        blocked: { 1: forwardBlocked, "-1": backBlocked },
+      };
+    });
   };
   const clearVisuals = () => {
     clearTimeout(timer);
-    cancelAnimationFrame(drawFrame);
-    drawFrame = null;
     timer = null;
+    cancelFrame();
+    dropWarm();
     gesture = null;
     settling = null;
     peek?.remove();
@@ -50,55 +127,11 @@ export function bindDaySwipe({
   const ensurePeek = (direction, blocked) => {
     if (peek?.dataset.direction === String(direction)) return peek;
     peek?.remove();
-    peek = document.createElement("div");
-    peek.className = "sched-swipe-peek";
-    peek.dataset.direction = direction;
-    peek.setAttribute("aria-hidden", "true");
-    peek.inert = true;
-    if (blocked) {
-      peek.classList.add("is-easter-egg");
-      peek.innerHTML = '<div class="sched-easter-egg-wrap"><span class="sched-easter-egg-msg">привет=)</span></div>';
-    } else {
-      peek.innerHTML = renderDay(addDays(gesture.date, direction));
-      // The preview is inert and must not duplicate live clock / button IDs.
-      peek.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
-    }
+    const cached = warm && warm.date.getTime() === gesture.date.getTime() &&
+      warm.blocked[direction] === blocked ? warm[direction] : null;
+    peek = cached || buildPeek(gesture.date, direction, blocked);
     scene.appendChild(peek);
     return peek;
-  };
-
-  const paintGesture = () => {
-    drawFrame = null;
-    const g = gesture;
-    if (!g || g.axis !== "x") return;
-    const dx = g.pointerX - g.x;
-    const w = g.width;
-    let direction = dx < 0 ? 1 : -1;
-    // Do not rebuild the full neighbouring day when a slow finger jitters
-    // around the starting pixel. Crossing 24px intentionally changes side.
-    if (g.direction && direction !== g.direction && Math.abs(dx) < 24) direction = g.direction;
-    g.direction = direction;
-    g.blocked = addDays(g.date, direction) < minDate();
-    const limited = Math.sign(dx || -direction) * Math.min(Math.abs(dx), w);
-    g.shift = g.blocked ? limited * 0.55 : limited;
-    const preview = ensurePeek(direction, g.blocked);
-    shiftStage(g.shift);
-    preview.style.transform = `translate3d(${direction * w + g.shift}px, 0, 0)`;
-    if (g.blocked) {
-      preview.style.setProperty("--easter-egg-width", `${Math.max(1, Math.abs(g.shift))}px`);
-      preview.style.setProperty("--easter-egg-opacity", String(Math.min(1, Math.max(0, (Math.abs(g.shift) - 20) / 64))));
-      preview.style.setProperty("--easter-egg-scale", "1");
-    }
-    shiftSelection(g.blocked ? 0 : -g.shift / w);
-  };
-  const requestPaint = () => {
-    if (drawFrame === null) drawFrame = requestAnimationFrame(paintGesture);
-  };
-  const flushPaint = () => {
-    if (drawFrame === null) return;
-    cancelAnimationFrame(drawFrame);
-    drawFrame = null;
-    paintGesture();
   };
 
   scene.addEventListener("touchstart", event => {
@@ -110,11 +143,10 @@ export function bindDaySwipe({
     }
     // Finish an earlier committed swipe before taking the next starting date.
     complete(true);
-    gesture = {
-      x: touch.clientX, y: touch.clientY, pointerX: touch.clientX, pointerY: touch.clientY,
-      shift: 0, axis: null, direction: 0, width: 0,
-      date: new Date(getDate()), blocked: false,
-    };
+    const date = new Date(getDate());
+    gesture = { x: touch.clientX, y: touch.clientY, shift: 0, axis: null, date, blocked: false };
+    measure();
+    prewarm(date);
   }, { passive: true });
 
   scene.addEventListener("touchmove", event => {
@@ -126,26 +158,44 @@ export function bindDaySwipe({
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       gesture.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       if (gesture.axis === "x") {
-        gesture.width = width();
         setActive(true);
         scene.classList.add("is-swiping");
         strip.classList.add("is-swipe-linked");
         strip.classList.remove("is-hop", "is-releasing");
         selection.classList.remove("is-hop");
+      } else {
+        dropWarm();
       }
     }
     if (gesture.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
-    gesture.pointerX = touch.clientX;
-    gesture.pointerY = touch.clientY;
-    requestPaint();
+    const w = width(), direction = dx < 0 ? 1 : -1;
+    gesture.blocked = addDays(gesture.date, direction) < minDate();
+    const limited = Math.sign(dx) * Math.min(Math.abs(dx), w);
+    gesture.shift = gesture.blocked ? limited * 0.55 : limited;
+    const preview = ensurePeek(direction, gesture.blocked);
+    schedule({
+      preview,
+      shift: gesture.shift,
+      previewX: direction * w + gesture.shift,
+      blocked: gesture.blocked,
+      eggWidth: Math.round(Math.max(1, Math.abs(gesture.shift))),
+      eggOpacity: String(Math.min(1, Math.max(0, (Math.abs(gesture.shift) - 20) / 64))),
+      selection: selectionOffset(gesture.blocked ? 0 : -gesture.shift / w),
+    });
   }, { passive: false });
 
   const end = allowCommit => {
     if (!gesture) return;
     if (gesture.axis !== "x") { complete(false); return; }
-    flushPaint();
-    const g = gesture, w = g.width || width(), direction = g.shift < 0 ? 1 : -1;
+    const g = gesture, w = width(), direction = g.shift < 0 ? 1 : -1;
+    // Write the last finger position synchronously so the settle transition
+    // starts from where the finger actually left the screen.
+    cancelFrame();
+    dropWarm();
+    shiftStage(g.shift);
+    if (peek) peek.style.transform = `translate3d(${(direction * w + g.shift).toFixed(1)}px, 0, 0)`;
+    shiftSelection(g.blocked ? 0 : -g.shift / w);
     const commit = allowCommit && !g.blocked && Math.abs(g.shift) >= Math.max(64, Math.min(110, w * 0.22));
     const distance = commit ? w - Math.abs(g.shift) : Math.abs(g.shift);
     const duration = reduced() ? 0 : Math.round(Math.min(320, Math.max(170, 140 + distance * 0.45)));
@@ -178,7 +228,7 @@ export function bindDaySwipe({
   document.addEventListener("visibilitychange", () => { if (document.hidden) complete(false); });
   window.addEventListener("resize", () => {
     // iPhone browser chrome can change height in the middle of a gesture.
-    if (innerWidth !== viewportWidth) { viewportWidth = innerWidth; complete(false); }
+    if (innerWidth !== viewportWidth) { viewportWidth = innerWidth; stageWidth = 0; complete(false); }
   });
   return { cancel: () => { if (gesture || settling || active) complete(false); } };
 }
