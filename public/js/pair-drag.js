@@ -85,7 +85,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (!inside) {
       d.targetN = null;
       d.clone.classList.remove('is-magnetized');
-      announce('в пределах этого дня · Esc — отмена');
+      announce('в пределах этого дня');
       return false;
     }
     // Layout coordinates exclude FLIP transforms, so an animating neighbour cannot flicker the target.
@@ -106,7 +106,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       void d.clone.offsetWidth;
     }
     centerCloneOnPlaceholder();
-    announce(targetN === d.fromN ? 'исходное место · Esc — отмена' : `отпусти на ${targetN}-ю пару · Esc — отмена`);
+    announce(targetN === d.fromN ? 'исходное место' : `отпусти на ${targetN}-ю пару`);
     return true;
   };
   const animate = () => {
@@ -139,8 +139,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: rect.left + 'px', top: rect.top + 'px' });
     document.body.appendChild(clone);
     const status = document.createElement('div');
-    status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    status.textContent = 'перетащи пару · Esc — отмена'; document.body.appendChild(status);
+    status.className = 'sched-drag-status is-sr-only'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    status.textContent = 'перетащи пару'; document.body.appendChild(status);
     const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading')
       && !el.classList.contains('sched-editor-toolbar'));
     const hidden = original.map(el => [el, el.hidden]);

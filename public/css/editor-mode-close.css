@@ -144,3 +144,27 @@ body.is-editor-closing #stage {
   border-width: 1.5px !important;
   border-color: color-mix(in srgb, var(--sched-blue) 38%, var(--sched-separator)) !important;
 }
+
+/* Подсказка при переносе пары больше не показывается на экране:
+   оставляем её только для скринридеров. */
+:root .sched-drag-status,
+:root .sched-drag-status.is-sr-only {
+  position: fixed !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+  pointer-events: none !important;
+}
