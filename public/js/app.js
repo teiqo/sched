@@ -2885,6 +2885,26 @@ function stopBasicsTourRoulette(options = {}) {
   selection?.style.removeProperty("will-change");
   selection?.style.removeProperty("transform");
   stage?.style.removeProperty("min-height");
+  if (sceneTimer !== null) {
+    clearTimeout(sceneTimer);
+    sceneTimer = null;
+  }
+  if (sceneOutTimer !== null) {
+    clearTimeout(sceneOutTimer);
+    sceneOutTimer = null;
+  }
+  if (stage) {
+    stage.querySelectorAll(".sched-active-day-scene").forEach(scene => {
+      scene.getAnimations().forEach(a => a.finish());
+      scene.classList.remove("is-entering", "is-leaving");
+      scene.removeAttribute("data-direction");
+      scene.style.animation = "none";
+      scene.querySelectorAll(".agenda-row, .live-lesson-card, .sched-empty-day, .completed-lessons, .agenda-break, #live-host").forEach(el => {
+        el.getAnimations().forEach(a => a.finish());
+        el.style.animation = "none";
+      });
+    });
+  }
   if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
     selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
   }
@@ -3003,6 +3023,29 @@ function startBasicsTourRoulette(options = {}) {
           selectDate(originalDate, null, { silent: true, preview: true, animated: false });
         }
         document.body.classList.remove("is-tour-roulette-active");
+
+        if (sceneTimer !== null) {
+          clearTimeout(sceneTimer);
+          sceneTimer = null;
+        }
+        if (sceneOutTimer !== null) {
+          clearTimeout(sceneOutTimer);
+          sceneOutTimer = null;
+        }
+        const stageEl = document.getElementById("stage");
+        if (stageEl) {
+          stageEl.querySelectorAll(".sched-active-day-scene").forEach(scene => {
+            scene.getAnimations().forEach(a => a.finish());
+            scene.classList.remove("is-entering", "is-leaving");
+            scene.removeAttribute("data-direction");
+            scene.style.animation = "none";
+            scene.querySelectorAll(".agenda-row, .live-lesson-card, .sched-empty-day, .completed-lessons, .agenda-break, #live-host").forEach(el => {
+              el.getAnimations().forEach(a => a.finish());
+              el.style.animation = "none";
+            });
+          });
+        }
+
         selection.style.removeProperty("will-change");
         selection.style.removeProperty("transform");
         stage?.style.removeProperty("min-height");
