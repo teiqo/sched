@@ -79,3 +79,61 @@ body.is-editor-closing #stage {
   color: inherit;
   -webkit-text-fill-color: currentColor;
 }
+
+/* Пунктир рамок рисовался через outline с отступом: он не повторяет
+   закругления и рвёт штрихи на углах — отсюда кривая рамка у окон.
+   Теперь рамка — псевдоэлемент с border-radius: штрихи ровные. */
+:root .sched-drag-board > .agenda-row.is-drag-ghost,
+:root .sched-drag-board > .agenda-row.is-drag-src,
+:root .sched-drag-board > .agenda-row.is-drop-target,
+:root .agenda-row.is-drag-ghost,
+:root .agenda-row.is-drop-target,
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+:root .sched-drag-board > .agenda-row.is-drag-ghost,
+:root .sched-drag-board > .agenda-row.is-drag-src,
+:root .sched-drag-board > .agenda-row.is-drop-target,
+:root .agenda-row.is-drag-ghost,
+:root .agenda-row.is-drop-target {
+  position: relative;
+  border-radius: 12px;
+}
+
+:root .sched-drag-board > .agenda-row.is-drag-ghost::after,
+:root .sched-drag-board > .agenda-row.is-drag-src::after,
+:root .sched-drag-board > .agenda-row.is-drop-target::after,
+:root .agenda-row.is-drag-ghost::after,
+:root .agenda-row.is-drop-target::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 2px dashed color-mix(in srgb, var(--sched-tertiary) 62%, var(--sched-bg));
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+:root .sched-drag-board > .agenda-row.is-drag-src::after {
+  border-color: color-mix(in srgb, var(--sched-blue) 70%, transparent);
+}
+:root .sched-drag-board > .agenda-row.is-drop-target::after,
+:root .agenda-row.is-drop-target::after {
+  border-color: var(--sched-blue);
+}
+
+/* Аватарка бота в примере уведомления. */
+.sched-onboarding-tg-avatar.has-photo {
+  overflow: hidden;
+  padding: 0;
+  background: #24303f;
+}
+.sched-onboarding-tg-avatar.has-photo img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}

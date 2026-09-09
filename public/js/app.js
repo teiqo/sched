@@ -2069,7 +2069,7 @@ function bindEvents() {
   document.addEventListener("click", (e) => {
     const row = e.target.closest(".sched-settings-row");
     if (!row || e.target.closest("button, a, input, select, label")) return;
-    /* Строки настроек остаются в DOM и когда панель закрыта. Без этой
+    /* Строки настроек остаются в DOM и при закрытой панели — без этой
        проверки случайный клик (например, после перетаскивания пары) открывал
        системное окно выбора цвета поверх расписания. */
     if (!state.settingsOpen || !row.closest("#settings")) return;
@@ -2821,8 +2821,8 @@ function onboardingHtml() {
         <div class="sched-onboarding-tg-example" aria-label="пример уведомления в telegram">
           <span>пример уведомления</span>
           <div class="sched-onboarding-tg-notification">
-            <i class="sched-onboarding-tg-avatar">s</i>
-            <div><div class="sched-onboarding-tg-head"><strong>🎧 sched</strong><time>9:06</time></div>
+            <i class="sched-onboarding-tg-avatar has-photo"><img src="assets/icons/tg-bot-avatar.jpg" alt="" width="42" height="42" loading="lazy" decoding="async" /></i>
+            <div><div class="sched-onboarding-tg-head"><strong>sched</strong><time>9:06</time></div>
             <p>🔄 11 сентября заменили 4 пару<br><b>комп. графика · аудитория 307</b></p></div>
           </div>
         </div>
@@ -2830,7 +2830,6 @@ function onboardingHtml() {
       </div>
       <div class="sched-onboarding-finish-actions">
         <button class="sched-onboarding-action" type="button" data-act="finish-tour">продолжить</button>
-        <button class="sched-onboarding-text-action" type="button" data-act="finish-no-telegram">неа</button>
       </div>
     </div>
   </div>`;
@@ -3128,32 +3127,8 @@ function startBasicsTourEditorDemo() {
     }
   }, 710);
 
-  // 3. Пользователь видит открытую панель (~1900ms = 2610ms), повторное нажатие на карандаш
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.add("is-tour-pressed");
-  }, 2610);
-
-  // 4. Отпускание и плавное скрытие панели редактора (+160ms = 2770ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.remove("is-tour-pressed");
-    const toolbar = document.querySelector(".sched-editor-toolbar");
-    if (toolbar) {
-      toolbar.classList.add("is-closing");
-    }
-  }, 2770);
-
-  // 5. Завершение анимации закрытия (+320ms = 3090ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    if (state.editorMode && !editorChangedEntries().length) {
-      finishEditorMode();
-      basicsTourOpenedEditor = false;
-    }
-  }, 3090);
+  /* 3. Дальше панель остаётся открытой: редактор закроется только когда
+     пользователь нажмёт «дальше» (или «пропустить»), а не сам по таймеру. */
 }
 
 function finishBasicsTour() {
@@ -3266,7 +3241,7 @@ function renderBasicsTour() {
     if (action === "next") {
       stopBasicsTourEditorDemo();
       if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
-        finishEditorMode();
+        closeEditorAnimated();
         basicsTourOpenedEditor = false;
       }
       basicsTourStep += 1;
