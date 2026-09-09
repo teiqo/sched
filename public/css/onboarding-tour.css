@@ -178,6 +178,10 @@
   outline-offset: 2px;
 }
 
+:root #strip.is-tour-demo #selection {
+  transition: none !important;
+}
+
 .sched-tour-copy .sched-tour-accent {
   display: inline;
   font-weight: 600;

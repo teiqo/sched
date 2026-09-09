@@ -2854,56 +2854,15 @@ function stopBasicsTourRoulette(options = {}) {
   if (basicsTourRouletteFrame !== null) cancelAnimationFrame(basicsTourRouletteFrame);
   basicsTourRouletteFrame = null;
   const strip = document.getElementById("strip");
+  const selection = document.getElementById("selection");
   strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
   strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
-  document.getElementById("selection")?.style.removeProperty("transform");
+  selection?.style.removeProperty("will-change");
+  selection?.style.removeProperty("transform");
   if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
     selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
   }
   basicsTourRouletteOriginalDate = null;
-}
-
-function tourRouletteEase(x) {
-  // Кубическая кривая Безье: выраженный разгон на старте и плавное затяжное замедление на финише
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  const p1x = 0.38, p1y = 0.04, p2x = 0.16, p2y = 1.0;
-  const cx = 3 * p1x;
-  const bx = 3 * (p2x - p1x) - cx;
-  const ax = 1 - cx - bx;
-  const cy = 3 * p1y;
-  const by = 3 * (p2y - p1y) - cy;
-  const ay = 1 - cy - by;
-
-  let t = x;
-  for (let i = 0; i < 6; i++) {
-    const currentX = ((ax * t + bx) * t + cx) * t;
-    const currentSlope = (3 * ax * t + 2 * bx) * t + cx;
-    if (Math.abs(currentSlope) < 1e-5) break;
-    t -= (currentX - x) / currentSlope;
-    t = Math.max(0, Math.min(1, t));
-  }
-  return ((ay * t + by) * t + cy) * t;
-}
-
-function getTourRoulettePosition(waypoints, normalizedProgress) {
-  let totalDist = 0;
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    totalDist += Math.abs(waypoints[i + 1] - waypoints[i]);
-  }
-  if (totalDist === 0) return waypoints[0];
-  let targetDist = normalizedProgress * totalDist;
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    const from = waypoints[i];
-    const to = waypoints[i + 1];
-    const segLen = Math.abs(to - from);
-    if (targetDist <= segLen || i === waypoints.length - 2) {
-      const frac = segLen === 0 ? 0 : Math.min(1, Math.max(0, targetDist / segLen));
-      return from + (to - from) * frac;
-    }
-    targetDist -= segLen;
-  }
-  return waypoints[waypoints.length - 1];
 }
 
 function startBasicsTourRoulette(options = {}) {
@@ -2919,7 +2878,13 @@ function startBasicsTourRoulette(options = {}) {
   const originalWeek = weekStart(originalDate);
   basicsTourRouletteOriginalDate = originalDate;
 
-  // Визуальное нажатие перед стартом вращения
+  // Движение строго в одну сторону и обратно:
+  // Если день в первой половине недели (0..3) — идём к концу (6) и обратно.
+  // Если день во второй половине (4..6) — идём к началу (0) и обратно.
+  const targetIndex = current <= 3 ? 6 : 0;
+  const distance = Math.abs(targetIndex - current);
+
+  // Предварительное мягкое нажатие перед движением
   const pressDelay = Math.max(0, initialDelay - 200);
   basicsTourRouletteTimer = window.setTimeout(() => {
     if (basicsTourStep !== 1 || !selection.isConnected) return;
@@ -2932,49 +2897,57 @@ function startBasicsTourRoulette(options = {}) {
       if (basicsTourStep !== 1 || !selection.isConnected) return;
 
       strip.classList.add("is-scrubbing");
-
-      // Траектория полного оборота по всей неделе с возвратом в исходный день
-      let waypoints;
-      if (current === 0) {
-        waypoints = [0, 6, 0];
-      } else if (current === 6) {
-        waypoints = [6, 0, 6];
-      } else if (current <= 3) {
-        waypoints = [current, 6, 0, current];
-      } else {
-        waypoints = [current, 0, 6, current];
-      }
+      selection.style.willChange = "transform";
 
       const reducedMotion = motionQuery.matches || state.perfMode;
-      const duration = reducedMotion ? 1200 : 2700;
+      const duration = reducedMotion ? 1100 : Math.max(2200, 1850 + distance * 110);
       const startedAt = performance.now();
       let lastIndex = current;
+      let lastUnderIndex = current;
+
+      // Момент разворота (44% времени на путь туда, 56% на возвращение с длинным замедлением)
+      const turnPoint = 0.44;
 
       const paintFingerSwipe = now => {
         if (!selection.isConnected || basicsTourStep !== 1) return;
         const progress = Math.min(1, (now - startedAt) / duration);
-        const easedProgress = reducedMotion
-          ? progress * progress * (3 - 2 * progress)
-          : tourRouletteEase(progress);
 
-        const position = getTourRoulettePosition(waypoints, easedProgress);
-        selection.style.transform = `translate3d(${position * 100}%,0,0)`;
-
-        const selectedIndex = Math.max(0, Math.min(6, Math.round(position)));
-        if (selectedIndex !== lastIndex) {
-          lastIndex = selectedIndex;
-          selectDate(addDays(originalWeek, selectedIndex), null, { silent: true, preview: true, animated: false });
+        let factor;
+        if (reducedMotion) {
+          factor = Math.sin(progress * Math.PI);
+        } else if (progress <= turnPoint) {
+          // Путь туда: плавный разгон (smootherstep) и мягкий выход в точку разворота с нулевой скоростью
+          const u = progress / turnPoint;
+          factor = u * u * u * (u * (u * 6 - 15) + 10);
+        } else {
+          // Путь обратно: плавный набор скорости от разворота и длительное шелковистое замедление
+          const v = (progress - turnPoint) / (1 - turnPoint);
+          const w = 1 - Math.pow(1 - v, 2.2);
+          const retEase = w * w * (3 - 2 * w);
+          factor = 1 - retEase;
         }
 
-        const center = selection.getBoundingClientRect().left + selection.getBoundingClientRect().width / 2;
-        const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-        let nearest = null, distance = Infinity;
-        buttons.forEach(button => {
-          const rect = button.getBoundingClientRect();
-          const nextDistance = Math.abs(rect.left + rect.width / 2 - center);
-          if (nextDistance < distance) { nearest = button; distance = nextDistance; }
-        });
-        buttons.forEach(button => button.toggleAttribute("data-under-selection", button === nearest));
+        const position = current + (targetIndex - current) * factor;
+        selection.style.transform = `translate3d(${(position * 100).toFixed(3)}%,0,0)`;
+
+        const nearestIndex = Math.max(0, Math.min(6, Math.round(position)));
+
+        // Оптимизация без layout thrashing: обновляем подсветку только при смене дня
+        if (nearestIndex !== lastUnderIndex) {
+          if (lastUnderIndex >= 0 && buttons[lastUnderIndex]) {
+            buttons[lastUnderIndex].removeAttribute("data-under-selection");
+          }
+          if (buttons[nearestIndex]) {
+            buttons[nearestIndex].setAttribute("data-under-selection", "true");
+          }
+          lastUnderIndex = nearestIndex;
+        }
+
+        // Обновляем превью расписания только при смене целого дня
+        if (nearestIndex !== lastIndex) {
+          lastIndex = nearestIndex;
+          selectDate(addDays(originalWeek, nearestIndex), null, { silent: true, preview: true, animated: false });
+        }
 
         if (progress < 1) {
           basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
@@ -2982,6 +2955,7 @@ function startBasicsTourRoulette(options = {}) {
         }
 
         selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+        selection.style.removeProperty("will-change");
         selection.style.removeProperty("transform");
         strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
         buttons.forEach(button => button.removeAttribute("data-under-selection"));
