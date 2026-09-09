@@ -816,3 +816,78 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   will-change: auto !important;
   contain: none !important;
 }
+
+
+/* ==========================================================================
+   Перенос пары: пунктир без воздушного зазора — вплотную к краю подложки.
+   Исходное место серое; переносимая карточка и активная цель лежат выше строк.
+   ========================================================================== */
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  position: relative;
+  z-index: 20;
+  border-color: transparent !important;
+  outline: 2px dashed var(--sched-secondary) !important;
+  outline-offset: 0 !important;
+  background: var(--sched-surface) !important;
+  box-shadow: none !important;
+}
+:root .sched-drag-board > .agenda-row.is-drag-ghost {
+  position: relative;
+  z-index: 10;
+  outline-color: var(--sched-secondary) !important;
+  outline-offset: 0 !important;
+}
+:root .sched-drag-board > .agenda-row.is-drop-target {
+  position: relative;
+  z-index: 30;
+  outline: 2px dashed var(--sched-blue) !important;
+  outline-offset: 0 !important;
+}
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  z-index: 2147483000 !important;
+  border-color: transparent !important;
+  outline: 2px dashed var(--sched-blue) !important;
+  outline-offset: 0 !important;
+}
+/* Линии края дня тоже поверх соседних карточек, без внешнего зазора. */
+:root .sched-drag-board > .agenda-row:is(.is-drop-before, .is-drop-after) {
+  position: relative;
+  z-index: 31;
+}
+
+
+/* ==========================================================================
+   Одинаковый вход первой видимой пары во все дни. Раньше задержка бралась из
+   data-row-n: если четверг начинался, например, с 3-й пары, первая карточка
+   получала задержку третьей и появлялась заметно позже.
+   ========================================================================== */
+#stage .sched-active-day-scene.is-entering
+  .sched-day-block > .agenda-list > .agenda-row:first-child {
+  animation-delay: 50ms !important;
+}
+
+/* Карточка «далее»: fixes.css оставлял кнопке flex-basis:44px и отрицательный
+   правый margin, хотя визуальный размер позже стал 24px. Из-за этого иконка
+   выглядела сдвинутой вправо. */
+:root .live-card-status {
+  justify-content: space-between;
+}
+:root .live-card-status > span {
+  flex: 1 1 auto;
+}
+:root .live-card-status-right {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  align-items: center;
+}
+:root .live-lesson-card .lesson-swap-btn {
+  position: static !important;
+  flex: 0 0 24px !important;
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: center;
+  transform: none !important;
+}
