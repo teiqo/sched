@@ -575,6 +575,8 @@ html.sched-page.sched-freshness-open #root {
   display: grid;
   width: 44px;
   height: 44px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
   padding: 0;
   place-items: center;
   border: 1px solid var(--sched-separator);
@@ -1355,7 +1357,7 @@ button.sched-settings-row > svg {
   place-items: center;
   overflow: visible;
   border: 0;
-  border-radius: 50%;
+  border-radius: 10px;
   background: transparent;
   color: var(--sched-blue);
   touch-action: none;
@@ -1363,9 +1365,13 @@ button.sched-settings-row > svg {
 }
 .date-strip-week-arrow:before {
   position: absolute;
-  width: 25px;
-  height: 25px;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
   border-radius: 50%;
+  aspect-ratio: 1 / 1;
   background: color-mix(in srgb, var(--sched-blue) 14%, transparent);
   content: "";
   opacity: 0;
@@ -2295,6 +2301,10 @@ button.sched-settings-row > svg {
   display: grid;
   width: 58px;
   height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
   padding: 0;
   place-items: center;
   border: 0;

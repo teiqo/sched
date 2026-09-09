@@ -220,10 +220,12 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 #settings-trigger.is-avatar .sched-trigger-avatar {
   width: calc(100% - 6px) !important;
   height: calc(100% - 6px) !important;
+  aspect-ratio: 1 / 1 !important;
+  flex-shrink: 0 !important;
   margin: auto;
   border: 1.5px solid var(--sched-accent, #2e9bff);
-  border-radius: 50%;
-  box-sizing: border-box;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
   box-shadow: none !important;
 }
 
@@ -722,7 +724,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   -webkit-backface-visibility: hidden;
 }
 /* Дочерние элементы наоборот не должны получать собственные слои. */
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) * {
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) * {
   will-change: auto !important;
 }
 
@@ -765,15 +767,15 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 
 /* Маски и широкие градиентные подсветки внутри едущего слоя тоже считаются
    на каждом кадре (особенно псевдоэлемент шириной 100vw у живой пары). */
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) *,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::before,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *::after {
   mask-image: none !important;
   -webkit-mask-image: none !important;
 }
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) .live-card-backglow,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) .live-card-glass::before,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) .live-card-glass::after {
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-backglow,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-glass::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-glass::after {
   display: none !important;
 }
 /* Стеклянная карточка текущей пары — главный источник перерисовки внутри
@@ -905,6 +907,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   left: 0;
   display: flex;
   width: 300%;
+  min-height: 100%;
   max-width: none;
   margin: 0;
   padding: 0;
@@ -914,6 +917,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   will-change: transform;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  -webkit-tap-highlight-color: transparent;
   transition: none;
 }
 .sched-swipe-carousel.is-active,
@@ -933,17 +937,20 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   box-sizing: border-box;
   overflow: hidden;
   background: var(--sched-bg);
+  min-height: 100%;
   contain: layout paint style;
   pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .sched-swipe-panel > .sched-day-block {
   width: 100%;
   box-sizing: border-box;
 }
-/* Живая сцена сохраняет место в потоке для будущих дней, но текущую карточку
-   рисует центральная панель карусели — двойного текста и двойного paint нет. */
-.sched-days-scene.is-carousel-swiping #day-scene > .sched-day-block:first-child {
-  visibility: hidden;
+/* Живая сцена сохраняет геометрию в потоке, но скрывается целиком,
+   чтобы будущие дни и фоновые карточки акцентных тем не подсвечивались сзади. */
+.sched-days-scene.is-carousel-swiping #stage,
+.sched-days-scene.is-carousel-swiping #day-scene {
+  visibility: hidden !important;
 }
 .sched-swipe-panel.is-blocked {
   min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);

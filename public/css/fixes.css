@@ -42,36 +42,56 @@
 .sched-stamp-button {
   border: 0;
   background: transparent;
-  color: var(--sched-secondary);
+  color: color-mix(in srgb, var(--sched-text) 82%, var(--sched-secondary));
   font: inherit;
   min-height: 44px;
   padding: 4px;
   cursor: pointer;
   min-width: 0;
 }
-.sched-schedule-footer .sched-data-stamp {
+:root .sched-schedule-footer .sched-data-stamp,
+:root #data-stamp {
   display: block;
   font-size: 13px;
   line-height: 18px;
+  font-weight: 550;
   margin: 0;
-  color: var(--sched-secondary);
+  color: color-mix(in srgb, var(--sched-text) 82%, var(--sched-secondary)) !important;
   white-space: normal;
   text-align: right;
+  transition: opacity 0.15s ease;
+}
+:root:is([data-theme="dark"], [data-sched-palette="opaque"]) .sched-stamp-button,
+:root:is([data-theme="dark"], [data-sched-palette="opaque"]) .sched-schedule-footer .sched-data-stamp,
+:root:is([data-theme="dark"], [data-sched-palette="opaque"]) #data-stamp {
+  color: color-mix(in srgb, var(--sched-secondary) 70%, #000000) !important;
+}
+.sched-stamp-button:hover .sched-data-stamp {
+  opacity: 0.8;
+}
+.sched-stamp-button:active .sched-data-stamp {
+  opacity: 0.6;
 }
 :root .sched-schedule-footer #refresh-btn {
   position: static;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  aspect-ratio: 1 / 1 !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
   padding: 0;
-  flex: none;
   border: 1px solid var(--sched-separator);
-  border-radius: 12px !important;
+  border-radius: 50% !important;
   background: var(--sched-surface);
   color: var(--sched-blue);
+  box-sizing: border-box !important;
 }
 #refresh-btn:disabled { cursor: wait; opacity: .55; }
 .sched-day-revert:focus-visible, .sched-stamp-button:focus-visible, #refresh-btn:focus-visible,
@@ -203,7 +223,7 @@
 .sched-bot-link { display: block; min-height: 44px; padding: 12px; background: var(--sched-blue); color: var(--sched-on-accent, #fff); border-radius: 12px; text-align: center; text-decoration: none; font-size: 14px; font-weight: 600; }
 .sched-bot-login .sched-replace-field span { font-size: 14px; line-height: 1.4; }
 .sched-bot-login input { font-size: 18px; letter-spacing: 2px; min-height: 48px; width: 100%; }
-@media (max-width: 360px) { :root .sched-header-actions { gap: 10px; } .sched-schedule-footer { gap: 8px; } }
+@media (max-width: 360px) { :root .sched-header-actions { gap: 4px; } .sched-schedule-footer { gap: 8px; } }
 @media (prefers-reduced-motion: reduce) { .sched-move-sheet, .sched-bot-login, .sched-day-revert, .sched-drag-status { animation: none !important; transition: none !important; } }
 
 /* Free destinations stay readable during dragging, even when windows are hidden. */

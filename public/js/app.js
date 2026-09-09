@@ -91,10 +91,24 @@ const systemTheme = () =>
     ? "light"
     : "dark";
 
+function isLearningModeActive() {
+  if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return true;
+  if (typeof state !== "undefined" && !state.onboarded) return true;
+  if (typeof document !== "undefined") {
+    if (document.body && document.body.classList.contains("is-tour-active")) return true;
+    if (document.getElementById("basics-tour") !== null) return true;
+    const ob = document.getElementById("onboarding");
+    if (ob && !ob.hidden && ob.innerHTML.trim() !== "") return true;
+  }
+  return false;
+}
+
 /* Режим производительности: data-perf на <html>, по CSS остаются только
-   лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются. */
+   лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются.
+   В режиме обучения (онбординг и тур) полностью игнорируется, чтобы анимации не ломались. */
 function applyPerfMode() {
-  if (state.perfMode) document.documentElement.setAttribute("data-perf", "1");
+  const perfActive = Boolean(state.perfMode && !isLearningModeActive());
+  if (perfActive) document.documentElement.setAttribute("data-perf", "1");
   else document.documentElement.removeAttribute("data-perf");
   const sw = $("#perf-switch");
   if (sw) sw.setAttribute("aria-pressed", state.perfMode ? "true" : "false");
@@ -257,7 +271,7 @@ function dateLabel(d) {
 function relLabel(d) {
   const today = startOfDay(currentDate());
   const diff = Math.round((d - today) / 86400000);
-  if (diff === 0) return "сегодня";
+  if (diff === 0) return `сегодня, ${dayEntry(d).name}`;
   if (diff === 1) return "завтра";
   if (diff === -1) return "вчера";
   return null;
@@ -607,7 +621,7 @@ function emptyDayHtml(d) {
 function headingHtml(d, sub, primary = false) {
   const today = sameDay(d, startOfDay(currentDate()));
   const title = today
-    ? "сегодня"
+    ? `<span class="sched-day-rel">сегодня, </span><span class="sched-day-weekday">${escapeHtml(dayEntry(d).name)}</span>`
     : `<span class="sched-day-weekday">${escapeHtml(dayEntry(d).name)}, </span><span class="sched-day-date">${d.getDate()} ${MONTHS[d.getMonth()]}</span>`;
   const rel = today ? "" : relLabel(d);
   return `<div class="sched-day-heading t-stagger is-shown${primary && !today ? " has-today-action" : ""}">
@@ -896,10 +910,12 @@ function setScene(html, direction) {
   }
 
   const scene = $("#scene");
+  const isLearning = isLearningModeActive();
+  const perfActive = Boolean(state.perfMode && !isLearning);
   const reduced =
-    state.perfMode ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    Boolean(scene && scene.classList.contains("is-motion-lite"));
+    perfActive ||
+    (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+    Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
 
   if (!direction || reduced) {
     old.getAnimations().forEach((a) => a.cancel());
@@ -1095,12 +1111,14 @@ function renderTab() {
     strip.style.display = "none";
     auxView.hidden = false;
     auxView.innerHTML = bellsHtml();
+    $("#editor-btn")?.classList.add("is-hidden-tab");
   } else {
     state.tab = "schedule";
     scheduleView.style.display = "";
     strip.style.display = "";
     auxView.hidden = true;
     auxView.innerHTML = "";
+    $("#editor-btn")?.classList.remove("is-hidden-tab");
   }
   applyFlags();
 }
@@ -1692,7 +1710,8 @@ function bindStrip() {
     dragClick = false;
 
     const tapDist = Math.abs(pressedPosition - position);
-    const reducedMotion = motionQuery.matches || state.perfMode;
+    const isLearning = isLearningModeActive();
+    const reducedMotion = (!isLearning && motionQuery.matches) || (state.perfMode && !isLearning);
 
     scrub = {
       pointerId: e.pointerId,
@@ -2809,6 +2828,7 @@ function renderOnboarding() {
   const host = $("#onboarding");
   /* Тему не форсируем: первый запуск следует системной (или выбранной ранее). */
   applyTheme();
+  applyPerfMode();
   host.innerHTML = onboardingHtml();
   host.hidden = false;
 }
@@ -2821,10 +2841,12 @@ function closeOnboarding() {
     host.classList.remove("is-closing");
     host.innerHTML = "";
     playBrandIntro(); /* главный экран появился — теперь интро лого */
+    applyPerfMode();
   }, 320);
   state.onboarded = true;
   save();
   applyTheme();
+  applyPerfMode();
 }
 
 var basicsTourStep = -1;
@@ -2904,8 +2926,8 @@ function startBasicsTourRoulette(options = {}) {
       strip.classList.add("is-scrubbing");
       selection.style.willChange = "transform";
 
-      const reducedMotion = motionQuery.matches || state.perfMode;
-      const duration = reducedMotion ? 1100 : Math.max(2200, 1850 + distance * 110);
+      const reducedMotion = false;
+      const duration = Math.max(2200, 1850 + distance * 110);
       const startedAt = performance.now();
       let lastIndex = current;
       let lastUnderIndex = current;
@@ -2964,14 +2986,19 @@ function startBasicsTourRoulette(options = {}) {
           return;
         }
 
-        const finalDir = originalDate > state.selected ? "forward" : originalDate < state.selected ? "backward" : null;
-        selectDate(originalDate, finalDir, { silent: true, preview: true, animated: true });
+        if (!sameDay(state.selected, originalDate)) {
+          selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+        }
         document.body.classList.remove("is-tour-roulette-active");
         selection.style.removeProperty("will-change");
         selection.style.removeProperty("transform");
         stage?.style.removeProperty("min-height");
         strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
-        buttons.forEach(button => button.removeAttribute("data-under-selection"));
+        buttons.forEach(button => {
+          button.removeAttribute("data-under-selection");
+          button.classList.toggle("is-selected", button.dataset.date === iso(originalDate));
+        });
+        strip.dataset.selectedIndex = String(current);
         basicsTourRouletteOriginalDate = null;
         basicsTourRouletteFrame = null;
       };
@@ -3003,6 +3030,8 @@ function finishBasicsTour() {
   stopBasicsTourRoulette();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
+  document.body.classList.remove("is-tour-active", "is-tour-roulette-active");
+  applyPerfMode();
   if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) finishEditorMode();
   basicsTourOpenedEditor = false;
 }
@@ -3096,6 +3125,8 @@ function startBasicsTour() {
   closeProfile();
   if (!state.editorMode) { startEditorMode(); basicsTourOpenedEditor = true; }
   basicsTourStep = 0;
+  document.body.classList.add("is-tour-active");
+  applyPerfMode();
   renderBasicsTour();
 }
 
@@ -3278,6 +3309,8 @@ function bindExtra() {
     }
     if (kind === "finish-tour" || kind === "finish-no-telegram") {
       state.group = state.draftGroup;
+      document.body.classList.add("is-tour-active");
+      applyPerfMode();
       closeOnboarding();
       render();
       window.setTimeout(startBasicsTour, 340);
