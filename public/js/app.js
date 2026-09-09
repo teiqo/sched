@@ -2843,8 +2843,16 @@ function startBasicsTourRoulette() {
   const originalDate = new Date(state.selected);
   const originalWeek = weekStart(originalDate);
   basicsTourRouletteOriginalDate = originalDate;
+  const countLessons = index => visibleSlotsFor(addDays(originalWeek, index)).filter(slot =>
+    slot && !slot.empty && !slot.window && !slot.cancelled && slot.subject && slot.subject !== "окно"
+  ).length;
+  let leftPairs = 0;
+  let rightPairs = 0;
+  for (let index = 0; index < current; index += 1) leftPairs += countLessons(index);
+  for (let index = current + 1; index < 7; index += 1) rightPairs += countLessons(index);
+  const targetIndex = rightPairs >= leftPairs ? 6 : 0;
   strip.classList.add("is-tour-demo", "is-pressing", "is-scrubbing");
-  const duration = 4600;
+  const duration = 2600 + Math.abs(targetIndex - current) * 70;
   const startedAt = performance.now();
   let lastIndex = current;
   const ease = value => value * value * (3 - 2 * value);
@@ -2853,8 +2861,8 @@ function startBasicsTourRoulette() {
     const progress = Math.min(1, (now - startedAt) / duration);
     const phase = progress <= .5 ? ease(progress * 2) : ease((progress - .5) * 2);
     const position = progress <= .5
-      ? current + (6 - current) * phase
-      : 6 + (current - 6) * phase;
+      ? current + (targetIndex - current) * phase
+      : targetIndex + (current - targetIndex) * phase;
     selection.style.transform = `translate3d(${position * 100}%,0,0)`;
     const selectedIndex = Math.max(0, Math.min(6, Math.round(position)));
     if (selectedIndex !== lastIndex) {
@@ -2909,8 +2917,11 @@ function renderBasicsTour() {
     host.setAttribute("aria-label", "обучение");
     document.body.appendChild(host);
   }
-  const rect = target.getBoundingClientRect();
-  const pad = basicsTourStep === 1 ? 0 : 6;
+  const visualTarget = basicsTourStep === 2 && target.classList.contains("is-avatar")
+    ? target.querySelector(".sched-trigger-avatar") || target
+    : target;
+  const rect = visualTarget.getBoundingClientRect();
+  const pad = basicsTourStep === 1 ? 0 : basicsTourStep === 2 ? 3 : 4;
   const left = basicsTourStep === 1 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
   const top = basicsTourStep === 1 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
   const width = basicsTourStep === 1
@@ -2921,7 +2932,7 @@ function renderBasicsTour() {
   const below = top + height + 14;
   const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === 1 ? 20 : 16;
+  const spotRadius = basicsTourStep === 1 ? 20 : 12;
   host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${previousSpot ? previousSpot.left : left}px;top:${previousSpot ? previousSpot.top : top}px;width:${previousSpot ? previousSpot.width : width}px;height:${previousSpot ? previousSpot.height : height}px;border-radius:${spotRadius}px"><svg aria-hidden="true"><rect pathLength="100" /></svg></div>
     <div class="sched-tour-copy" style="left:${previousCopy ? previousCopy.left : copyLeft}px;top:${previousCopy ? previousCopy.top : copyTop}px;width:${previousCopy ? previousCopy.width : copyWidth}px">
       <span>шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span><strong>${step.title}</strong><small>${step.text}</small>

@@ -147,13 +147,6 @@
     0 0 0 6px color-mix(in srgb, var(--sched-blue) 14%, transparent),
     0 12px 38px color-mix(in srgb, var(--sched-blue) 30%, transparent);
 }
-#strip.is-tour-demo #selection::before {
-  transform: scaleY(1) !important;
-  box-shadow: 0 8px 22px color-mix(in srgb, var(--sched-blue) 35%, transparent) !important;
-}
-#strip.is-tour-demo .date-strip-selection {
-  z-index: 2;
-}
 @keyframes sched-tour-dashes {
   to { stroke-dashoffset: -20; }
 }
