@@ -2069,6 +2069,11 @@ function bindEvents() {
   document.addEventListener("click", (e) => {
     const row = e.target.closest(".sched-settings-row");
     if (!row || e.target.closest("button, a, input, select, label")) return;
+    /* Строки настроек остаются в DOM и когда панель закрыта. Без этой
+       проверки случайный клик (например, после перетаскивания пары) открывал
+       системное окно выбора цвета поверх расписания. */
+    if (!state.settingsOpen || !row.closest("#settings")) return;
+    if (document.body.classList.contains("is-dragging-pair")) return;
     const sw = row.querySelector(".sched-setting-switch");
     if (sw) {
       sw.click();

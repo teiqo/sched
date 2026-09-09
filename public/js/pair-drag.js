@@ -253,6 +253,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.addEventListener('touchcancel', onTouchCancel, true);
   }, { passive: true });
   scene.addEventListener('click', e => { if (Date.now() < suppressUntil) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  document.addEventListener('click', e => {
+    if (drag || pending || Date.now() < suppressUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
   scene.addEventListener('contextmenu', e => { if (drag || pending || e.target.closest('.lesson-swap-btn')) e.preventDefault(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && (drag || pending)) { e.preventDefault(); finish(false); } });
   window.addEventListener('blur', () => finish(false));

@@ -49,3 +49,33 @@ body.is-editor-closing #stage {
     transition: none;
   }
 }
+
+/* Нажатие на окно: текст не должен белеть от подсветки и выделения. */
+:root #stage .agenda-row.is-window-row,
+:root #stage .agenda-row.is-window-row * {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+:root #stage .agenda-row.is-window-row:active strong,
+:root #stage .agenda-row.is-window-row:focus strong,
+:root #stage .agenda-row.is-window-row:focus-visible strong,
+:root #stage .agenda-row.is-window-row:focus-within strong,
+:root #stage .agenda-row.is-window-row.is-pressed strong {
+  color: var(--sched-secondary) !important;
+  -webkit-text-fill-color: var(--sched-secondary) !important;
+}
+:root #stage .agenda-row.is-window-row:active .agenda-row-time,
+:root #stage .agenda-row.is-window-row:active .agenda-row-time *,
+:root #stage .agenda-row.is-window-row:active small,
+:root #stage .agenda-row.is-window-row:active .lesson-meta,
+:root #stage .agenda-row.is-window-row:active .lesson-meta * {
+  -webkit-text-fill-color: currentColor !important;
+}
+:root #stage .agenda-row.is-window-row ::selection,
+:root #stage .agenda-row.is-window-row::selection {
+  background: transparent;
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+}
