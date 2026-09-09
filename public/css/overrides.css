@@ -2883,8 +2883,11 @@ a.sched-settings-row.sched-settings-link strong {
   font-size: 10px;
   font-weight: 550;
   line-height: 12px;
-  color: var(--sched-tertiary);
+  color: color-mix(in srgb, var(--sched-text) 82%, var(--sched-secondary));
   white-space: nowrap;
+}
+:root:is([data-theme="dark"], [data-sched-palette="opaque"]) .sched-data-stamp {
+  color: color-mix(in srgb, var(--sched-secondary) 70%, #000000);
 }
 
 /* ---------- в текущей паре под часами — сколько уже прошло ---------- */
@@ -2976,12 +2979,24 @@ a.sched-settings-row.sched-settings-link strong {
   }
   .sched-header-actions {
     gap: 4px;
+    min-width: max-content;
+    flex-shrink: 0;
   }
   .sched-header-actions .sched-settings-trigger,
-  .sched-header-actions .sched-tg-btn {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
+  .sched-header-actions .sched-tg-btn,
+  .sched-header-actions .sched-bell-btn,
+  .sched-header-actions .sched-editor-btn {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    border-radius: 50% !important;
+    box-sizing: border-box !important;
     padding: 0;
   }
   .sched-header-actions .sched-theme-toggle {
@@ -3804,8 +3819,8 @@ a.sched-settings-row.sched-settings-link strong {
   }
 }
 
-/* --- режим производительности: отключение анимаций и эффектов без влияния на логотип --- */
-:root[data-perf] :where(*:not(.sched-header-brand):not(.sched-header-brand *):not(#stage):not(#selection):not(.sched-swipe-peek)) {
+/* --- режим производительности: отключение анимаций и эффектов без влияния на логотип и режим обучения --- */
+:root[data-perf] :where(*:not(.sched-header-brand):not(.sched-header-brand *):not(#stage):not(#selection):not(.sched-swipe-peek):not(#basics-tour):not(#basics-tour *):not(.sched-tour):not(.sched-tour *):not(#onboarding):not(#onboarding *)) {
   animation-duration: 0.001ms !important;
   animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
@@ -5101,13 +5116,25 @@ a.sched-settings-row,
     gap: 4px;
   }
   .sched-header-actions {
-    gap: 0;
+    gap: 4px;
+    min-width: max-content;
+    flex-shrink: 0;
   }
   .sched-header-actions .sched-settings-trigger,
-  .sched-header-actions .sched-bell-btn {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
+  .sched-header-actions .sched-bell-btn,
+  .sched-header-actions .sched-editor-btn,
+  .sched-header-actions .sched-settings {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    border-radius: 50% !important;
+    box-sizing: border-box !important;
   }
   .sched-header-actions .sched-theme-toggle {
     display: none;
@@ -5374,22 +5401,48 @@ a.sched-settings-row,
 }
 
 /* Уведомления и настройки — круглые кнопки */
-.sched-header-actions .sched-settings-trigger,
-.sched-header-actions .sched-bell-btn,
-.sched-header-actions .sched-tg-btn,
+.sched-header-actions > .sched-settings-trigger,
+.sched-header-actions > .sched-bell-btn,
+.sched-header-actions > .sched-tg-btn,
+.sched-header-actions > .sched-editor-btn,
+.sched-header-actions > .sched-settings > #settings-trigger,
 #refresh-btn,
 #bell-btn,
+#editor-btn,
 #settings-trigger {
   border-radius: 50% !important;
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  aspect-ratio: 1 / 1 !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
   padding: 0;
   overflow: visible !important;
+}
+.sched-header-actions .sched-settings {
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  aspect-ratio: 1 / 1 !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
 }
 .sched-header-actions .sched-settings-trigger.is-avatar,
 #settings-trigger.is-avatar {
   border-radius: 50% !important;
+  aspect-ratio: 1 / 1 !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
   overflow: visible !important;
   padding: 0 !important;
   border: none !important;
@@ -5400,23 +5453,120 @@ a.sched-settings-row,
 }
 .sched-header-actions .sched-settings-trigger.is-avatar .sched-trigger-avatar,
 #settings-trigger.is-avatar .sched-trigger-avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  flex-shrink: 0 !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
   display: block;
 }
 @media (max-width: 430px) {
-  .sched-header-actions .sched-settings-trigger,
-  .sched-header-actions .sched-bell-btn,
-  .sched-header-actions .sched-tg-btn,
+  .sched-header-actions > .sched-settings-trigger,
+  .sched-header-actions > .sched-bell-btn,
+  .sched-header-actions > .sched-tg-btn,
+  .sched-header-actions > .sched-editor-btn,
+  .sched-header-actions > .sched-settings > #settings-trigger,
   #bell-btn,
+  #editor-btn,
   #settings-trigger {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
     border-radius: 50% !important;
+    box-sizing: border-box !important;
   }
+}
+@media (max-width: 360px) {
+  .sched-header-actions {
+    gap: 4px !important;
+  }
+  .sched-header-actions > .sched-settings-trigger,
+  .sched-header-actions > .sched-bell-btn,
+  .sched-header-actions > .sched-tg-btn,
+  .sched-header-actions > .sched-editor-btn,
+  .sched-header-actions > .sched-settings > #settings-trigger,
+  #bell-btn,
+  #editor-btn,
+  #settings-trigger {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    border-radius: 50% !important;
+    box-sizing: border-box !important;
+  }
+  .sched-header-actions .sched-settings {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* Защита строк и тумблеров внутри выпадающего меню настроек */
+.sched-settings-popover .sched-settings-row,
+.sched-settings-popover button.sched-settings-row {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 46px !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  border-radius: 0 !important;
+  padding: 5px 9px !important;
+  flex: 1 1 auto !important;
+  flex-shrink: 1 !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.sched-settings-popover .sched-setting-switch {
+  width: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  aspect-ratio: auto !important;
+  border-radius: 14px !important;
+  flex: 0 0 46px !important;
+}
+
+.sched-settings-popover .sched-setting-switch > span {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+.sched-settings-popover .sched-theme-modes button {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 28px !important;
+  aspect-ratio: auto !important;
+  border-radius: 999px !important;
 }
 
 /* Каскад появления: перерывы и live-host вместе с парами */
@@ -5631,20 +5781,20 @@ a.sched-settings-row,
   transition: none;
 }
 
-/* Подглядывающий день: окна и акцент+ подложки сразу нужного цвета
-   (правила основной сцены привязаны к #stage, а peek живёт в #scene) */
-.sched-swipe-peek .agenda-row.is-window-row,
-.sched-swipe-peek .agenda-row.is-window-row:hover,
-.sched-swipe-peek .agenda-row.is-window-row:active {
+/* Подглядывающий день и карусель: окна и акцент+ подложки сразу нужного цвета
+   (правила основной сцены привязаны к #stage, а peek и карусель живут в #scene) */
+:is(.sched-swipe-peek, .sched-swipe-panel) .agenda-row.is-window-row,
+:is(.sched-swipe-peek, .sched-swipe-panel) .agenda-row.is-window-row:hover,
+:is(.sched-swipe-peek, .sched-swipe-panel) .agenda-row.is-window-row:active {
   background: var(--sched-window-bg) !important;
 }
-:root[data-sched-schedule-view="light"] .sched-swipe-peek .agenda-row.is-window-row {
+:root[data-sched-schedule-view="light"] :is(.sched-swipe-peek, .sched-swipe-panel) .agenda-row.is-window-row {
   min-height: 62px;
   padding: 9px 0;
 }
-:root[data-theme="dark"][data-sched-palette="accent-plus"] .sched-swipe-peek .agenda-list,
+:root[data-theme="dark"][data-sched-palette="accent-plus"] :is(.sched-swipe-peek, .sched-swipe-panel) .agenda-list,
 :root[data-theme="dark"][data-sched-palette="accent-plus"]
-  .sched-swipe-peek
+  :is(.sched-swipe-peek, .sched-swipe-panel)
   .live-lesson-card:not(.is-current) {
   background: linear-gradient(
     125deg,
@@ -5652,15 +5802,18 @@ a.sched-settings-row,
     color-mix(in srgb, var(--sched-accent) 4%, #040407)
   ) !important;
 }
-:root[data-theme="light"][data-sched-palette="accent-plus"] .sched-swipe-peek .agenda-list,
+:root[data-theme="light"][data-sched-palette="accent-plus"] :is(.sched-swipe-peek, .sched-swipe-panel) .agenda-list,
 :root[data-theme="light"][data-sched-palette="accent-plus"]
-  .sched-swipe-peek
+  :is(.sched-swipe-peek, .sched-swipe-panel)
   .live-lesson-card:not(.is-current) {
   background: linear-gradient(
     125deg,
     #ffffff,
     color-mix(in srgb, var(--sched-accent) 9%, #ffffff)
   ) !important;
+}
+:root[data-sched-palette="accent-plus"] .sched-swipe-panel {
+  background: transparent !important;
 }
 
 /* При переключении палитры акцентный цвет не анимируем — иначе синяя вспышка

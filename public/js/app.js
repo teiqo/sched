@@ -91,10 +91,24 @@ const systemTheme = () =>
     ? "light"
     : "dark";
 
+function isLearningModeActive() {
+  if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return true;
+  if (typeof state !== "undefined" && !state.onboarded) return true;
+  if (typeof document !== "undefined") {
+    if (document.body && document.body.classList.contains("is-tour-active")) return true;
+    if (document.getElementById("basics-tour") !== null) return true;
+    const ob = document.getElementById("onboarding");
+    if (ob && !ob.hidden && ob.innerHTML.trim() !== "") return true;
+  }
+  return false;
+}
+
 /* Режим производительности: data-perf на <html>, по CSS остаются только
-   лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются. */
+   лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются.
+   В режиме обучения (онбординг и тур) полностью игнорируется, чтобы анимации не ломались. */
 function applyPerfMode() {
-  if (state.perfMode) document.documentElement.setAttribute("data-perf", "1");
+  const perfActive = Boolean(state.perfMode && !isLearningModeActive());
+  if (perfActive) document.documentElement.setAttribute("data-perf", "1");
   else document.documentElement.removeAttribute("data-perf");
   const sw = $("#perf-switch");
   if (sw) sw.setAttribute("aria-pressed", state.perfMode ? "true" : "false");
@@ -257,7 +271,7 @@ function dateLabel(d) {
 function relLabel(d) {
   const today = startOfDay(currentDate());
   const diff = Math.round((d - today) / 86400000);
-  if (diff === 0) return "сегодня";
+  if (diff === 0) return `сегодня, ${dayEntry(d).name}`;
   if (diff === 1) return "завтра";
   if (diff === -1) return "вчера";
   return null;
@@ -607,7 +621,7 @@ function emptyDayHtml(d) {
 function headingHtml(d, sub, primary = false) {
   const today = sameDay(d, startOfDay(currentDate()));
   const title = today
-    ? "сегодня"
+    ? `<span class="sched-day-rel">сегодня, </span><span class="sched-day-weekday">${escapeHtml(dayEntry(d).name)}</span>`
     : `<span class="sched-day-weekday">${escapeHtml(dayEntry(d).name)}, </span><span class="sched-day-date">${d.getDate()} ${MONTHS[d.getMonth()]}</span>`;
   const rel = today ? "" : relLabel(d);
   return `<div class="sched-day-heading t-stagger is-shown${primary && !today ? " has-today-action" : ""}">
@@ -896,10 +910,12 @@ function setScene(html, direction) {
   }
 
   const scene = $("#scene");
+  const isLearning = isLearningModeActive();
+  const perfActive = Boolean(state.perfMode && !isLearning);
   const reduced =
-    state.perfMode ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    Boolean(scene && scene.classList.contains("is-motion-lite"));
+    perfActive ||
+    (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+    Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
 
   if (!direction || reduced) {
     old.getAnimations().forEach((a) => a.cancel());
@@ -1095,12 +1111,14 @@ function renderTab() {
     strip.style.display = "none";
     auxView.hidden = false;
     auxView.innerHTML = bellsHtml();
+    $("#editor-btn")?.classList.add("is-hidden-tab");
   } else {
     state.tab = "schedule";
     scheduleView.style.display = "";
     strip.style.display = "";
     auxView.hidden = true;
     auxView.innerHTML = "";
+    $("#editor-btn")?.classList.remove("is-hidden-tab");
   }
   applyFlags();
 }
@@ -1647,6 +1665,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
+    if (basicsTourStep === 1) return;
     /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
@@ -1691,7 +1710,8 @@ function bindStrip() {
     dragClick = false;
 
     const tapDist = Math.abs(pressedPosition - position);
-    const reducedMotion = motionQuery.matches || state.perfMode;
+    const isLearning = isLearningModeActive();
+    const reducedMotion = (!isLearning && motionQuery.matches) || (state.perfMode && !isLearning);
 
     scrub = {
       pointerId: e.pointerId,
@@ -1876,6 +1896,11 @@ function bindStrip() {
     /* Глушим только клик того же жеста, что был перетаскиванием. */
     if (dragClick) {
       dragClick = false;
+      return;
+    }
+    if (basicsTourStep === 1) {
+      const [y, m, d] = btn.dataset.date.split("-").map(Number);
+      triggerTourRoulette(new Date(y, m - 1, d));
       return;
     }
     const [y, m, d] = btn.dataset.date.split("-").map(Number);
@@ -2803,6 +2828,7 @@ function renderOnboarding() {
   const host = $("#onboarding");
   /* Тему не форсируем: первый запуск следует системной (или выбранной ранее). */
   applyTheme();
+  applyPerfMode();
   host.innerHTML = onboardingHtml();
   host.hidden = false;
 }
@@ -2815,100 +2841,197 @@ function closeOnboarding() {
     host.classList.remove("is-closing");
     host.innerHTML = "";
     playBrandIntro(); /* главный экран появился — теперь интро лого */
+    applyPerfMode();
   }, 320);
   state.onboarded = true;
   save();
   applyTheme();
+  applyPerfMode();
 }
 
 var basicsTourStep = -1;
 var basicsTourOpenedEditor = false;
 var basicsTourRouletteAnimation = null;
 var basicsTourRouletteFrame = null;
+var basicsTourRouletteTimer = null;
 var basicsTourRouletteOriginalDate = null;
+var basicsTourLastTriggerTime = 0;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
-  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это просто залипательно." },
+  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
-function stopBasicsTourRoulette() {
+function stopBasicsTourRoulette(options = {}) {
+  if (basicsTourRouletteTimer !== null) {
+    clearTimeout(basicsTourRouletteTimer);
+    basicsTourRouletteTimer = null;
+  }
   basicsTourRouletteAnimation?.cancel();
   basicsTourRouletteAnimation = null;
   if (basicsTourRouletteFrame !== null) cancelAnimationFrame(basicsTourRouletteFrame);
   basicsTourRouletteFrame = null;
+  document.body.classList.remove("is-tour-roulette-active");
   const strip = document.getElementById("strip");
+  const selection = document.getElementById("selection");
+  const stage = document.getElementById("stage");
   strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
   strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
-  document.getElementById("selection")?.style.removeProperty("transform");
-  if (basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
+  selection?.style.removeProperty("will-change");
+  selection?.style.removeProperty("transform");
+  stage?.style.removeProperty("min-height");
+  if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
     selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
   }
   basicsTourRouletteOriginalDate = null;
 }
 
-function startBasicsTourRoulette() {
-  stopBasicsTourRoulette();
+function startBasicsTourRoulette(options = {}) {
+  const initialDelay = typeof options.delay === "number" ? options.delay : 650;
+  stopBasicsTourRoulette({ keepDate: Boolean(options.keepDate) });
+
   const strip = document.getElementById("strip");
   const selection = document.getElementById("selection");
+  const stage = document.getElementById("stage");
   if (!strip || !selection) return;
+
+  if (stage && stage.offsetHeight) {
+    stage.style.minHeight = `${stage.offsetHeight}px`;
+  }
+  document.body.classList.add("is-tour-roulette-active");
+
   const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
   const originalDate = new Date(state.selected);
   const originalWeek = weekStart(originalDate);
   basicsTourRouletteOriginalDate = originalDate;
-  const countLessons = index => visibleSlotsFor(addDays(originalWeek, index)).filter(slot =>
-    slot && !slot.empty && !slot.window && !slot.cancelled && slot.subject && slot.subject !== "окно"
-  ).length;
-  let leftPairs = 0;
-  let rightPairs = 0;
-  for (let index = 0; index < current; index += 1) leftPairs += countLessons(index);
-  for (let index = current + 1; index < 7; index += 1) rightPairs += countLessons(index);
-  const targetIndex = rightPairs >= leftPairs ? 6 : 0;
-  strip.classList.add("is-tour-demo", "is-pressing", "is-scrubbing");
-  const duration = 2600 + Math.abs(targetIndex - current) * 70;
-  const startedAt = performance.now();
-  let lastIndex = current;
-  const ease = value => value * value * (3 - 2 * value);
-  const paintFingerSwipe = now => {
-    if (!selection.isConnected || basicsTourStep !== 1) return;
-    const progress = Math.min(1, (now - startedAt) / duration);
-    const phase = progress <= .5 ? ease(progress * 2) : ease((progress - .5) * 2);
-    const position = progress <= .5
-      ? current + (targetIndex - current) * phase
-      : targetIndex + (current - targetIndex) * phase;
-    selection.style.transform = `translate3d(${position * 100}%,0,0)`;
-    const selectedIndex = Math.max(0, Math.min(6, Math.round(position)));
-    if (selectedIndex !== lastIndex) {
-      lastIndex = selectedIndex;
-      selectDate(addDays(originalWeek, selectedIndex), null, { silent: true, preview: true, animated: false });
-    }
-    const center = selection.getBoundingClientRect().left + selection.getBoundingClientRect().width / 2;
+
+  // Движение строго в одну сторону и обратно:
+  // Если день в первой половине недели (0..3) — идём к концу (6) и обратно.
+  // Если день во второй половине (4..6) — идём к началу (0) и обратно.
+  const targetIndex = current <= 3 ? 6 : 0;
+  const distance = Math.abs(targetIndex - current);
+
+  // Предварительное мягкое нажатие перед движением
+  const pressDelay = Math.max(0, initialDelay - 200);
+  basicsTourRouletteTimer = window.setTimeout(() => {
+    if (basicsTourStep !== 1 || !selection.isConnected) return;
+    strip.classList.add("is-tour-demo", "is-pressing");
     const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-    let nearest = null, distance = Infinity;
-    buttons.forEach(button => {
-      const rect = button.getBoundingClientRect();
-      const nextDistance = Math.abs(rect.left + rect.width / 2 - center);
-      if (nextDistance < distance) { nearest = button; distance = nextDistance; }
-    });
-    buttons.forEach(button => button.toggleAttribute("data-under-selection", button === nearest));
-    if (progress < 1) {
+    buttons.forEach((btn, i) => btn.toggleAttribute("data-under-selection", i === current));
+
+    basicsTourRouletteTimer = window.setTimeout(() => {
+      basicsTourRouletteTimer = null;
+      if (basicsTourStep !== 1 || !selection.isConnected) return;
+
+      strip.classList.add("is-scrubbing");
+      selection.style.willChange = "transform";
+
+      const reducedMotion = false;
+      const duration = Math.max(2200, 1850 + distance * 110);
+      const startedAt = performance.now();
+      let lastIndex = current;
+      let lastUnderIndex = current;
+
+      // Момент разворота (44% времени на путь туда, 56% на возвращение с длинным замедлением)
+      const turnPoint = 0.44;
+
+      const paintFingerSwipe = now => {
+        if (!selection.isConnected || basicsTourStep !== 1) return;
+        const progress = Math.min(1, (now - startedAt) / duration);
+
+        let factor;
+        if (reducedMotion) {
+          factor = Math.sin(progress * Math.PI);
+        } else if (progress <= turnPoint) {
+          // Путь туда: плавный разгон (smootherstep) и мягкий выход в точку разворота с нулевой скоростью
+          const u = progress / turnPoint;
+          factor = u * u * u * (u * (u * 6 - 15) + 10);
+        } else {
+          // Путь обратно: плавный набор скорости от разворота и длительное шелковистое замедление
+          const v = (progress - turnPoint) / (1 - turnPoint);
+          const w = 1 - Math.pow(1 - v, 2.2);
+          const retEase = w * w * (3 - 2 * w);
+          factor = 1 - retEase;
+        }
+
+        const position = current + (targetIndex - current) * factor;
+        selection.style.transform = `translate3d(${(position * 100).toFixed(3)}%,0,0)`;
+
+        const nearestIndex = Math.max(0, Math.min(6, Math.round(position)));
+
+        // Оптимизация без layout thrashing: обновляем подсветку только при смене дня
+        if (nearestIndex !== lastUnderIndex) {
+          if (lastUnderIndex >= 0 && buttons[lastUnderIndex]) {
+            buttons[lastUnderIndex].removeAttribute("data-under-selection");
+          }
+          if (buttons[nearestIndex]) {
+            buttons[nearestIndex].setAttribute("data-under-selection", "true");
+          }
+          lastUnderIndex = nearestIndex;
+        }
+
+        // Обновляем превью расписания с полноценной анимацией появления пар
+        if (nearestIndex !== lastIndex) {
+          const dir = nearestIndex > lastIndex ? "forward" : "backward";
+          lastIndex = nearestIndex;
+          selectDate(addDays(originalWeek, nearestIndex), dir, {
+            silent: true,
+            preview: true,
+            animated: true,
+          });
+        }
+
+        if (progress < 1) {
+          basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
+          return;
+        }
+
+        if (!sameDay(state.selected, originalDate)) {
+          selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+        }
+        document.body.classList.remove("is-tour-roulette-active");
+        selection.style.removeProperty("will-change");
+        selection.style.removeProperty("transform");
+        stage?.style.removeProperty("min-height");
+        strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
+        buttons.forEach(button => {
+          button.removeAttribute("data-under-selection");
+          button.classList.toggle("is-selected", button.dataset.date === iso(originalDate));
+        });
+        strip.dataset.selectedIndex = String(current);
+        basicsTourRouletteOriginalDate = null;
+        basicsTourRouletteFrame = null;
+      };
+
       basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
-      return;
-    }
-    selectDate(originalDate, null, { silent: true, preview: true, animated: false });
-    selection.style.removeProperty("transform");
-    strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
-    buttons.forEach(button => button.removeAttribute("data-under-selection"));
-    basicsTourRouletteOriginalDate = null;
-    basicsTourRouletteFrame = null;
-  };
-  basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
+    }, Math.max(1, initialDelay - pressDelay));
+  }, pressDelay);
+}
+
+function isTourRouletteRunning() {
+  return basicsTourRouletteFrame !== null || basicsTourRouletteTimer !== null;
+}
+
+function triggerTourRoulette(clickedDate) {
+  if (basicsTourStep !== 1) return;
+  const now = performance.now();
+  if (now - basicsTourLastTriggerTime < 500) return;
+  if (isTourRouletteRunning()) return;
+  basicsTourLastTriggerTime = now;
+  stopBasicsTourRoulette({ keepDate: true });
+  if (clickedDate) {
+    const dir = clickedDate > state.selected ? "forward" : clickedDate < state.selected ? "backward" : null;
+    selectDate(clickedDate, dir, { silent: true, preview: true, animated: true });
+  }
+  startBasicsTourRoulette({ delay: 180, keepDate: true });
 }
 
 function finishBasicsTour() {
   stopBasicsTourRoulette();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
+  document.body.classList.remove("is-tour-active", "is-tour-roulette-active");
+  applyPerfMode();
   if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) finishEditorMode();
   basicsTourOpenedEditor = false;
 }
@@ -2953,11 +3076,33 @@ function renderBasicsTour() {
     </div>`;
   host.onclick = event => {
     const action = event.target.closest("[data-tour]")?.dataset.tour;
-    if (action === "skip") finishBasicsTour();
+    if (action === "skip") { finishBasicsTour(); return; }
     if (action === "next") {
       basicsTourStep += 1;
       if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
       else renderBasicsTour();
+      return;
+    }
+    if (basicsTourStep === 1) {
+      if (event.target.closest(".sched-tour-copy")) return;
+      const strip = document.getElementById("strip");
+      if (strip) {
+        const buttons = [...strip.querySelectorAll("button[data-date-index]")];
+        const clickedBtn = buttons.find(btn => {
+          const r = btn.getBoundingClientRect();
+          return (
+            event.clientX >= r.left &&
+            event.clientX <= r.right &&
+            event.clientY >= r.top &&
+            event.clientY <= r.bottom
+          );
+        });
+        if (clickedBtn && clickedBtn.dataset.date) {
+          const [y, m, d] = clickedBtn.dataset.date.split("-").map(Number);
+          triggerTourRoulette(new Date(y, m - 1, d));
+        }
+      }
+      return;
     }
   };
   requestAnimationFrame(() => {
@@ -2971,7 +3116,7 @@ function renderBasicsTour() {
     copy.style.left = `${copyLeft}px`;
     copy.style.top = `${copyTop}px`;
     copy.style.width = `${copyWidth}px`;
-    if (basicsTourStep === 1) startBasicsTourRoulette();
+    if (basicsTourStep === 1) startBasicsTourRoulette({ delay: 650 });
   });
 }
 
@@ -2980,6 +3125,8 @@ function startBasicsTour() {
   closeProfile();
   if (!state.editorMode) { startEditorMode(); basicsTourOpenedEditor = true; }
   basicsTourStep = 0;
+  document.body.classList.add("is-tour-active");
+  applyPerfMode();
   renderBasicsTour();
 }
 
@@ -3162,6 +3309,8 @@ function bindExtra() {
     }
     if (kind === "finish-tour" || kind === "finish-no-telegram") {
       state.group = state.draftGroup;
+      document.body.classList.add("is-tour-active");
+      applyPerfMode();
       closeOnboarding();
       render();
       window.setTimeout(startBasicsTour, 340);
