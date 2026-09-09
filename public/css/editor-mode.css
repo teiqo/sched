@@ -54,7 +54,7 @@
   gap: 12px;
   margin: 12px 0 16px;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--sched-blue) 22%, var(--sched-separator));
+  border: 1.5px dashed color-mix(in srgb, var(--sched-blue) 38%, var(--sched-separator));
   border-radius: 12px;
   background: color-mix(in srgb, var(--sched-blue) 7%, var(--sched-surface));
   animation: sched-editor-toolbar-slide-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;

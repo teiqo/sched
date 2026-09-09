@@ -137,3 +137,10 @@ body.is-editor-closing #stage {
   object-fit: cover;
   display: block;
 }
+
+/* Обводка панели режима редактора — пунктирная. */
+:root .sched-editor-toolbar {
+  border-style: dashed !important;
+  border-width: 1.5px !important;
+  border-color: color-mix(in srgb, var(--sched-blue) 38%, var(--sched-separator)) !important;
+}
