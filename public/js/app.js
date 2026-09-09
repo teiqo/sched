@@ -113,8 +113,7 @@ var state = {
   windows: false,
   showVacancies: false,
   showSelfStudy: true,
-  /* null = автоматический режим: кнопки видны только владельцу и редакторам. */
-  showSwapButtons: null,
+  editorMode: false,
   parityMode: "auto",
   settingsOpen: false,
   nowOverride: null,
@@ -372,11 +371,17 @@ function slotsForBase(d) {
 
 function lessonsFor(d) {
   /* Отменённая пара просто исчезает из списка (и из «сейчас/далее»). */
-  return slotsFor(d).filter((s) => !s.window && isSlotVisible(s, state));
+  const preferences = state.editorMode
+    ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
+    : state;
+  return slotsFor(d).filter((s) => !s.window && isSlotVisible(s, preferences));
 }
 
 function visibleSlotsFor(d) {
-  return slotsFor(d).filter((s) => isSlotVisible(s, state));
+  const preferences = state.editorMode
+    ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
+    : state;
+  return slotsFor(d).filter((s) => isSlotVisible(s, preferences));
 }
 
 function mins(hhmm) {
@@ -533,9 +538,12 @@ function rowHtml(slot, live, dIso) {
 
   if (slot.window) {
     cls.push("is-window-row");
-    return `<div class="${cls.join(" ")}" data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить">${time}<div class="agenda-row-content">
+    const editorAttrs = state.editorMode
+      ? ` data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить"`
+      : "";
+    return `<div class="${cls.join(" ")}"${editorAttrs}>${time}<div class="agenda-row-content">
       <strong>окно</strong>
-    </div><span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span></div>`;
+    </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : ""}</div>`;
   }
 
   const mark = isCurrent
@@ -603,7 +611,27 @@ function headingHtml(d, sub, primary = false) {
       <h2 class="t-stagger-line t-stagger-line--1">${title}</h2>
       <span class="t-stagger-line t-stagger-line--2">${sub}${rel ? ` · ${rel}` : ""}</span>
     </div>
-    <div class="sched-day-actions">${dayRevertHtml(iso(d))}</div>
+    <div class="sched-day-actions"></div>
+  </div>`;
+}
+
+function editorToolbarHtml(dIso) {
+  if (!state.editorMode) return "";
+  const role = myRole();
+  const primary = role === "owner" || role === "editor"
+    ? "сохранить"
+    : role === "user"
+      ? "предложить"
+      : "сохранить у себя";
+  const undoDisabled = !editorSession?.history.length ? " disabled" : "";
+  return `<div class="sched-editor-toolbar" role="toolbar" aria-label="редактор расписания">
+    <div class="sched-editor-toolbar-copy"><strong>режим редактора</strong><span>видны все пары, окна, вакансии и самостоятельные</span></div>
+    <div class="sched-editor-toolbar-actions">
+      <button type="button" data-editor="undo"${undoDisabled}>${ICON_UNDO}<span>назад</span></button>
+      <button type="button" data-editor="reset-day" data-date="${dIso}">${ICON_RESET}<span>исходный день</span></button>
+      <button type="button" data-editor="cancel">отмена</button>
+      <button type="button" class="is-primary" data-editor="save">${primary}</button>
+    </div>
   </div>`;
 }
 
@@ -674,7 +702,7 @@ function dayHtml(d, withLive, future) {
   const dIso = iso(d);
   const all = visibleSlotsFor(d);
   const lessons = all.filter((s) => !s.window);
-  const rows = state.windows ? all : lessons;
+  const rows = state.editorMode || state.windows ? all : lessons;
   const live = withLive ? liveState(d) : null;
   const count = lessons.length;
   const today = sameDay(d, startOfDay(currentDate()));
@@ -703,7 +731,7 @@ function dayHtml(d, withLive, future) {
     body = `${earlierHtml}${liveHost}`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${withLive && !future ? editorToolbarHtml(dIso) : ""}${body}</div>`;
 }
 
 function weekHtml() {
@@ -714,7 +742,7 @@ function weekHtml() {
     const d = addDays(ws, i);
     const all = visibleSlotsFor(d);
     const lessons = all.filter((s) => !s.window);
-    const rows = state.windows ? all : lessons;
+    const rows = state.editorMode || state.windows ? all : lessons;
     days.push(`<div class="sched-day-block" data-day="${iso(d)}">
       <div class="sched-day-heading">
         <div class="sched-day-heading-copy">
@@ -726,7 +754,7 @@ function weekHtml() {
           }</span>
         </div>
         ${sameDay(d, startOfDay(currentDate())) ? '<span class="sched-week-badge">сегодня</span>' : ""}
-        <div class="sched-day-actions">${dayRevertHtml(iso(d))}</div>
+        <div class="sched-day-actions"></div>
       </div>
       ${
         lessons.length || (state.windows && rows.length)
@@ -1246,7 +1274,6 @@ function save() {
         windows: state.windows,
         showVacancies: state.showVacancies,
         showSelfStudy: state.showSelfStudy,
-        showSwapButtons: state.showSwapButtons,
         parityMode: state.parityMode,
         tab: state.tab,
         light: state.light,
@@ -1277,7 +1304,6 @@ function load() {
     if (typeof data.windows === "boolean") state.windows = data.windows;
     if (typeof data.showVacancies === "boolean") state.showVacancies = data.showVacancies;
     if (typeof data.showSelfStudy === "boolean") state.showSelfStudy = data.showSelfStudy;
-    if (typeof data.showSwapButtons === "boolean") state.showSwapButtons = data.showSwapButtons;
     if (["auto", "even", "odd"].includes(data.parityMode)) state.parityMode = data.parityMode;
     if (["schedule", "bells"].includes(data.tab)) state.tab = data.tab;
     if (typeof data.light === "boolean") state.light = data.light;
@@ -1978,10 +2004,9 @@ function bindEvents() {
       render();
     });
   });
-  $("#swap-buttons-switch")?.addEventListener("click", () => {
-    state.showSwapButtons = !effectiveShowSwapButtons();
-    save();
-    applyFlags();
+  $("#editor-btn")?.addEventListener("click", () => {
+    if (state.editorMode) cancelEditorMode();
+    else startEditorMode();
   });
 
   $("#settings-trigger").addEventListener("click", (e) => {
@@ -2149,15 +2174,10 @@ function applyQuery() {
 
 /* ---------- оформление: флаги ---------- */
 
-function effectiveShowSwapButtons() {
-  if (typeof state.showSwapButtons === "boolean") return state.showSwapButtons;
-  const role = myRole();
-  return role === "owner" || role === "editor";
-}
-
 function applyFlags() {
   const root = document.documentElement;
-  root.dataset.showSwapButtons = effectiveShowSwapButtons() ? "true" : "false";
+  root.dataset.editorMode = state.editorMode ? "true" : "false";
+  root.dataset.showSwapButtons = state.editorMode ? "true" : "false";
   if (state.light) root.dataset.schedScheduleView = "light";
   else root.removeAttribute("data-sched-schedule-view");
   const ls = $("#light-switch");
@@ -2166,7 +2186,12 @@ function applyFlags() {
   if (ss) ss.setAttribute("aria-pressed", state.scope === "week" ? "true" : "false");
   $("#vacancies-switch")?.setAttribute("aria-pressed", String(state.showVacancies));
   $("#self-study-switch")?.setAttribute("aria-pressed", String(state.showSelfStudy));
-  $("#swap-buttons-switch")?.setAttribute("aria-pressed", String(effectiveShowSwapButtons()));
+  const editorButton = $("#editor-btn");
+  if (editorButton) {
+    editorButton.setAttribute("aria-pressed", String(state.editorMode));
+    editorButton.classList.toggle("is-active", state.editorMode);
+    editorButton.title = state.editorMode ? "выйти из редактора" : "режим редактора";
+  }
   const li = $("#light-hint");
   if (li) li.textContent = state.light ? "плоские и компактные пары" : "обычные карточки";
   const sh = $("#scope-hint");
@@ -2232,7 +2257,7 @@ function cachedFutureDay(d) {
     state.showSelfStudy,
     state.parityMode,
     iso(startOfDay(currentDate())),
-    JSON.stringify(loadSwaps()),
+    JSON.stringify(activeSwapMap()),
   ].join("|");
   if (context !== futureMarkupKey) {
     futureMarkupKey = context;
@@ -2735,6 +2760,16 @@ function bindExtra() {
 
   $("#scene").addEventListener("click", event => {
     if (event.target.closest('[data-act="choose-group"]')) { openProfile(); return; }
+    const editorAction = event.target.closest("[data-editor]");
+    if (editorAction) {
+      event.preventDefault();
+      const action = editorAction.dataset.editor;
+      if (action === "undo") undoEditorAction();
+      else if (action === "reset-day") resetEditorDay(editorAction.dataset.date);
+      else if (action === "cancel") cancelEditorMode();
+      else if (action === "save") saveEditorMode();
+      return;
+    }
     const button = event.target.closest('[data-act="reset-day"]');
     if (button) { event.preventDefault(); resetDaySwaps(button.dataset.date); }
   });
@@ -2978,6 +3013,101 @@ function init() {
 /* var намеренно: эти значения нужны раннему рендеру до конца модуля */
 var SWAP_KEY = "sched:swaps:v1";
 var swapMap = null;
+var editorSession = null;
+var ICON_UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 6 6"/></svg>';
+var ICON_RESET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v6h6"/><path d="M5.5 15a7 7 0 1 0 1.1-7.8L4 10"/></svg>';
+
+function cloneSwapMap(map) {
+  return JSON.parse(JSON.stringify(map || {}));
+}
+
+function activeSwapMap() {
+  return state.editorMode && editorSession ? editorSession.draft : loadSwaps();
+}
+
+function startEditorMode() {
+  if (state.editorMode) return;
+  closeSettings();
+  closeSwapSheet();
+  const baseline = cloneSwapMap(loadSwaps());
+  editorSession = { baseline, draft: cloneSwapMap(baseline), history: [] };
+  state.editorMode = true;
+  completedOpen = false;
+  applyFlags();
+  render();
+}
+
+function finishEditorMode() {
+  state.editorMode = false;
+  editorSession = null;
+  closeSwapSheet();
+  closeMoveSheet();
+  applyFlags();
+  render();
+}
+
+function cancelEditorMode() {
+  if (!state.editorMode) return;
+  const changed = editorChangedEntries().length > 0;
+  if (changed && !confirm("выйти из редактора и отменить несохранённые изменения?")) return;
+  finishEditorMode();
+}
+
+function editorChangedEntries() {
+  if (!editorSession) return [];
+  const keys = new Set([...Object.keys(editorSession.baseline), ...Object.keys(editorSession.draft)]);
+  return [...keys].filter(key => JSON.stringify(editorSession.baseline[key] || null) !== JSON.stringify(editorSession.draft[key] || null));
+}
+
+function undoEditorAction() {
+  if (!state.editorMode || !editorSession?.history.length) return;
+  editorSession.draft = editorSession.history.pop();
+  render();
+}
+
+function resetEditorDay(dIso) {
+  if (!state.editorMode || !editorSession || !dIso) return;
+  editorSession.history.push(cloneSwapMap(editorSession.draft));
+  const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+  Object.keys(editorSession.draft).forEach(key => {
+    if (key.startsWith(prefix)) delete editorSession.draft[key];
+  });
+  render();
+  toast("день возвращён к исходному расписанию в черновике");
+}
+
+async function saveEditorMode() {
+  if (!state.editorMode || !editorSession) return;
+  const changedKeys = editorChangedEntries();
+  if (!changedKeys.length) {
+    toast("изменений нет");
+    finishEditorMode();
+    return;
+  }
+  const map = loadSwaps();
+  const entries = {};
+  const updatedAt = Math.max(Date.now(), ...Object.values(map).map(entry => Number(entry?.updatedAt) + 1 || 0));
+  const operationId = crypto.randomUUID ? crypto.randomUUID() : updatedAt.toString(36) + Math.random().toString(36).slice(2);
+  changedKeys.forEach(key => {
+    const draft = editorSession.draft[key];
+    const entry = draft ? { ...draft, updatedAt } : { deleted: true, updatedAt };
+    if (changedKeys.length > 1) {
+      entry.operationId = operationId;
+      entry.operationSize = changedKeys.length;
+    }
+    map[key] = entry;
+    entries[key] = entry;
+  });
+  saveSwaps();
+  const role = myRole();
+  finishEditorMode();
+  if (sharedSwapsEnabled() && role !== "anon") {
+    const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
+    if (!ok) toast(cloudFailHint());
+  } else {
+    toast("изменения сохранены на этом устройстве");
+  }
+}
 
 function loadSwaps() {
   if (swapMap) return swapMap;
@@ -3025,6 +3155,17 @@ function setSwap(dIso, n, value) { return applyDayChanges(dIso, { [n]: value });
 function applyDayChanges(dIso, changes, label = "замена") {
   const keys = Object.keys(changes).filter(n => Number.isInteger(Number(n)) && Number(n) >= 1 && Number(n) <= 6);
   if (!keys.length) return false;
+  if (state.editorMode && editorSession) {
+    editorSession.history.push(cloneSwapMap(editorSession.draft));
+    const updatedAt = Date.now();
+    keys.forEach(n => {
+      const key = swapKey(dIso, Number(n));
+      const value = changes[n];
+      if (value === null) delete editorSession.draft[key];
+      else editorSession.draft[key] = { ...value, updatedAt };
+    });
+    return true;
+  }
   const map = loadSwaps();
   const updatedAt = Math.max(Date.now(), ...Object.values(map).map(entry => Number(entry?.updatedAt) + 1 || 0));
   const operationId = crypto.randomUUID ? crypto.randomUUID() : updatedAt.toString(36) + Math.random().toString(36).slice(2);
@@ -3154,7 +3295,7 @@ function openMoveSheet(dIso, n) {
 function slotsFor(d) {
   const list = slotsForBase(d);
   if (!list.length) return list;
-  const map = loadSwaps();
+  const map = activeSwapMap();
   const dIso = iso(d);
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   let hasAny = false;
@@ -3258,7 +3399,7 @@ var ICON_SWAP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg>';
 
 function swapButtonHtml(dIso, n, isWindow) {
-  if (!dIso) return "";
+  if (!dIso || !state.editorMode) return "";
   const title = isWindow ? "добавить или изменить пару" : "изменить или перенести пару — нажми или потяни";
   return (
     '<button class="lesson-swap-btn" type="button" data-act="swap" data-date="' +
@@ -3548,7 +3689,7 @@ var swapDragSuppressUntil = 0;
        результата открывалась бы шторка редактирования. */
     if (Date.now() < swapDragSuppressUntil) return;
     const btn = e.target.closest('[data-act="swap"]');
-    if (!btn) return;
+    if (!btn || !state.editorMode) return;
     e.preventDefault();
     e.stopPropagation();
     openSwapSheet(btn.dataset.date, Number(btn.dataset.n));
@@ -3556,7 +3697,7 @@ var swapDragSuppressUntil = 0;
   scene.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       const btn = e.target.closest('[data-act="swap"]');
-      if (btn) {
+      if (btn && state.editorMode) {
         e.preventDefault();
         e.stopPropagation();
         openSwapSheet(btn.dataset.date, Number(btn.dataset.n));
@@ -4140,6 +4281,7 @@ function myRole() {
 }
 
 function swapPrimaryLabel() {
+  if (state.editorMode) return "применить";
   const role = myRole();
   return role === "owner" || role === "editor" ? "опубликовать" : role === "user" ? "предложить" : "сохранить у себя";
 }
@@ -4484,7 +4626,7 @@ function pendingOperation(enc) {
     value.operationId === entry.operationId && value.by === entry.by && decodeSwapKey(key).split(":").slice(0, -1).join(":") === groupDate) : [[enc, entry]];
 }
 async function approvePending(enc) {
-  if (myRole() !== "owner") { toast("только владелец может подтверждать заявки"); return; }
+  if (myRole() !== "owner" && myRole() !== "editor") { toast("только редактор может подтверждать заявки"); return; }
   const entries = pendingOperation(enc);
   if (!entries.length) return;
   if (entries[0][1].operationSize && entries.length !== entries[0][1].operationSize) {
@@ -4516,7 +4658,7 @@ async function approvePending(enc) {
   toast("изменения опубликованы");
 }
 async function rejectPending(enc) {
-  if (myRole() !== "owner") { toast("только владелец может отклонять заявки"); return; }
+  if (myRole() !== "owner" && myRole() !== "editor") { toast("только редактор может отклонять заявки"); return; }
   const entries = pendingOperation(enc);
   const updates = Object.fromEntries(entries.map(([key]) => [key, null]));
   if (!entries.length || !await cloudWrite(CLOUD_PATHS.pending, updates, { method: "PATCH", notify: false })) return;
@@ -4784,24 +4926,11 @@ function pendingRowHtml(enc, entry, role) {
     if (parts.length) what = parts.join(" · ");
   }
   const who = entry.byName || "без имени";
-  /* Сегмент пары без времени: предмет, преподаватель · кабинет, «N пара · 1 ч 35 мин». */
+  /* Та же карточка «до → после», что и в уведомлениях. */
   const frag = m ? buildNotifFrag(key, entry) : null;
-  const dur = frag ? lessonDurationLabel(frag.d, frag.n) : "";
-  const segHtml = frag
-    ? '<div class="sched-pending-segment">' +
-      "<strong>" +
-      escapeHtml(frag.subject || frag.n + " пара") +
-      "</strong>" +
-      ([frag.teacher, frag.room].filter(Boolean).length
-        ? "<span>" + escapeHtml([frag.teacher, frag.room].filter(Boolean).join(" · ")) + "</span>"
-        : "") +
-      "<small>" +
-      escapeHtml(frag.n + " пара" + (dur ? " · " + dur : "")) +
-      "</small>" +
-      "</div>"
-    : "";
+  const segHtml = frag ? notifFragHtml({ frag }) : "";
   let actions = "";
-  if (role === "owner") {
+  if (role === "owner" || role === "editor") {
     actions =
       '<button class="is-primary" type="button" data-tg="approve" data-key="' +
       escapeHtml(enc) +
@@ -4810,6 +4939,7 @@ function pendingRowHtml(enc, entry, role) {
       escapeHtml(enc) +
       '">отклонить</button>';
     if (
+      role === "owner" &&
       entry.by &&
       entry.by !== String(tgRoles.owner) &&
       !tgRoles.editors[entry.by]
@@ -4822,7 +4952,7 @@ function pendingRowHtml(enc, entry, role) {
         '">+ редактор</button>';
     }
   } else {
-    actions = '<span class="sched-pending-readonly-label">на проверке у владельца</span>';
+    actions = '<span class="sched-pending-readonly-label">на проверке у редакторов</span>';
   }
   return (
     '<div class="sched-tg-row"><div class="sched-tg-row-text"><strong>' +

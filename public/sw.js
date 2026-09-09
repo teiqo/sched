@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-09-v29-profile-stats";
+const CACHE = CACHE_PREFIX + "2026-09-09-v30-editor-mode";
 const ASSETS = [
   "./",
   "./index.html",
@@ -25,6 +25,7 @@ const ASSETS = [
   "./css/overrides.css",
   "./css/fixes.css",
   "./css/interaction.css",
+  "./css/editor-mode.css",
   "./assets/fonts/inter.ttf",
   "./assets/icons/sched.svg",
   "./assets/icons/sched-180.png",

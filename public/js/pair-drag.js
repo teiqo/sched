@@ -228,6 +228,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   const onTouchEnd = e => { if ([...e.changedTouches].some(t => t.identifier === (drag || pending)?.pointerId)) { if (drag) e.preventDefault(); finish(true); } };
   const onTouchCancel = () => finish(false);
   const sourceFor = target => {
+    if (document.documentElement.dataset.editorMode !== 'true') return null;
     const row = target.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
     if (!row || row.classList.contains('is-cancelled')) return null;
     const handle = target.closest('.lesson-swap-btn[data-act="swap"]');

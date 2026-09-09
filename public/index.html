@@ -91,6 +91,7 @@
     <link rel="stylesheet" href="css/overrides.css" />
     <link rel="stylesheet" href="css/fixes.css" />
     <link rel="stylesheet" href="css/interaction.css" />
+    <link rel="stylesheet" href="css/editor-mode.css" />
     <link rel="manifest" href="manifest.webmanifest" />
     <!-- Публичный конфиг пуст в репозитории и создаётся из GitHub variables во время сборки. -->
     <script src="js/config.js"></script>
@@ -234,6 +235,19 @@
             </h1>
 
             <div class="sched-header-actions">
+              <button
+                class="sched-tg-btn sched-editor-btn"
+                id="editor-btn"
+                type="button"
+                aria-label="режим редактора"
+                aria-pressed="false"
+                title="режим редактора"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                </svg>
+              </button>
               <button
                 class="sched-tg-btn sched-bell-btn"
                 id="bell-btn"
@@ -557,7 +571,7 @@
                         <span class="sched-settings-icon is-bells">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                         </span>
-                        <span class="sched-settings-copy"><strong>дополнительно</strong><span>вид расписания и кнопки пар</span></span>
+                        <span class="sched-settings-copy"><strong>дополнительно</strong><span>вид расписания и отображение пар</span></span>
                       </span>
                       <svg class="sched-settings-more-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
                     </summary>
@@ -622,18 +636,6 @@
                       <button class="sched-setting-switch" id="self-study-switch" type="button" aria-pressed="true" aria-label="показывать самостоятельную работу">
                         <span aria-hidden="true"></span>
                       </button>
-                    </div>
-                    <div class="sched-settings-row">
-                      <span class="sched-settings-row-main">
-                        <span class="sched-settings-icon is-layout">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/><path d="M5 4v16"/></svg>
-                        </span>
-                        <span class="sched-settings-copy">
-                          <strong>кнопки замены</strong>
-                          <span>показывать у карточек пар</span>
-                        </span>
-                      </span>
-                      <button class="sched-setting-switch" id="swap-buttons-switch" type="button" aria-pressed="false" aria-label="показывать кнопки замены"><span aria-hidden="true"></span></button>
                     </div>
                     <div class="sched-settings-row">
                       <span class="sched-settings-row-main">

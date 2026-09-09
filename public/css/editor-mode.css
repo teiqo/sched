@@ -1,0 +1,100 @@
+/* Режим редактора: отдельное, явное состояние для черновых замен. */
+.sched-editor-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--sched-separator);
+  border-radius: 50%;
+  background: var(--sched-surface);
+  color: var(--sched-secondary);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 120ms ease;
+}
+.sched-editor-btn svg { width: 20px; height: 20px; }
+.sched-editor-btn:active { transform: scale(.94); }
+.sched-editor-btn.is-active {
+  border-color: color-mix(in srgb, var(--sched-blue) 44%, var(--sched-separator));
+  background: color-mix(in srgb, var(--sched-blue) 12%, var(--sched-surface));
+  color: var(--sched-blue);
+}
+.sched-editor-btn:focus-visible,
+.sched-editor-toolbar button:focus-visible {
+  outline: 2px solid var(--sched-blue);
+  outline-offset: 3px;
+}
+
+.sched-editor-toolbar {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--sched-blue) 22%, var(--sched-separator));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sched-blue) 7%, var(--sched-surface));
+}
+.sched-editor-toolbar-copy { display: grid; gap: 3px; min-width: 0; }
+.sched-editor-toolbar-copy strong { color: var(--sched-text); font-size: 14px; line-height: 1.3; }
+.sched-editor-toolbar-copy span { color: var(--sched-secondary); font-size: 12px; line-height: 1.4; }
+.sched-editor-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sched-editor-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--sched-separator);
+  border-radius: 8px;
+  background: var(--sched-surface);
+  color: var(--sched-text);
+  font: 600 13px/1.2 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+.sched-editor-toolbar button svg { width: 16px; height: 16px; flex: none; }
+.sched-editor-toolbar button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--sched-blue) 30%, var(--sched-separator)); }
+.sched-editor-toolbar button:disabled { opacity: .42; cursor: default; }
+.sched-editor-toolbar button.is-primary {
+  margin-left: auto;
+  border-color: transparent;
+  background: var(--sched-blue);
+  color: #fff;
+}
+
+/* Значок замены существует только внутри режима редактора. */
+:root:not([data-editor-mode="true"]) #stage .lesson-swap-btn { display: none !important; }
+:root[data-editor-mode="true"] .agenda-row.is-window-row { cursor: pointer; }
+
+/* Более компактный номер пары. */
+:root .agenda-row-num {
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+:root .agenda-row:not(.is-bell-pair):not(.is-bell-break) {
+  grid-template-columns: 74px minmax(0, 1fr) !important;
+}
+
+/* Заявка использует ту же читаемую карточку «до → после», что уведомления. */
+.sched-tg-row .sched-notif-frag { margin-top: 8px; }
+
+@media (max-width: 620px) {
+  .sched-editor-toolbar { margin-top: 8px; padding: 12px; }
+  .sched-editor-toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .sched-editor-toolbar button { width: 100%; min-height: 44px; }
+  .sched-editor-toolbar button.is-primary { margin-left: 0; }
+}
+@media (max-width: 430px) {
+  .sched-header-actions { gap: 6px !important; }
+  .sched-editor-btn,
+  .sched-header-actions .sched-bell-btn,
+  .sched-header-actions .sched-settings-trigger { width: 40px !important; height: 40px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-editor-btn,
+  .sched-editor-toolbar button { transition: none !important; }
+}
