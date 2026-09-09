@@ -466,7 +466,7 @@ function metaHtml(slot) {
     const teacher = escapeHtml(slot.teacher);
     const vacancy = isVacancy(slot);
     parts.push(
-      `<span class="lesson-type-accent${vacancy ? " is-vacancy" : ""}">�� ${teacher}</span>`,
+      `<span class="lesson-type-accent${vacancy ? " is-vacancy" : ""}">• ${teacher}</span>`,
     );
   }
   if (slot.room) parts.push(`<span class="lesson-room">ауд. ${escapeHtml(slot.room)}</span>`);
@@ -2121,7 +2121,7 @@ function bindEvents() {
     if (e.key === "ArrowLeft") shiftDay(-1);
   });
 
-  /* Свайпы используют только transform; экономичный режим сохраняет плавную дов��дку. */
+  /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
   const scene = $("#scene");
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
@@ -2790,7 +2790,7 @@ function onboardingHtml() {
       <div class="sched-onboarding-copy">
         <button class="sched-onboarding-back" type="button" data-act="back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-          н��зад
+          назад
         </button>
         <h1>какая группа?</h1>
         <p>выбор можно поменять потом в настройках</p>
@@ -3667,29 +3667,61 @@ function finishEditorMode() {
   render();
 }
 
-/* Закрытие редактора: панель и окна уезжают плавно, а не исчезают кадром.
-   Окна сворачиваются по высоте с небольшим каскадом сверху вниз. */
-const EDITOR_CLOSE_MS = 300;
+/* Закрытие редактора: панель и окна уезжают плавно, а оставшиеся пары
+   доезжают на новые места (FLIP), а не прыгают одним кадром. */
+const EDITOR_CLOSE_MS = 340;
+const EDITOR_SETTLE_MS = 420;
 let editorClosing = false;
+
+function editorReducedMotion() {
+  return (
+    document.documentElement.hasAttribute("data-perf") ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function lessonRowTops() {
+  const map = new Map();
+  document.querySelectorAll("#scene [data-day] .agenda-row[data-row-n]").forEach(row => {
+    const day = row.closest("[data-day]")?.dataset.day;
+    if (day) map.set(day + "|" + row.dataset.rowN, row.getBoundingClientRect().top);
+  });
+  return map;
+}
+
+function settleLessonRows(before) {
+  if (!before || !before.size || editorReducedMotion()) return;
+  document.querySelectorAll("#scene [data-day] .agenda-row[data-row-n]").forEach(row => {
+    const day = row.closest("[data-day]")?.dataset.day;
+    if (!day) return;
+    const was = before.get(day + "|" + row.dataset.rowN);
+    if (was === undefined) return;
+    const delta = was - row.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1 || Math.abs(delta) > 700) return;
+    row.animate(
+      [{ transform: `translate3d(0, ${delta}px, 0)` }, { transform: "translate3d(0, 0, 0)" }],
+      { duration: EDITOR_SETTLE_MS, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+    );
+  });
+}
 
 function playEditorClose(done) {
   const scene = document.getElementById("scene");
   const toolbar = scene?.querySelector(".sched-editor-toolbar");
   const rows = scene ? [...scene.querySelectorAll(".agenda-row.is-window-row")] : [];
-  const reduced =
-    document.documentElement.hasAttribute("data-perf") ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduced || (!toolbar && !rows.length)) {
-    done();
+  if (editorReducedMotion() || (!toolbar && !rows.length)) {
+    done(null);
     return;
   }
   toolbar?.classList.add("is-closing");
+  /* Каскад снизу вверх: нижние окна сворачиваются раньше, и день
+     собирается одной волной. */
   rows.forEach((row, i) => {
-    row.style.setProperty("--sched-window-leave-height", `${row.offsetHeight}px`);
-    row.style.setProperty("--sched-window-leave-delay", `${Math.min(i * 26, 104)}ms`);
+    row.style.setProperty("--sched-window-leave-height", row.offsetHeight + "px");
+    row.style.setProperty("--sched-window-leave-delay", Math.min((rows.length - 1 - i) * 22, 88) + "ms");
     row.classList.add("is-window-leaving");
   });
-  window.setTimeout(done, EDITOR_CLOSE_MS);
+  window.setTimeout(() => done(lessonRowTops()), EDITOR_CLOSE_MS);
 }
 
 function closeEditorAnimated() {
@@ -3700,10 +3732,11 @@ function closeEditorAnimated() {
   editorClosing = true;
   document.body.classList.add("is-editor-closing");
   return new Promise(resolve => {
-    playEditorClose(() => {
+    playEditorClose(before => {
       editorClosing = false;
       document.body.classList.remove("is-editor-closing");
       finishEditorMode();
+      if (before) window.requestAnimationFrame(() => settleLessonRows(before));
       resolve();
     });
   });
@@ -3928,7 +3961,7 @@ function openMoveSheet(dIso, n) {
   backdrop.id = "move-backdrop";
   backdrop.className = "sched-replace-backdrop is-open";
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
-    <div class="sched-replace-head"><strong id="move-title">куда пер��нести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
+    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
     <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n ? 'disabled aria-current="true"' : ""}>
       <span class="sched-move-number">${slot.n}</span><span class="sched-move-target-copy"><strong>${escapeHtml(slot.window || slot.cancelled ? "окно" : slot.subject)}</strong>
@@ -4207,7 +4240,8 @@ function openSwapSheet(dIso, n) {
     '<button class="is-primary" type="button" data-swap="save">' +
     swapPrimaryLabel() +
     "</button>" +
-    '<button type="button" data-swap="cancel-lesson">отменить пару</button>' +
+    /* В окне отменять нечего — пары там нет. */
+    (isWindowSlot ? "" : '<button type="button" data-swap="cancel-lesson">отменить пару</button>') +
     '<button type="button" data-swap="reset">вернуть как было</button>' +
     '<button type="button" data-swap="close">закрыть</button>' +
     "</div>" +
@@ -4291,6 +4325,10 @@ function openSwapSheet(dIso, n) {
       return;
     }
     if (act === "cancel-lesson") {
+      if (isWindowSlot) {
+        toast("в окне нет пары — отменять нечего");
+        return;
+      }
       setSwap(dIso, n, { cancelled: true });
 
       commit();
@@ -4381,7 +4419,9 @@ var swapDragSuppressUntil = 0;
 /* Shared movement controller for all lesson card types. */
 bindPairDrag({
   scene: document.getElementById("scene"),
-  slotsForDate: date => slotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
+  /* Те же строки, что и на экране: иначе в режиме редактора превью переноса
+     собиралось из другого набора пар и места путались. */
+  slotsForDate: date => visibleSlotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
   onSwap: movePair, onReorder: (date, from, to) => movePairRelative(date, from, to, to > from),
   onActiveChange: active => {
     pairDragActive = active;

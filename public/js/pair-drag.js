@@ -141,10 +141,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const status = document.createElement('div');
     status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     status.textContent = 'перетащи пару · Esc — отмена'; document.body.appendChild(status);
-    /* The heading and the editor toolbar stay in place: hiding the toolbar
-       collapsed the day on a phone and the whole screen jumped on hold. */
-    const original = [...scope.children].filter(el =>
-      !el.classList.contains('sched-day-heading') && !el.classList.contains('sched-editor-toolbar'));
+    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading')
+      && !el.classList.contains('sched-editor-toolbar'));
     const hidden = original.map(el => [el, el.hidden]);
     const board = document.createElement('div'); board.className = 'agenda-list sched-drag-board';
     const items = new Map();
@@ -174,14 +172,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.body.classList.add('is-dragging-pair'); scope.classList.add('is-pair-dragging');
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
     scope.appendChild(board);
-    /* Windows are revealed above the grabbed pair, so the preview board is
-       taller than the static day. The page is never scrolled and never padded
-       with a spacer for that: on a phone this jumped the layout, blanked the
-       screen and left the finger over an empty area. The floating card keeps
-       its own fixed position and magnetises to the placeholder instead.
-
-       Recenter the card against the actual dashed source placeholder, because
-       the board can be wider or shifted after the windows appear. */
+    /* Ничего не скроллим и не сдвигаем страницу: окна раскрываются на месте,
+       а сама карточка под пальцем остаётся точно там, где её взяли. */
+    /* The drag board can be wider or shift after windows are revealed. Recenter
+       the scaled card against the actual dashed source placeholder, not the old row. */
     centerCloneOnPlaceholder();
     if (!p.touchBody) { try { scene.setPointerCapture(p.pointerId); } catch (_) {} }
     try { navigator.vibrate?.(10); } catch (_) {}
@@ -262,10 +256,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   scene.addEventListener('contextmenu', e => { if (drag || pending || e.target.closest('.lesson-swap-btn')) e.preventDefault(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && (drag || pending)) { e.preventDefault(); finish(false); } });
   window.addEventListener('blur', () => finish(false));
-  /* Only a real relayout cancels a drag. Mobile browsers fire resize when the
-     address bar collapses during a drag, which used to abort the move. */
   let lastWidth = innerWidth;
   window.addEventListener('resize', () => {
+    /* Клавиатура и адресная строка меняют только высоту — из-за этого
+       перенос срывался прямо во время удержания пары. */
     if (innerWidth === lastWidth) return;
     lastWidth = innerWidth;
     finish(false);

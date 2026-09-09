@@ -1,29 +1,24 @@
-/* ==========================================================================
-   Плавный выход из режима редактора.
-   Окна не пропадают кадром вместе с ререндером: они сворачиваются по высоте
-   и уезжают вверх небольшим каскадом, значки замены гаснут одновременно.
-   ========================================================================== */
+/* Плавный уход окон при выходе из редактора. */
 @keyframes sched-window-row-leave {
   0% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0) scale(1);
     max-height: var(--sched-window-leave-height, 96px);
   }
-  55% {
+  45% {
     opacity: 0;
-    transform: translate3d(0, -6px, 0);
+    transform: translate3d(0, -4px, 0) scale(0.985);
     max-height: var(--sched-window-leave-height, 96px);
   }
   100% {
     opacity: 0;
-    transform: translate3d(0, -6px, 0);
+    transform: translate3d(0, -6px, 0) scale(0.985);
     max-height: 0;
     margin-top: 0;
     margin-bottom: 0;
     padding-top: 0;
     padding-bottom: 0;
     border-width: 0;
-    border-color: transparent;
   }
 }
 
@@ -31,21 +26,26 @@
   overflow: hidden;
   pointer-events: none;
   min-height: 0 !important;
-  animation: sched-window-row-leave 300ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  animation: sched-window-row-leave 340ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
   animation-delay: var(--sched-window-leave-delay, 0ms) !important;
+  will-change: max-height, opacity, transform;
 }
 
 /* Значок замены гаснет вместе с окнами, чтобы карточки не мигали. */
 body.is-editor-closing #stage .lesson-swap-btn {
-  opacity: 0 !important;
-  transition: opacity 180ms ease !important;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+body.is-editor-closing #stage {
   pointer-events: none;
 }
 
-/* Пока идёт закрытие, панель редактора уже не реагирует на нажатия. */
-body.is-editor-closing .sched-editor-toolbar { pointer-events: none; }
-
 @media (prefers-reduced-motion: reduce) {
-  :root .agenda-row.is-window-leaving { animation: none !important; }
-  body.is-editor-closing #stage .lesson-swap-btn { transition: none !important; }
+  :root .agenda-row.is-window-leaving {
+    animation: none !important;
+  }
+  body.is-editor-closing #stage .lesson-swap-btn {
+    transition: none;
+  }
 }
