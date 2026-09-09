@@ -983,3 +983,174 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 :root :is(.agenda-row, .live-lesson-card).is-drag-float {
   outline-color: color-mix(in srgb, var(--sched-tertiary) 68%, var(--sched-bg)) !important;
 }
+
+
+/* Переносимая пара сохраняет исходный размер 1:1. */
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  transform: none !important;
+  scale: 1 !important;
+}
+
+
+/* ==========================================================================
+   Профиль владельца/редактора — вкладка статистики.
+   ========================================================================== */
+.sched-profile-main-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 10px 20px 8px;
+}
+.sched-profile-main-tabs button {
+  min-height: 38px;
+  font-size: 13px;
+}
+.sched-profile-content.is-stats-view {
+  padding-top: 8px;
+}
+.sched-stats {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+.sched-stats-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sched-stats-head > div {
+  min-width: 0;
+}
+.sched-stats-head span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--sched-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.sched-stats-head h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+}
+.sched-stats-status {
+  min-width: 72px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sched-separator);
+  border-radius: 9px;
+  background: var(--sched-raised);
+  color: var(--sched-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+.sched-stats-status.is-error {
+  color: var(--sched-danger, #e56458);
+}
+.sched-stats-error {
+  margin: -6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sched-danger, #e56458) 28%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sched-danger, #e56458) 8%, transparent);
+  color: var(--sched-danger, #e56458);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.sched-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.sched-stat-card {
+  display: flex;
+  min-width: 0;
+  min-height: 112px;
+  padding: 15px;
+  justify-content: space-between;
+  flex-direction: column;
+  border: 1px solid var(--sched-separator);
+  border-radius: 14px;
+  background: var(--sched-raised);
+}
+.sched-stat-card strong {
+  overflow: hidden;
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -.04em;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.sched-stat-card span {
+  max-width: 15ch;
+  color: var(--sched-secondary);
+  font-size: 13px;
+  line-height: 1.3;
+}
+.sched-stat-card.is-primary {
+  border-color: color-mix(in srgb, var(--sched-blue) 26%, var(--sched-separator));
+  background: color-mix(in srgb, var(--sched-blue) 9%, var(--sched-raised));
+}
+.sched-stat-card.is-primary strong,
+.sched-stat-card.is-accent strong {
+  color: var(--sched-blue);
+}
+.sched-stat-card.is-positive {
+  border-color: color-mix(in srgb, var(--sched-green) 24%, var(--sched-separator));
+  background: color-mix(in srgb, var(--sched-green) 8%, var(--sched-raised));
+}
+.sched-stat-card.is-positive strong {
+  color: var(--sched-green);
+}
+.sched-stats-section {
+  display: grid;
+  gap: 7px;
+}
+.sched-stats-section h3 {
+  margin: 0 2px;
+  color: var(--sched-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sched-stats-list {
+  overflow: hidden;
+  border: 1px solid var(--sched-separator);
+  border-radius: 14px;
+  background: var(--sched-raised);
+}
+.sched-stat-row {
+  display: flex;
+  min-height: 44px;
+  padding: 10px 13px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sched-stat-row + .sched-stat-row {
+  border-top: 1px solid var(--sched-separator);
+}
+.sched-stat-row span {
+  min-width: 0;
+  color: var(--sched-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.sched-stat-row strong {
+  flex: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.sched-stats-note {
+  margin: 0 2px 6px;
+  color: var(--sched-tertiary, var(--sched-secondary));
+  font-size: 11px;
+  line-height: 1.45;
+}
+@media (max-width: 390px) {
+  .sched-stats-grid { gap: 8px; }
+  .sched-stat-card { min-height: 104px; padding: 13px; }
+  .sched-stat-card strong { font-size: 27px; }
+}

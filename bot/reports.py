@@ -85,7 +85,6 @@ class Reports:
                  file['bytes'] if file else None,fingerprint))
             esc = lambda value: html.escape(str(value), quote=False)
             text = '<b>🐞 отчёт № ' + esc(rid[:8]) + '</b>'
-            text += '\n<b>группа:</b> ' + esc(data.get('group') or 'не выбрано')
             text += '\n<b>автор:</b> ' + esc((author_name + ' · ' + author) if author else 'без подтверждённого входа')
             text += '\n\n<b>что произошло</b>\n' + esc(data['message'][:2200])
             if data.get('steps'): text += '\n\n<b>как повторить</b>\n' + esc(data['steps'][:500])

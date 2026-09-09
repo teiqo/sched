@@ -1528,7 +1528,7 @@ function endScrub(options = {}) {
     // в фазу отпускания, где он задерживается на выбранном дне и плавно опускается.
     stripEl.classList.add("is-settling");
     window.requestAnimationFrame(() => {
-      /* Если пользователь уже начал новый жест, дожимать старую анимацию нельзя. */
+      /* Если пользователь уже нач��л новый жест, дожимать старую анимацию нельзя. */
       if (scrub) return;
       stripEl.classList.remove("is-settling");
       stripEl.classList.add("is-releasing");
@@ -1618,7 +1618,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
+    /* Предыдущий жест мог не успеть доиграть (резко отпустили �� сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
     dragClick = false;
@@ -2400,11 +2400,122 @@ function openNotifsSheet() {
   });
 }
 
+var profileView = "profile";
+var appStatsCache = null;
+var appStatsLoading = false;
+var appStatsError = "";
+
+function compactNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("ru-RU").format(n);
+}
+function localApplicationStats() {
+  const entries = Object.entries(loadSwaps()).filter(([, value]) => value && typeof value === "object" && !value.deleted);
+  return {
+    activeChanges: entries.length,
+    replaced: entries.filter(([, value]) => !value.cancelled && !value.moved && !value.makeWindow).length,
+    moved: entries.filter(([, value]) => value.moved).length,
+    cancelled: entries.filter(([, value]) => value.cancelled).length,
+    windows: entries.filter(([, value]) => value.makeWindow).length,
+    groups: new Set(entries.map(([key]) => key.split("|")[0]).filter(Boolean)).size,
+    pending: Object.keys(pendingMap).length,
+  };
+}
+function statCard(value, label, tone = "") {
+  return `<article class="sched-stat-card${tone ? " is-" + tone : ""}">
+    <strong>${compactNumber(value)}</strong><span>${label}</span>
+  </article>`;
+}
+function statRow(label, value) {
+  return `<div class="sched-stat-row"><span>${label}</span><strong>${compactNumber(value)}</strong></div>`;
+}
+function statsPanelHtml() {
+  const local = localApplicationStats();
+  const server = appStatsCache || {};
+  const users = server.users || {};
+  const telegram = server.telegram || {};
+  const activity = server.activity || {};
+  const status = appStatsLoading
+    ? '<span class="sched-stats-status">обновляем…</span>'
+    : appStatsError
+      ? `<button class="sched-stats-status is-error" type="button" data-act="refresh-stats">повторить</button>`
+      : '<button class="sched-stats-status" type="button" data-act="refresh-stats">обновить</button>';
+  return `<section class="sched-stats" id="profile-stats-panel" aria-label="статистика приложения">
+    <div class="sched-stats-head">
+      <div><span>живые данные</span><h2>статистика приложения</h2></div>${status}
+    </div>
+    ${appStatsError ? `<p class="sched-stats-error">${escapeHtml(appStatsError)}</p>` : ""}
+    <div class="sched-stats-grid">
+      ${statCard(users.total, "реальных пользователей", "primary")}
+      ${statCard(users.active_7d, "активны за 7 дней", "positive")}
+      ${statCard(local.replaced, "заменено пар", "accent")}
+      ${statCard(local.activeChanges, "активных изменений")}
+    </div>
+    <div class="sched-stats-section">
+      <h3>сейчас</h3>
+      <div class="sched-stats-list">
+        ${statRow("подписаны на telegram", telegram.subscribers)}
+        ${statRow("активны за 30 дней", users.active_30d)}
+        ${statRow("заявок на проверке", local.pending)}
+        ${statRow("групп с изменениями", local.groups)}
+      </div>
+    </div>
+    <div class="sched-stats-section">
+      <h3>изменения</h3>
+      <div class="sched-stats-list">
+        ${statRow("перенесено пар", local.moved)}
+        ${statRow("отменено пар", local.cancelled)}
+        ${statRow("создано окон", local.windows)}
+        ${statRow("операций за 30 дней", activity.change_events_30d)}
+      </div>
+    </div>
+    <div class="sched-stats-section">
+      <h3>telegram за 30 дней</h3>
+      <div class="sched-stats-list">
+        ${statRow("доставлено уведомлений", telegram.deliveries_30d)}
+        ${statRow("пользователей запускали бота", users.bot_started)}
+        ${statRow("групп у подписчиков", telegram.groups)}
+        ${statRow("получено отчётов", activity.reports_30d)}
+      </div>
+    </div>
+    <p class="sched-stats-note">пользователь считается реальным после подтверждённого входа через telegram или запуска бота. данные о заменах показывают актуальные записи в общей базе.</p>
+  </section>`;
+}
+function profileTabsHtml(canReview) {
+  if (!canReview) return "";
+  return `<div class="sched-profile-tabs sched-profile-main-tabs" role="tablist" aria-label="раздел профиля">
+    <button type="button" role="tab" data-act="profile-tab" data-tab="profile" aria-selected="${profileView === "profile"}" class="${profileView === "profile" ? "is-active" : ""}">профиль</button>
+    <button type="button" role="tab" data-act="profile-tab" data-tab="stats" aria-selected="${profileView === "stats"}" class="${profileView === "stats" ? "is-active" : ""}">статистика</button>
+  </div>`;
+}
+async function loadApplicationStats(force = false) {
+  if (appStatsLoading || LOCAL_PREVIEW || !tgSessionVerified) return;
+  if (appStatsCache && !force && Date.now() - Number(appStatsCache.generated_at || 0) < 60000) return;
+  const role = myRole();
+  if (role !== "owner" && role !== "editor") return;
+  appStatsLoading = true;
+  appStatsError = "";
+  const current = document.getElementById("profile-stats-panel");
+  if (current) current.outerHTML = statsPanelHtml();
+  try {
+    appStatsCache = await botRequest("stats", {}, await ensurePushSession());
+  } catch (error) {
+    appStatsError = error?.message || "не удалось загрузить статистику";
+    recordError("app-stats", appStatsError);
+  } finally {
+    appStatsLoading = false;
+    const panel = document.getElementById("profile-stats-panel");
+    if (panel) panel.outerHTML = statsPanelHtml();
+  }
+}
+
 function openProfile() {
   const backdrop = $("#profile-backdrop");
   const count = lessonCount(state.group);
   const role = myRole();
   const canReview = role === "owner" || role === "editor";
+  if (!canReview && profileView === "stats") profileView = "profile";
   const pendingCount = Object.keys(pendingMap).length;
 
   /* После входа — карточка-«герой» с аватаркой, именем и бейджем роли. */
@@ -2470,7 +2581,7 @@ function openProfile() {
             </span>
             <span class="sched-settings-copy">
               <strong>настроить уведомления</strong>
-              <span>что показывать и куда дублировать</span>
+              <span>ч��о показывать и куда дублировать</span>
             </span>
           </span>
           ${ICON_CHEVRON}
@@ -2487,29 +2598,34 @@ function openProfile() {
       ${accountBlock}
       ${ownerActionsBlock}`;
 
-  backdrop.innerHTML = `<div class="sched-profile" role="dialog" aria-modal="true" aria-label="профиль">
+  const tabs = profileTabsHtml(canReview);
+  const profileBody = profileView === "stats" && canReview
+    ? `<div class="sched-profile-content is-stats-view">${statsPanelHtml()}</div>`
+    : `${heroBlock}
+      <div class="sched-profile-identity">
+        <div>
+          <h2>${state.group ? groupName() : "группа не выбрана"}</h2>
+          <p>${state.group ? `${count} ${plural(count, "пара", "пары", "пар")} в неделю` : "выбери группу ниже"}</p>
+        </div>
+      </div>
+      <div class="sched-profile-content">${content}</div>`;
+
+  backdrop.innerHTML = `<div class="sched-profile${profileView === "stats" ? " is-stats-view" : ""}" role="dialog" aria-modal="true" aria-label="профиль">
     <div class="sched-profile-header">
       <button type="button" data-act="back">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
         назад
       </button>
-      <h1>профиль</h1>
+      <h1>${profileView === "stats" ? "статистика" : "профиль"}</h1>
       <span></span>
     </div>
-    ${heroBlock}
-    <div class="sched-profile-identity">
-      <div>
-        <h2>${state.group ? groupName() : "группа не выбрана"}</h2>
-        <p>${state.group ? `${count} ${plural(count, "пара", "пары", "пар")} в неделю` : "выбери группу ниже"}</p>
-      </div>
-    </div>
-    <div class="sched-profile-content">
-      ${content}
-    </div>
+    ${tabs}
+    ${profileBody}
   </div>`;
   backdrop.hidden = false;
   state.profileOpen = true;
   updateSubscriptionUi();
+  if (profileView === "stats" && canReview) loadApplicationStats();
   if (!LOCAL_PREVIEW && !tgSession) prepareTelegramLogin();
 }
 
@@ -2518,6 +2634,7 @@ function closeProfile() {
   backdrop.hidden = true;
   backdrop.innerHTML = "";
   state.profileOpen = false;
+  profileView = "profile";
   closeTgMemo();
   closeNotifsSheet();
   closeTgSheet();
@@ -2667,6 +2784,18 @@ function bindExtra() {
     }
     const act = e.target.closest("[data-act]");
     if (!act) return;
+    if (act.dataset.act === "profile-tab") {
+      const next = act.dataset.tab;
+      if ((next === "profile" || next === "stats") && next !== profileView) {
+        profileView = next;
+        openProfile();
+      }
+      return;
+    }
+    if (act.dataset.act === "refresh-stats") {
+      loadApplicationStats(true);
+      return;
+    }
     if (act.dataset.act === "back") {
       closeProfile();
       openSettings();
@@ -4151,9 +4280,8 @@ function botHtml(value) {
 function botDate(dIso) {
   try {
     const d = dateFromIso(dIso);
-    const name = dayEntry(d).name;
-    return `${d.getDate()} ${MONTHS[d.getMonth()]} · ${name}`;
-  } catch (_) { return dIso || "дата не указана"; }
+    return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  } catch (_) { return dIso || "неизвестная дата"; }
 }
 function botLesson(slot) {
   const value = slot || {};
@@ -4161,12 +4289,6 @@ function botLesson(slot) {
   const subject = botHtml(value.subject || "пара без названия");
   const meta = [value.teacher, value.room].filter(Boolean).map(botHtml).join(" · ");
   return meta ? `${subject}\n<blockquote>${meta}</blockquote>` : subject;
-}
-function botNotificationHeader(icon, title, group, dIso, n) {
-  return `${icon} <b>${title}</b>\n\n` +
-    `<b>группа:</b> ${botHtml(group || "не указана")}\n` +
-    `<b>дата:</b> ${botHtml(botDate(dIso))}` +
-    (n ? `\n<b>пара:</b> ${n}` : "");
 }
 function notifyCloudEvent(path, body) {
   if (LOCAL_PREVIEW || !body || !window.SCHED_NOTIFY_URL) return;
@@ -4176,29 +4298,25 @@ function notifyCloudEvent(path, body) {
   const key = decodeSwapKey(String(path).slice(section.length + 1));
   const stamp = body.updatedAt || body.createdAt || 0;
   const parts = key.split("|");
-  const group = parts[0] || "";
+  const group = parts[0] || ""; // Только маршрутизация, в сообщение не выводится.
   const when = (parts[1] || "").split(":");
   const dIso = when[0] || "";
   const n = Number(when[1]) || 0;
   let original = null;
   try { original = slotsForBase(dateFromIso(dIso)).find(slot => slot.n === n) || null; } catch (_) {}
 
-  let icon = "🔔", title = "замена в расписании";
-  if (type === "pending") { icon = "🕐"; title = "заявка на изменение"; }
-  else if (body.makeWindow) { icon = "🪟"; title = "окно после переноса"; }
-  else if (body.deleted) { icon = "↩️"; title = "замена сброшена"; }
-  else if (body.cancelled) { icon = "🚫"; title = "пара отменена"; }
-  else if (body.moved) { icon = "↪️"; title = "перенос пары"; }
+  let verb;
+  if (type === "pending") {
+    verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
+  } else if (body.makeWindow) verb = "сделали окном";
+  else if (body.deleted) verb = "вернули";
+  else if (body.cancelled) verb = "отменили";
+  else if (body.moved) verb = "перенесли";
+  else verb = "заменили";
 
-  let text = botNotificationHeader(icon, title, group, dIso, n);
-  if (!body.cancelled && !body.deleted && !body.moved && !body.makeWindow && original) {
-    text += `\n\n<b>было</b>\n${botLesson(original)}\n\n<b>стало</b>\n${botLesson(body)}`;
-  } else {
-    const shown = body.cancelled || body.deleted ? original : body;
-    const label = body.deleted ? "восстановлено" : body.cancelled ? "отменено" : "теперь";
-    if (shown) text += `\n\n<b>${label}</b>\n${botLesson(shown)}`;
-  }
-  if (body.byName) text += `\n\n<i>изменил: ${botHtml(body.byName)}</i>`;
+  const shown = body.cancelled || body.deleted ? original : body;
+  let text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>`;
+  if (shown) text += `\n\n${botLesson(shown)}`;
   queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group }).catch(reportPushError);
 }
 
@@ -4315,10 +4433,10 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       const rows = list.map(([k, value]) => {
         const n = Number(k.split(":").at(-1)) || 0;
         const stateLabel = value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value);
-        return `<b>${n} пара</b> — ${stateLabel}`;
+        return `<b>${n} пара</b>\n${stateLabel}`;
       }).join("\n\n");
-      const text = botNotificationHeader(pending ? "🕐" : "↪️", pending ? "заявка на перенос" : "изменение порядка пар", group, date, 0) +
-        `\n\n<b>${botHtml(label)}</b>\n${rows}`;
+      const action = pending ? "предложили перенести пары" : "перенесли пары";
+      const text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
       queueBotEvent({ type: pending ? "pending" : "swap", format: "html", group,
         event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text,
       }).catch(reportPushError);
@@ -4389,11 +4507,11 @@ async function approvePending(enc) {
   const rows = entries.map(([k, value]) => {
     const when = decodeSwapKey(k).split("|")[1] || "";
     const n = Number(when.split(":")[1]) || 0;
-    return `<b>${n} пара</b> — ${value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value)}`;
+    return `<b>${n} пара</b>\n${value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value)}`;
   }).join("\n\n");
   queueBotEvent({ type: "swap", format: "html", group,
     event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
-    text: botNotificationHeader("✅", "изменения опубликованы", group, date, 0) + `\n\n${rows}`,
+    text: `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`,
   }).catch(reportPushError);
   toast("изменения опубликованы");
 }
