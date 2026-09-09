@@ -2147,7 +2147,7 @@ function bindEvents() {
   });
 
   /* На iOS Safari innerHeight меняется при скролле (прячется/показывается тулбар) —
-     если пересчитывать высоту на каждый resize, вся раскладка «подпр��гивает».
+     если пересчитывать высоту на каждый resize, вся раскладка «подпрыгивает».
      Пересчитываем только при реальной смене ширины (поворот, сплит-вью). */
   let lastViewportWidth = window.innerWidth;
   const vh = (force) => {
@@ -2382,7 +2382,7 @@ function notifPreferencesHtml() {
   const prefs = loadNotifPrefs();
   const rows = [
     ["swaps", "замены и отмены", "изменения пар твоей группы"],
-    ["schedule", "обновления рас��исания", "когда появляется новое расписание"],
+    ["schedule", "обновления расписания", "когда появляется новое расписание"],
     ["pending", "заявки на проверку", "для владельца и редакторов"],
     [
       "telegram",
@@ -2894,16 +2894,7 @@ function stopBasicsTourRoulette(options = {}) {
     sceneOutTimer = null;
   }
   if (stage) {
-    stage.querySelectorAll(".sched-active-day-scene").forEach(scene => {
-      scene.getAnimations().forEach(a => a.finish());
-      scene.classList.remove("is-entering", "is-leaving");
-      scene.removeAttribute("data-direction");
-      scene.style.animation = "none";
-      scene.querySelectorAll(".agenda-row, .live-lesson-card, .sched-empty-day, .completed-lessons, .agenda-break, #live-host").forEach(el => {
-        el.getAnimations().forEach(a => a.finish());
-        el.style.animation = "none";
-      });
-    });
+    stage.querySelectorAll(".sched-active-day-scene.is-leaving").forEach(scene => scene.remove());
   }
   if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
     selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
@@ -2914,6 +2905,11 @@ function stopBasicsTourRoulette(options = {}) {
 function startBasicsTourRoulette(options = {}) {
   const initialDelay = typeof options.delay === "number" ? options.delay : 650;
   stopBasicsTourRoulette({ keepDate: Boolean(options.keepDate) });
+
+  if (state.editorMode && !editorChangedEntries().length) {
+    finishEditorMode();
+    basicsTourOpenedEditor = false;
+  }
 
   const strip = document.getElementById("strip");
   const selection = document.getElementById("selection");
@@ -3019,44 +3015,42 @@ function startBasicsTourRoulette(options = {}) {
           return;
         }
 
-        if (!sameDay(state.selected, originalDate)) {
-          selectDate(originalDate, null, { silent: true, preview: true, animated: false });
-        }
-        document.body.classList.remove("is-tour-roulette-active");
+        basicsTourRouletteFrame = null;
 
-        if (sceneTimer !== null) {
-          clearTimeout(sceneTimer);
-          sceneTimer = null;
-        }
-        if (sceneOutTimer !== null) {
-          clearTimeout(sceneOutTimer);
-          sceneOutTimer = null;
-        }
-        const stageEl = document.getElementById("stage");
-        if (stageEl) {
-          stageEl.querySelectorAll(".sched-active-day-scene").forEach(scene => {
-            scene.getAnimations().forEach(a => a.finish());
-            scene.classList.remove("is-entering", "is-leaving");
-            scene.removeAttribute("data-direction");
-            scene.style.animation = "none";
-            scene.querySelectorAll(".agenda-row, .live-lesson-card, .sched-empty-day, .completed-lessons, .agenda-break, #live-host").forEach(el => {
-              el.getAnimations().forEach(a => a.finish());
-              el.style.animation = "none";
-            });
+        // Фиксируем выбранный день в дате и UI
+        strip.dataset.selectedIndex = String(current);
+        if (selection) {
+          selection.classList.add("is-week-reset");
+          selection.style.removeProperty("will-change");
+          selection.style.removeProperty("transform");
+          window.requestAnimationFrame(() => {
+            selection.classList.remove("is-week-reset");
           });
         }
 
-        selection.style.removeProperty("will-change");
-        selection.style.removeProperty("transform");
-        stage?.style.removeProperty("min-height");
+        // Завершаем скрабинг: выделение плавно опускается в полоску под датой
         strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
         buttons.forEach(button => {
           button.removeAttribute("data-under-selection");
           button.classList.toggle("is-selected", button.dataset.date === iso(originalDate));
         });
-        strip.dataset.selectedIndex = String(current);
+
+        // Убираем ушедшие сцены, оставляя только текущую, без резкого сброса анимаций
+        const stageEl = document.getElementById("stage");
+        if (stageEl) {
+          stageEl.querySelectorAll(".sched-active-day-scene.is-leaving").forEach(scene => scene.remove());
+        }
+
+        // Высоту stage и активный статус держим заблокированными до завершения анимации полоски (380ms),
+        // чтобы пары внизу не вздрагивали
+        window.setTimeout(() => {
+          if (basicsTourStep === 1) {
+            stage?.style.removeProperty("min-height");
+            document.body.classList.remove("is-tour-roulette-active");
+          }
+        }, 380);
+
         basicsTourRouletteOriginalDate = null;
-        basicsTourRouletteFrame = null;
       };
 
       basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
@@ -3094,6 +3088,10 @@ function finishBasicsTour() {
 
 function renderBasicsTour() {
   stopBasicsTourRoulette();
+  if (basicsTourStep === 1 && state.editorMode && !editorChangedEntries().length) {
+    finishEditorMode();
+    basicsTourOpenedEditor = false;
+  }
   const step = BASICS_TOUR[basicsTourStep];
   const target = step && document.querySelector(step.selector);
   if (!step || !target) { finishBasicsTour(); return; }
@@ -3134,6 +3132,10 @@ function renderBasicsTour() {
     const action = event.target.closest("[data-tour]")?.dataset.tour;
     if (action === "skip") { finishBasicsTour(); return; }
     if (action === "next") {
+      if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
+        finishEditorMode();
+        basicsTourOpenedEditor = false;
+      }
       basicsTourStep += 1;
       if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
       else renderBasicsTour();
@@ -3459,7 +3461,7 @@ function init() {
 
   if (!LOCAL_PREVIEW && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
     /* Новая версия должна заменить уже открытую старую страницу, иначе в памяти
-       остаются прежние строки и анимации даже после обновления фай��ов на GitHub. */
+       остаются прежние строки и анимации даже после обновления файлов на GitHub. */
     const hadController = Boolean(navigator.serviceWorker.controller);
     let swReloading = false;
     let swReloadPending = false;
@@ -4231,7 +4233,7 @@ function previewAnimated() {
 function migrateSwaps(data) {
   const out = {};
   Object.keys(data).forEach((key) => {
-    out[key.indexOf("|") === -1 ? "\u0442\u043c-303/\u0431|" + key : key] = data[key];
+    out[key.indexOf("|") === -1 ? "тм-303/б|" + key : key] = data[key];
   });
   return out;
 }
@@ -4256,11 +4258,7 @@ function scheduleStamp(payload) {
   if (Number.isNaN(when.getTime())) return;
   const hh = String(when.getHours()).padStart(2, "0");
   const mm = String(when.getMinutes()).padStart(2, "0");
-  el.textContent =
-    "\u0440\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u0432 " +
-    hh +
-    ":" +
-    mm;
+  el.textContent = "расписание обновлено в " + hh + ":" + mm;
 }
 
 function applySchedulePayload(payload) {

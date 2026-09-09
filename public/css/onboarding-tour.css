@@ -243,15 +243,6 @@ body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-
   }
 }
 
-/* Исключаем повторную анимацию пар во время обучения, когда показ рулетки завершён */
-body.is-tour-active:not(.is-tour-roulette-active) #stage .sched-active-day-scene .agenda-row,
-body.is-tour-active:not(.is-tour-roulette-active) #stage .sched-active-day-scene .live-lesson-card,
-body.is-tour-active:not(.is-tour-roulette-active) #stage .sched-active-day-scene .sched-empty-day,
-body.is-tour-active:not(.is-tour-roulette-active) #stage .sched-active-day-scene .completed-lessons,
-body.is-tour-active:not(.is-tour-roulette-active) #stage .sched-active-day-scene .agenda-break,
-body.is-tour-active:not(.is-tour-roulette-active) #stage .sched-active-day-scene #live-host {
-  animation: none !important;
-}
 
 @media (max-height: 720px) {
   .sched-onboarding-telegram-mark { width: 68px; height: 68px; margin: 4px auto 10px; border-radius: 22px; }
