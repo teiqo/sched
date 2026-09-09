@@ -328,7 +328,8 @@ class App:
         eid = data.get("event_id")
         text = data.get("text")
         group = data.get("group", "")
-        if not isinstance(eid, str) or not 1 <= len(eid) <= 512 or not isinstance(text, str) or not text.strip() or len(text) > 3800 or not isinstance(group, str) or len(group) > 100:
+        message_format = data.get("format", "plain")
+        if not isinstance(eid, str) or not 1 <= len(eid) <= 512 or not isinstance(text, str) or not text.strip() or len(text) > 3800 or not isinstance(group, str) or len(group) > 100 or message_format not in ("plain", "html"):
             return 400, {"ok": False, "error": "Invalid event"}
         # Private notifications NEVER accept client-selected recipients or fall back to public broadcast.
         if kind in ("pending", "report"):
@@ -337,7 +338,8 @@ class App:
                 text = "[отчёт без подтверждённого входа]\n" + text
         else:
             targets = self.store.recipients(kind, group)
-        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets)
+        payload = {"parse_mode": "HTML"} if message_format == "html" else None
+        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets, payload=payload)
         self.wake()
         LOG.info("событие %s: %s; в очереди получателей %d", kind, "принято" if created else "дубликат", queued)
         return 202, {"ok": True, "accepted": created, "duplicate": not created, "queued": queued}

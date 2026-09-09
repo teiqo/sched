@@ -2593,7 +2593,7 @@ function closeOnboarding() {
     host.hidden = true;
     host.classList.remove("is-closing");
     host.innerHTML = "";
-    playBrandIntro(); /* главный экран появился — теперь интро лого */
+    playBrandIntro(); /* главный экран появи��ся — теперь интро лого */
   }, 320);
   state.onboarded = true;
   save();
@@ -3591,7 +3591,7 @@ function planScheduleRetry() {
   window.addEventListener("online", () => refreshSchedule(true));
 })();
 
-/* Слишком светлый акцент на светлом фоне и слишком тёмный на тёмном
+/* Слишком светлый акцент на с������етлом фоне и слишком тёмный на тёмном
    не читаются, поэтому для текста и иконок берём подправленный оттенок */
 function accentLuminance(hex) {
   const n = String(hex || "").replace("#", "");
@@ -4101,7 +4101,7 @@ async function cloudFetch(url, options = {}) {
 function encodeSwapKey(key) {
   /* Слеш в ключе (тм-303/б|...) для Firebase — разделитель пути: %2F в REST
      раскодируется обратно в "/", запись уходит глубже $key, и .validate правил
-     проверяет родительскую мапу вместо записи — отсюда вечный 401. Заменяем
+     проверяет родительскую мапу вместо записи — отсюда вечный 401. За��еняем
      "/" на "~" (разрешён в ключах Firebase) и получаем плоский ключ. Точки
      по-прежнему экранируем — они в ключах Firebase запрещены. */
   return encodeURIComponent(String(key).replace(/\//g, "~")).replace(/\./g, "%2E");
@@ -4142,58 +4142,64 @@ function reportPushError(error) {
   pushWarningAt = Date.now();
   console.warn("sched: уведомление не отправлено:", error.message);
 }
+function botHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+function botDate(dIso) {
+  try {
+    const d = dateFromIso(dIso);
+    const name = dayEntry(d).name;
+    return `${d.getDate()} ${MONTHS[d.getMonth()]} · ${name}`;
+  } catch (_) { return dIso || "дата не указана"; }
+}
+function botLesson(slot) {
+  const value = slot || {};
+  if (value.makeWindow || value.window || value.empty) return "окно";
+  const subject = botHtml(value.subject || "пара без названия");
+  const meta = [value.teacher, value.room].filter(Boolean).map(botHtml).join(" · ");
+  return meta ? `${subject}\n<blockquote>${meta}</blockquote>` : subject;
+}
+function botNotificationHeader(icon, title, group, dIso, n) {
+  return `${icon} <b>${title}</b>\n\n` +
+    `<b>группа:</b> ${botHtml(group || "не указана")}\n` +
+    `<b>дата:</b> ${botHtml(botDate(dIso))}` +
+    (n ? `\n<b>пара:</b> ${n}` : "");
+}
 function notifyCloudEvent(path, body) {
   if (LOCAL_PREVIEW || !body || !window.SCHED_NOTIFY_URL) return;
   const section = String(path).split("/")[0];
-  const type =
-    section === CLOUD_PATHS.swaps
-      ? "swap"
-      : section === CLOUD_PATHS.pending
-        ? "pending"
-        : section === CLOUD_PATHS.reports
-          ? "report"
-          : null;
-  if (!type || type === "report") return; // Reports have one explicit send path.
+  const type = section === CLOUD_PATHS.swaps ? "swap" : section === CLOUD_PATHS.pending ? "pending" : null;
+  if (!type) return;
   const key = decodeSwapKey(String(path).slice(section.length + 1));
   const stamp = body.updatedAt || body.createdAt || 0;
-  let group = type === "report" ? body.group || "" : key.split("|")[0];
-  let text;
-  if (type === "report") {
-    text = "🐞 отчёт · " + group + "\n" + String(body.message || "").slice(0, 2500);
-    if (body.hasFile) text += "\n📎 вложение доступно в отчётах на сайте";
+  const parts = key.split("|");
+  const group = parts[0] || "";
+  const when = (parts[1] || "").split(":");
+  const dIso = when[0] || "";
+  const n = Number(when[1]) || 0;
+  let original = null;
+  try { original = slotsForBase(dateFromIso(dIso)).find(slot => slot.n === n) || null; } catch (_) {}
+
+  let icon = "🔔", title = "замена в расписании";
+  if (type === "pending") { icon = "🕐"; title = "заявка на изменение"; }
+  else if (body.makeWindow) { icon = "🪟"; title = "окно после переноса"; }
+  else if (body.deleted) { icon = "↩️"; title = "замена сброшена"; }
+  else if (body.cancelled) { icon = "🚫"; title = "пара отменена"; }
+  else if (body.moved) { icon = "↪️"; title = "перенос пары"; }
+
+  let text = botNotificationHeader(icon, title, group, dIso, n);
+  if (!body.cancelled && !body.deleted && !body.moved && !body.makeWindow && original) {
+    text += `\n\n<b>было</b>\n${botLesson(original)}\n\n<b>стало</b>\n${botLesson(body)}`;
   } else {
-    const rest = key.split("|")[1] || "";
-    const when = rest.split(":");
-    const dIso = when[0] || "";
-    const n = Number(when[1]) || 0;
-    const what =
-      type === "pending"
-        ? "🕐 заявка на проверку"
-        : body.makeWindow
-          ? "🪟 окно после переноса"
-          : body.deleted
-            ? "↩️ сброс замены"
-            : body.cancelled
-              ? "отмена пары"
-              : body.moved ? "↪️ перенос" : "🔔 замена";
-    let original = null;
-    try { original = slotsForBase(dateFromIso(dIso)).find((slot) => slot.n === n) || null; } catch (e) {}
-    const lessonLine = (slot) => {
-      const value = slot || {};
-      const details = value.makeWindow || value.window || value.empty
-        ? ["окно"]
-        : [value.subject, value.teacher, value.room].filter(Boolean);
-      return [dIso, n ? n + " пара" : "", ...details].filter(Boolean).join(" · ");
-    };
-    text = what;
-    if (!body.cancelled && !body.deleted && !body.moved && !body.makeWindow && original) {
-      text += "\n" + lessonLine(original) + "\n↓\n" + lessonLine(body);
-    } else {
-      const shown = body.cancelled || body.deleted ? original : body;
-      if (shown) text += "\n" + lessonLine(shown);
-    }
+    const shown = body.cancelled || body.deleted ? original : body;
+    const label = body.deleted ? "восстановлено" : body.cancelled ? "отменено" : "теперь";
+    if (shown) text += `\n\n<b>${label}</b>\n${botLesson(shown)}`;
   }
-  queueBotEvent({ type, event_id: path + ":" + stamp, text, group }).catch(reportPushError);
+  if (body.byName) text += `\n\n<i>изменил: ${botHtml(body.byName)}</i>`;
+  queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group }).catch(reportPushError);
 }
 
 /* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
@@ -4299,14 +4305,22 @@ async function publishSwapBatch(entries, label = "изменены пары") {
     const list = Object.entries(entries);
     if (list.length === 1) {
       const [key, entry] = list[0];
-      notifyCloudEvent(section + "/" + encodeSwapKey(key), { ...entry, by: identity });
+      notifyCloudEvent(section + "/" + encodeSwapKey(key), {
+        ...entry, by: identity, byName: tgDisplayName(tgSession),
+      });
     } else {
       const [key, entry] = list[0];
       const group = key.split("|")[0], date = (key.split("|")[1] || "").split(":")[0];
-      queueBotEvent({ type: section === CLOUD_PATHS.pending ? "pending" : "swap", group,
-        event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt),
-        text: `${section === CLOUD_PATHS.pending ? "🕐 заявка" : "🔔 расписание"} · ${group} · ${date}\n${label}\n` +
-          list.map(([k, value]) => `${k.split(":").at(-1)} пара: ${value.deleted ? "исходное расписание" : value.makeWindow ? "окно" : value.cancelled ? "отменена" : [value.subject, value.teacher, value.room].filter(Boolean).join(" · ")}`).join("\n"),
+      const pending = section === CLOUD_PATHS.pending;
+      const rows = list.map(([k, value]) => {
+        const n = Number(k.split(":").at(-1)) || 0;
+        const stateLabel = value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value);
+        return `<b>${n} пара</b> — ${stateLabel}`;
+      }).join("\n\n");
+      const text = botNotificationHeader(pending ? "🕐" : "↪️", pending ? "заявка на перенос" : "изменение порядка пар", group, date, 0) +
+        `\n\n<b>${botHtml(label)}</b>\n${rows}`;
+      queueBotEvent({ type: pending ? "pending" : "swap", format: "html", group,
+        event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text,
       }).catch(reportPushError);
     }
     if (section === CLOUD_PATHS.pending) toast("изменения отправлены на проверку одним действием");
@@ -4370,8 +4384,17 @@ async function approvePending(enc) {
   for (const [key, entry] of entries) { delete pendingMap[key]; map[decodeSwapKey(key)] = { ...entry }; }
   saveSwaps(); updateTgButton(); renderTgSheetBody(); render();
   const [key, entry] = entries[0];
-  queueBotEvent({ type: "swap", group: decodeSwapKey(key).split("|")[0], event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
-    text: "🔔 опубликованы изменения расписания · " + decodeSwapKey(key).split("|")[0] + "\n" + entries.map(([k, value]) => decodeSwapKey(k).split("|")[1] + " · " + (value.subject || (value.makeWindow ? "окно" : "восстановление / отмена"))).join("\n") }).catch(reportPushError);
+  const decoded = decodeSwapKey(key), group = decoded.split("|")[0];
+  const date = (decoded.split("|")[1] || "").split(":")[0];
+  const rows = entries.map(([k, value]) => {
+    const when = decodeSwapKey(k).split("|")[1] || "";
+    const n = Number(when.split(":")[1]) || 0;
+    return `<b>${n} пара</b> — ${value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value)}`;
+  }).join("\n\n");
+  queueBotEvent({ type: "swap", format: "html", group,
+    event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
+    text: botNotificationHeader("✅", "изменения опубликованы", group, date, 0) + `\n\n${rows}`,
+  }).catch(reportPushError);
   toast("изменения опубликованы");
 }
 async function rejectPending(enc) {
@@ -4613,7 +4636,7 @@ function renderAccountRow() {
     const pHint = document.getElementById("settings-pending-hint");
     if (pHint)
       pHint.textContent = pendingCount
-        ? "ждут проверки: " + pendingCount
+        ? "ждут проверк��: " + pendingCount
         : "проверка замен и права";
   }
 
@@ -5008,7 +5031,7 @@ function describeSwapForNotif(key, entry) {
   var what = "замена";
   if (entry.deleted) what = "сброс замены";
   else if (entry.cancelled) what = "отмена пары";
-  else if (entry.moved) what = entry.makeWindow ? "окно после переноса" : "перенос";
+  else if (entry.moved) what = entry.makeWindow ? "окно после перен��са" : "перенос";
   /* Номер, предмет, преподаватель и аудитория уже показаны в мини-карточке. */
   return what;
 }
@@ -5411,7 +5434,7 @@ function renderUpdatesBody(data) {
   const entries = data && Array.isArray(data.entries) ? data.entries : [];
   if (!entries.length) {
     html +=
-      '<p class="sched-replace-hint sched-updates-empty">изменений пока не было. как только парсер найдёт отличия в PDF колледжа, они появятся здесь — по каждой группе отдельно.</p>';
+      '<p class="sched-replace-hint sched-updates-empty">изменений пока не было. как только парсер найдёт отличия в PDF колледжа, они появятся здесь — по ка��дой группе отдельно.</p>';
   } else {
     html +=
       '<div class="sched-tg-section"><span>изменения по всем группам (' +
