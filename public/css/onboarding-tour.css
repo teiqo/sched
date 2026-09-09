@@ -50,22 +50,14 @@
   display: grid;
   width: 42px;
   height: 42px;
-  min-width: 42px;
-  min-height: 42px;
-  max-width: 42px;
-  max-height: 42px;
-  aspect-ratio: 1 / 1 !important;
-  flex: 0 0 42px !important;
-  flex-shrink: 0 !important;
   place-items: center;
-  border-radius: 50% !important;
+  border-radius: 50%;
   background: linear-gradient(145deg, #1688f8, #7058ec);
   color: #fff;
   font-size: 22px;
   font-style: normal;
   font-weight: 800;
   text-transform: uppercase;
-  box-sizing: border-box;
 }
 .sched-onboarding-tg-head {
   display: flex;
@@ -186,63 +178,6 @@
   outline-offset: 2px;
 }
 
-:root #strip.is-tour-demo #selection {
-  transition: none !important;
-}
-
-.sched-tour-copy .sched-tour-accent {
-  display: inline;
-  font-weight: 600;
-  color: var(--sched-blue);
-  background: linear-gradient(135deg, var(--sched-blue) 0%, color-mix(in srgb, var(--sched-blue) 35%, #a855f7) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.sched-tour.is-ready .sched-tour-copy strong {
-  animation: sched-tour-text-flow 0.36s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
-}
-
-.sched-tour.is-ready .sched-tour-copy small {
-  animation: sched-tour-text-flow 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
-}
-
-@keyframes sched-tour-text-flow {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 6px, 0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-/* Анимация появления пар при прокрутке рулетки в обучении */
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row,
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .live-lesson-card,
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .sched-empty-day {
-  animation: sched-tour-pair-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
-
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) { animation-delay: 25ms !important; }
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) { animation-delay: 55ms !important; }
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) { animation-delay: 85ms !important; }
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) { animation-delay: 115ms !important; }
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 5) { animation-delay: 145ms !important; }
-
-@keyframes sched-tour-pair-in {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, -12px, 0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 @media (max-height: 720px) {
   .sched-onboarding-telegram-mark { width: 68px; height: 68px; margin: 4px auto 10px; border-radius: 22px; }
   .sched-onboarding-telegram-mark svg { width: 30px; height: 30px; }
@@ -253,45 +188,4 @@ body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-
 
 @media (prefers-reduced-motion: reduce) {
   .sched-tour-spotlight rect { animation: none; }
-  .sched-tour.is-ready .sched-tour-copy strong,
-  .sched-tour.is-ready .sched-tour-copy small {
-    animation: none;
-  }
 }
-
-/* Режим обучения полностью изолирован от ограничений производительности */
-:root[data-perf] #basics-tour,
-:root[data-perf] #basics-tour *,
-:root[data-perf] .sched-tour,
-:root[data-perf] .sched-tour *,
-:root[data-perf] #onboarding,
-:root[data-perf] #onboarding *,
-:root[data-perf] body.is-tour-active #stage *,
-:root[data-perf] body.is-tour-active #strip *,
-:root[data-perf] body.is-tour-roulette-active #stage *,
-:root[data-perf] body.is-tour-roulette-active #strip * {
-  animation: revert !important;
-  animation-duration: revert !important;
-  animation-delay: revert !important;
-  animation-iteration-count: revert !important;
-  transition: revert !important;
-  transition-duration: revert !important;
-  transition-delay: revert !important;
-}
-
-:root[data-perf] .sched-tour-spotlight rect {
-  animation: sched-tour-dashes 1.15s linear infinite !important;
-}
-
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row,
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .live-lesson-card,
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .sched-empty-day {
-  animation: sched-tour-pair-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
-
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) { animation-delay: 25ms !important; }
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) { animation-delay: 55ms !important; }
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) { animation-delay: 85ms !important; }
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) { animation-delay: 115ms !important; }
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 5) { animation-delay: 145ms !important; }
-

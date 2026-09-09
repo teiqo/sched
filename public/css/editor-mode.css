@@ -89,77 +89,11 @@
   .sched-editor-toolbar button.is-primary { margin-left: 0; }
 }
 @media (max-width: 430px) {
-  .sched-header-actions {
-    gap: 6px !important;
-    min-width: max-content;
-    flex-shrink: 0;
-  }
+  .sched-header-actions { gap: 6px !important; }
   .sched-editor-btn,
   .sched-header-actions .sched-bell-btn,
-  .sched-header-actions .sched-settings-trigger,
-  .sched-header-actions .sched-settings {
-    width: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    max-height: 40px !important;
-    aspect-ratio: 1 / 1 !important;
-    flex: 0 0 auto !important;
-    flex-shrink: 0 !important;
-    border-radius: 50% !important;
-    box-sizing: border-box !important;
-  }
+  .sched-header-actions .sched-settings-trigger { width: 40px !important; height: 40px !important; }
 }
-#editor-btn.is-hidden-tab {
-  display: none !important;
-}
-
-@media (max-width: 385px) {
-  #editor-btn.sched-editor-btn {
-    position: fixed !important;
-    right: max(16px, env(safe-area-inset-right, 16px)) !important;
-    bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)) !important;
-    z-index: 35 !important;
-    width: 48px !important;
-    height: 48px !important;
-    min-width: 48px !important;
-    max-width: 48px !important;
-    min-height: 48px !important;
-    max-height: 48px !important;
-    aspect-ratio: 1 / 1 !important;
-    flex-shrink: 0 !important;
-    border-radius: 50% !important;
-    box-sizing: border-box !important;
-    border: 1px solid var(--sched-separator) !important;
-    background: var(--sched-surface) !important;
-    color: var(--sched-secondary) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--sched-separator) !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
-  }
-
-  #editor-btn.sched-editor-btn svg {
-    width: 22px !important;
-    height: 22px !important;
-  }
-
-  #editor-btn.sched-editor-btn:active {
-    transform: scale(0.92) !important;
-  }
-
-  #editor-btn.sched-editor-btn.is-active {
-    border-color: color-mix(in srgb, var(--sched-blue) 44%, var(--sched-separator)) !important;
-    background: color-mix(in srgb, var(--sched-blue) 14%, var(--sched-surface)) !important;
-    color: var(--sched-blue) !important;
-    box-shadow: 0 4px 18px color-mix(in srgb, var(--sched-blue) 30%, transparent), 0 0 0 1px var(--sched-blue) !important;
-  }
-
-  .sched-schedule-footer {
-    padding-bottom: max(68px, calc(env(safe-area-inset-bottom, 0px) + 60px)) !important;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .sched-editor-btn,
   .sched-editor-toolbar button { transition: none !important; }
