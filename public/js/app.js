@@ -449,7 +449,28 @@ function liveState(d) {
     }
   }
   const next = list.find((s) => mins(s.from) > cur);
-  if (next) return { kind: "next", slot: next, left: mins(next.from) - cur, progress: 0, now };
+  if (next) {
+    /* Если до этого уже была пара — сейчас идёт перерыв, а не ожидание первой пары. */
+    const prev = [...list].reverse().find((s) => mins(s.to) <= cur);
+    if (prev) {
+      const from = mins(prev.to);
+      const to = mins(next.from);
+      const total = to - from;
+      return {
+        kind: "break",
+        slot: next,
+        prev,
+        from: prev.to,
+        to: next.from,
+        total,
+        left: to - cur,
+        passed: cur - from,
+        progress: total > 0 ? (cur - from) / total : 1,
+        now,
+      };
+    }
+    return { kind: "next", slot: next, left: mins(next.from) - cur, progress: 0, now };
+  }
   return { kind: "done", slot: list[list.length - 1], left: 0, progress: 1, now };
 }
 
@@ -493,8 +514,39 @@ function changeLabel(slot) {
   return slot.moved ? "перенос" : isRoomOnlySwap(slot) ? "другая аудитория" : "замена";
 }
 
+/* Перерыв показывается такой же большой плашкой, как идущая пара,
+   только с отсчётом до следующей пары. */
+function breakCardHtml(live, dIso) {
+  const s = live.slot;
+  const title = live.total >= 30 ? "большой перерыв" : "перерыв";
+  const dateStr = dIso || iso(live.now || state.selected || currentDate());
+  const swapBtn = swapButtonHtml(dateStr, s.n);
+  const room = s.room
+    ? ` · <span class="lesson-room">ауд. ${escapeHtml(s.room)}</span>`
+    : "";
+  const body = `
+    <div class="live-card-status">
+      <span><i></i>сейчас · перерыв ${bellDuration(Math.max(0, Math.round(live.total)))}</span>
+      <div class="live-card-status-right">
+        <time id="live-clock">${clockText(live.now)}</time>
+        ${swapBtn}
+      </div>
+    </div>
+    <h3>${title}</h3>
+    <p class="lesson-meta"><span class="lesson-type-accent">дальше · ${s.n} пара</span> ${escapeHtml(s.subject)}${room}</p>
+    <div class="live-card-progress"><i id="live-progress" style="transform:scaleX(${live.progress.toFixed(3)})"></i></div>
+    <div class="live-card-timing"><span class="live-card-range">${live.from}–${live.to}<small id="live-passed">прошло ${fmtLeft(live.passed)}</small></span><span id="live-left">осталось ${fmtLeft(live.left)}</span></div>`;
+  return `<article class="live-lesson-card is-current is-break" data-row-n="${s.n}">
+    <div class="live-card-glass">
+      <div class="live-card-particles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      ${body}
+    </div>
+  </article>`;
+}
+
 function liveCardHtml(live, dIso) {
   if (!live || live.kind === "done") return "";
+  if (live.kind === "break") return breakCardHtml(live, dIso);
   const s = live.slot;
   const current = live.kind === "current";
   const dateStr = dIso || iso(live.now || state.selected || currentDate());
@@ -729,7 +781,7 @@ function dayHtml(d, withLive, future) {
     body = emptyDayHtml(d);
   } else if (!today || !withLive || future) {
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}</div>` : "";
-  } else if (live && (live.kind === "current" || live.kind === "next")) {
+  } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
     const liveN = live.slot.n;
     const earlier = rows.filter((s) => s.n < liveN);
     const later = rows.filter((s) => s.n > liveN);
@@ -1184,13 +1236,13 @@ function tick() {
   const clock = $("#live-clock");
   const left = $("#live-left");
   const bar = $("#live-progress");
-  if (clock && live.kind === "current") clock.textContent = clockText(live.now);
+  if (clock && (live.kind === "current" || live.kind === "break")) clock.textContent = clockText(live.now);
   if (left) {
     left.textContent =
-      live.kind === "current" ? `осталось ${fmtLeft(live.left)}` : `через ${fmtLeft(live.left)}`;
+      live.kind === "next" ? `через ${fmtLeft(live.left)}` : `осталось ${fmtLeft(live.left)}`;
   }
   const passed = $("#live-passed");
-  if (passed && live.kind === "current") passed.textContent = `прошло ${fmtLeft(live.passed)}`;
+  if (passed && (live.kind === "current" || live.kind === "break")) passed.textContent = `прошло ${fmtLeft(live.passed)}`;
   if (bar) bar.style.transform = `scaleX(${live.progress.toFixed(3)})`;
 }
 

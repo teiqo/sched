@@ -168,3 +168,18 @@ body.is-editor-closing #stage {
   transition: none !important;
   pointer-events: none !important;
 }
+
+/* Плашка перерыва: та же большая карточка, что и у идущей пары,
+   только в спокойном, не «живом» тоне. */
+.live-lesson-card.is-break .live-card-status {
+  color: var(--sched-secondary);
+}
+.live-lesson-card.is-break .live-card-status > span > i {
+  background: var(--sched-secondary);
+}
+.live-lesson-card.is-break .live-card-progress i {
+  background: color-mix(in srgb, var(--sched-secondary) 70%, transparent);
+}
+.live-lesson-card.is-break .lesson-type-accent {
+  color: var(--sched-blue);
+}
