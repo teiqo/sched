@@ -741,3 +741,78 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   max-height: calc(var(--sched-viewport-height, 100dvh) + 120px);
   overflow: hidden;
 }
+
+
+/* ==========================================================================
+   iOS Safari: рывки по всей длине свайпа дают backdrop-filter и маски.
+   Любое размытие подложки пересчитывается каждый кадр, пока под ним или
+   вместе с ним едет контент — и это невозможно вынести на композитор.
+   На время жеста размытие снимается целиком, фоны становятся непрозрачными.
+   ========================================================================== */
+:root.is-day-swiping *,
+:root.is-day-swiping *::before,
+:root.is-day-swiping *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Непрозрачные замены для того, что без размытия стало бы полупрозрачным. */
+:root.is-day-swiping .sched-date-controls { background: var(--sched-bg) !important; }
+:root.is-day-swiping .sched-tab-bar,
+:root.is-day-swiping .sched-tab-bar::after,
+:root.is-day-swiping .sched-dock-refresh { background: var(--sched-raised) !important; }
+:root.is-day-swiping .sched-dock::before { background: var(--sched-bg) !important; }
+
+/* Маски и широкие градиентные подсветки внутри едущего слоя тоже считаются
+   на каждом кадре (особенно псевдоэлемент шириной 100vw у живой пары). */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) .live-card-backglow,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) .live-card-glass::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) .live-card-glass::after {
+  display: none !important;
+}
+/* Стеклянная карточка текущей пары — главный источник перерисовки внутри
+   самой сцены: на время жеста это обычная плоская карточка. */
+:root.is-day-swiping .live-card-glass {
+  background: var(--sched-surface) !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+
+/* ==========================================================================
+   Ключевая iOS-правка: не двигаем весь #stage. В режиме «неделя» внутри него
+   лежат текущий день плюс до шести полностью отрисованных будущих дней.
+   Safari создавал огромную текстуру и перетайлил её на протяжении всего
+   свайпа. Рулетка плавная именно потому, что этот контейнер не двигает.
+   Теперь едет только первый (активный) .sched-day-block.
+   ========================================================================== */
+:root.is-day-swiping #stage {
+  transform: none !important;
+  will-change: auto !important;
+  contain: none !important;
+}
+:root.is-day-swiping .is-swipe-mover {
+  position: relative;
+  z-index: 2;
+  contain: layout paint style;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+#scene:is(.is-swipe-return, .is-swipe-commit) .is-swipe-mover {
+  transition: transform var(--swipe-anim-dur, 260ms) cubic-bezier(.22, 1, .36, 1) !important;
+}
+/* Будущие дни остаются обычным неподвижным потоком и не входят в
+   композитную текстуру активного дня. */
+:root.is-day-swiping #day-scene > .sched-future-days {
+  position: relative;
+  z-index: 0;
+  will-change: auto !important;
+  contain: none !important;
+}
