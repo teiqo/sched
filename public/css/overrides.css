@@ -5569,6 +5569,58 @@ a.sched-settings-row,
   border-radius: 999px !important;
 }
 
+/* Плавное выдвижение строки цвета акцента при переключении с базовой темы */
+#accent-row {
+  display: flex !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  transform-origin: top center;
+  will-change: max-height, opacity, transform;
+}
+
+#accent-row:not(.is-visible) {
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  transform: translate3d(0, -12px, 0) !important;
+  border-top-width: 0 !important;
+  border-top-color: transparent !important;
+  pointer-events: none !important;
+  visibility: hidden;
+  transition:
+    max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease,
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    padding-top 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    padding-bottom 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    border-top-color 0.16s ease,
+    visibility 0s linear 0.32s !important;
+}
+
+#accent-row.is-visible {
+  height: auto !important;
+  min-height: 46px !important;
+  max-height: 72px !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+  opacity: 1 !important;
+  transform: translate3d(0, 0, 0) !important;
+  border-top: 1px solid var(--sched-separator) !important;
+  pointer-events: auto !important;
+  visibility: visible;
+  transition:
+    max-height 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.28s ease 0.04s,
+    transform 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    padding-top 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    padding-bottom 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    border-top-color 0.22s ease !important;
+}
+
 /* Каскад появления: перерывы и live-host вместе с парами */
 #stage .sched-active-day-scene.is-entering .agenda-break,
 #stage .sched-active-day-scene.is-entering #live-host {

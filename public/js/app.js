@@ -1256,7 +1256,12 @@ function applyTheme() {
     });
   }
   const accentRow = $("#accent-row");
-  if (accentRow) accentRow.hidden = state.palette !== "accent" && state.palette !== "accent-plus";
+  const isAccent = state.palette === "accent" || state.palette === "accent-plus";
+  if (accentRow) {
+    accentRow.removeAttribute("hidden");
+    accentRow.classList.toggle("is-visible", isAccent);
+    accentRow.inert = !isAccent;
+  }
   const accentInput = $("#accent-color");
   if (accentInput && accentInput.value.toLowerCase() !== state.accent.toLowerCase()) {
     accentInput.value = state.accent;
@@ -2905,11 +2910,19 @@ function startBasicsTourRoulette(options = {}) {
   const originalWeek = weekStart(originalDate);
   basicsTourRouletteOriginalDate = originalDate;
 
-  // Движение строго в одну сторону и обратно:
-  // Если день в первой половине недели (0..3) — идём к концу (6) и обратно.
-  // Если день во второй половине (4..6) — идём к началу (0) и обратно.
-  const targetIndex = current <= 3 ? 6 : 0;
-  const distance = Math.abs(targetIndex - current);
+  const today = startOfDay(currentDate());
+  const todayIndex = Math.max(0, Math.min(6, Math.round((today - originalWeek) / 86400000)));
+
+  // Рулетка дней должна доходить до сегодняшнего дня:
+  let targetIndex;
+  if (current !== todayIndex) {
+    targetIndex = todayIndex;
+  } else {
+    // Если уже на сегодняшнем дне — идём к началу недели (понедельник 0) и возвращаемся в сегодня.
+    // Если сегодня понедельник (0) — идём к пятнице (4) и возвращаемся в сегодня.
+    targetIndex = todayIndex === 0 ? 4 : 0;
+  }
+  const distance = Math.max(1, Math.abs(targetIndex - current));
 
   // Предварительное мягкое нажатие перед движением
   const pressDelay = Math.max(0, initialDelay - 200);
