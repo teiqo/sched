@@ -3,7 +3,7 @@ export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
   renderDay, onCommit, onActiveChange, onFinish,
 }) {
-  let gesture = null, peek = null, settling = null, timer = null, active = false;
+  let gesture = null, peek = null, settling = null, timer = null, drawFrame = null, active = false;
   let viewportWidth = innerWidth;
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const width = () => stage.offsetWidth || innerWidth;
@@ -13,13 +13,17 @@ export function bindDaySwipe({
     strip.classList.toggle("is-day-swiping", value);
     onActiveChange?.(value);
   };
-  const shiftStage = x => stage.style.setProperty("--swipe-x", `${x.toFixed(2)}px`);
+  /* A direct transform does not invalidate inherited custom properties in the
+     whole schedule tree. It stays on the compositor while the finger moves. */
+  const shiftStage = x => { stage.style.transform = `translate3d(${x.toFixed(2)}px, 0, 0)`; };
   const shiftSelection = progress => {
     const index = Number(strip.dataset.selectedIndex) || 0;
     selection.style.transform = `translate3d(${Math.max(0, Math.min(6, index + progress)) * 100}%, 0, 0)`;
   };
   const clearVisuals = () => {
     clearTimeout(timer);
+    cancelAnimationFrame(drawFrame);
+    drawFrame = null;
     timer = null;
     gesture = null;
     settling = null;
@@ -27,6 +31,7 @@ export function bindDaySwipe({
     peek = null;
     scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
     scene.style.removeProperty("--swipe-anim-dur");
+    stage.style.removeProperty("transform");
     stage.style.removeProperty("--swipe-x");
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     strip.style.removeProperty("--strip-swipe-duration");
@@ -62,6 +67,40 @@ export function bindDaySwipe({
     return peek;
   };
 
+  const paintGesture = () => {
+    drawFrame = null;
+    const g = gesture;
+    if (!g || g.axis !== "x") return;
+    const dx = g.pointerX - g.x;
+    const w = g.width;
+    let direction = dx < 0 ? 1 : -1;
+    // Do not rebuild the full neighbouring day when a slow finger jitters
+    // around the starting pixel. Crossing 24px intentionally changes side.
+    if (g.direction && direction !== g.direction && Math.abs(dx) < 24) direction = g.direction;
+    g.direction = direction;
+    g.blocked = addDays(g.date, direction) < minDate();
+    const limited = Math.sign(dx || -direction) * Math.min(Math.abs(dx), w);
+    g.shift = g.blocked ? limited * 0.55 : limited;
+    const preview = ensurePeek(direction, g.blocked);
+    shiftStage(g.shift);
+    preview.style.transform = `translate3d(${direction * w + g.shift}px, 0, 0)`;
+    if (g.blocked) {
+      preview.style.setProperty("--easter-egg-width", `${Math.max(1, Math.abs(g.shift))}px`);
+      preview.style.setProperty("--easter-egg-opacity", String(Math.min(1, Math.max(0, (Math.abs(g.shift) - 20) / 64))));
+      preview.style.setProperty("--easter-egg-scale", "1");
+    }
+    shiftSelection(g.blocked ? 0 : -g.shift / w);
+  };
+  const requestPaint = () => {
+    if (drawFrame === null) drawFrame = requestAnimationFrame(paintGesture);
+  };
+  const flushPaint = () => {
+    if (drawFrame === null) return;
+    cancelAnimationFrame(drawFrame);
+    drawFrame = null;
+    paintGesture();
+  };
+
   scene.addEventListener("touchstart", event => {
     if (!canStart() || event.touches.length !== 1) { complete(false); return; }
     const touch = event.touches[0];
@@ -71,7 +110,11 @@ export function bindDaySwipe({
     }
     // Finish an earlier committed swipe before taking the next starting date.
     complete(true);
-    gesture = { x: touch.clientX, y: touch.clientY, shift: 0, axis: null, date: new Date(getDate()), blocked: false };
+    gesture = {
+      x: touch.clientX, y: touch.clientY, pointerX: touch.clientX, pointerY: touch.clientY,
+      shift: 0, axis: null, direction: 0, width: 0,
+      date: new Date(getDate()), blocked: false,
+    };
   }, { passive: true });
 
   scene.addEventListener("touchmove", event => {
@@ -83,6 +126,7 @@ export function bindDaySwipe({
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       gesture.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       if (gesture.axis === "x") {
+        gesture.width = width();
         setActive(true);
         scene.classList.add("is-swiping");
         strip.classList.add("is-swipe-linked");
@@ -92,25 +136,16 @@ export function bindDaySwipe({
     }
     if (gesture.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
-    const w = width(), direction = dx < 0 ? 1 : -1;
-    gesture.blocked = addDays(gesture.date, direction) < minDate();
-    const limited = Math.sign(dx) * Math.min(Math.abs(dx), w);
-    gesture.shift = gesture.blocked ? limited * 0.55 : limited;
-    const preview = ensurePeek(direction, gesture.blocked);
-    shiftStage(gesture.shift);
-    preview.style.transform = `translate3d(${direction * w + gesture.shift}px, 0, 0)`;
-    if (gesture.blocked) {
-      preview.style.setProperty("--easter-egg-width", `${Math.max(1, Math.abs(gesture.shift))}px`);
-      preview.style.setProperty("--easter-egg-opacity", String(Math.min(1, Math.max(0, (Math.abs(gesture.shift) - 20) / 64))));
-      preview.style.setProperty("--easter-egg-scale", "1");
-    }
-    shiftSelection(gesture.blocked ? 0 : -gesture.shift / w);
+    gesture.pointerX = touch.clientX;
+    gesture.pointerY = touch.clientY;
+    requestPaint();
   }, { passive: false });
 
   const end = allowCommit => {
     if (!gesture) return;
     if (gesture.axis !== "x") { complete(false); return; }
-    const g = gesture, w = width(), direction = g.shift < 0 ? 1 : -1;
+    flushPaint();
+    const g = gesture, w = g.width || width(), direction = g.shift < 0 ? 1 : -1;
     const commit = allowCommit && !g.blocked && Math.abs(g.shift) >= Math.max(64, Math.min(110, w * 0.22));
     const distance = commit ? w - Math.abs(g.shift) : Math.abs(g.shift);
     const duration = reduced() ? 0 : Math.round(Math.min(320, Math.max(170, 140 + distance * 0.45)));
