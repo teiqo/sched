@@ -13,7 +13,8 @@
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 120ms ease;
 }
 .sched-editor-btn svg { width: 20px; height: 20px; }
-.sched-editor-btn:active { transform: scale(.94); }
+.sched-editor-btn:active,
+.sched-editor-btn.is-tour-pressed { transform: scale(.9) !important; }
 .sched-editor-btn.is-active {
   border-color: color-mix(in srgb, var(--sched-blue) 44%, var(--sched-separator));
   background: color-mix(in srgb, var(--sched-blue) 12%, var(--sched-surface));
@@ -61,6 +62,35 @@
 }
 .sched-active-day-scene.is-entering .sched-editor-toolbar {
   animation: none !important;
+}
+body.is-tour-active .sched-editor-toolbar {
+  border-color: color-mix(in srgb, var(--sched-blue) 48%, var(--sched-separator));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--sched-blue) 18%, transparent);
+}
+
+@keyframes sched-editor-toolbar-slide-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    max-height: 280px;
+    overflow: hidden;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0);
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+    overflow: hidden;
+  }
+}
+
+.sched-editor-toolbar.is-closing {
+  animation: sched-editor-toolbar-slide-out 0.32s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  pointer-events: none;
 }
 .sched-editor-toolbar-copy { display: grid; gap: 3px; min-width: 0; }
 .sched-editor-toolbar-copy strong { color: var(--sched-text); font-size: 14px; line-height: 1.3; }
