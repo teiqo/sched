@@ -681,7 +681,7 @@ function headingHtml(d, sub, primary = false) {
       <h2 class="t-stagger-line t-stagger-line--1">${title}</h2>
       <span class="t-stagger-line t-stagger-line--2">${sub}${rel ? ` · ${rel}` : ""}</span>
     </div>
-    <div class="sched-day-actions"></div>
+    <div class="sched-day-actions">${state.editorMode ? dayRevertHtml(iso(d)) : ""}</div>
   </div>`;
 }
 
@@ -1612,7 +1612,7 @@ function endScrub(options = {}) {
   const keepVisual = Boolean(options.keepVisual);
   const skipRender = Boolean(options.skipRender);
   /* Работает и без активного scrub: используется как полный сброс состояния,
-     чтобы после резкого о������пускания не оставались инлайн-трансформ и блюр. */
+     чтобы после резкого о��������пускания не оставались инлайн-трансформ и блюр. */
   const stripEl = (scrub && scrub.strip) || $("#strip");
   if (!stripEl) return;
   const wasActive = Boolean(scrub && (scrub.active || scrub.targetIndex !== undefined));
@@ -3833,6 +3833,20 @@ function publishedSwap(key) {
   return entry && !entry.deleted ? entry : null;
 }
 
+function draftSwap(key) {
+  const entry = editorSession?.draft?.[key];
+  return entry && !entry.deleted ? entry : null;
+}
+
+/* День отличается от «официальное расписание + утверждённые замены»? */
+function dayDiffersFromPublished(dIso) {
+  if (!dIso) return false;
+  if (!state.editorMode || !editorSession) return hasDaySwaps(dIso);
+  return editorDayKeys(dIso).some(key =>
+    JSON.stringify(publishedSwap(key)) !== JSON.stringify(draftSwap(key))
+  );
+}
+
 function restoreEditorSwap(key) {
   const confirmed = publishedSwap(key);
   if (confirmed) editorSession.draft[key] = cloneSwapMap(confirmed);
@@ -3844,10 +3858,7 @@ function resetEditorDay(dIso) {
   /* «Исходный день» = официальное расписание + текущие опубликованные замены,
      а не снимок черновика на входе в редактор. */
   const dayKeys = editorDayKeys(dIso);
-  const changed = dayKeys.filter(key =>
-    JSON.stringify(publishedSwap(key) || null) !== JSON.stringify(editorSession.draft[key] && !editorSession.draft[key].deleted ? editorSession.draft[key] : null)
-  );
-  if (!changed.length) {
+  if (!dayDiffersFromPublished(dIso)) {
     toast("этот день и так исходный");
     return;
   }
@@ -4016,7 +4027,8 @@ function movePairToEdge(dIso, fromN, after) {
 }
 
 function dayRevertHtml(dIso) {
-  return `<button class="sched-day-revert" type="button" data-act="reset-day" data-date="${dIso}" ${hasDaySwaps(dIso) ? "" : "hidden"}
+  const action = state.editorMode ? "data-editor=\"reset-day\"" : "data-act=\"reset-day\"";
+  return `<button class="sched-day-revert" type="button" ${action} data-date="${dIso}" ${dayDiffersFromPublished(dIso) ? "" : "hidden"}
       aria-label="вернуть исходные пары: ${escapeHtml(dateLabel(dateFromIso(dIso)))}" title="вернуть исходное расписание только этого дня">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4-5 5 5 5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
       <span class="sched-day-revert-label">вернуть</span>
@@ -4172,7 +4184,7 @@ async function resetAllSwaps() {
 
 function updateDayRevertBtn() {
   document.querySelectorAll('.sched-day-block[data-day] .sched-day-revert').forEach(button => {
-    button.hidden = !hasDaySwaps(button.dataset.date);
+    button.hidden = !dayDiffersFromPublished(button.dataset.date);
   });
 }
 
@@ -5707,7 +5719,7 @@ async function pullSharedSwaps() {
         if (!batches.has(id)) batches.set(id, {});
         batches.get(id)[key] = entry;
       }
-      for (const batch of batches.values()) publishSwapBatch(batch, "повторн��я отправка изменений");
+      for (const batch of batches.values()) publishSwapBatch(batch, "повторн����я отправка изменений");
     }
   } catch (e) {
     /* офлайн — повторим в следующий тик */
