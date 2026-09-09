@@ -1647,6 +1647,11 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
+    if (basicsTourStep === 1) {
+      const [y, m, d] = btn.dataset.date.split("-").map(Number);
+      triggerTourRoulette(new Date(y, m - 1, d));
+      return;
+    }
     /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
@@ -1876,6 +1881,11 @@ function bindStrip() {
     /* Глушим только клик того же жеста, что был перетаскиванием. */
     if (dragClick) {
       dragClick = false;
+      return;
+    }
+    if (basicsTourStep === 1) {
+      const [y, m, d] = btn.dataset.date.split("-").map(Number);
+      triggerTourRoulette(new Date(y, m - 1, d));
       return;
     }
     const [y, m, d] = btn.dataset.date.split("-").map(Number);
@@ -2825,14 +2835,20 @@ var basicsTourStep = -1;
 var basicsTourOpenedEditor = false;
 var basicsTourRouletteAnimation = null;
 var basicsTourRouletteFrame = null;
+var basicsTourRouletteTimer = null;
 var basicsTourRouletteOriginalDate = null;
+var basicsTourLastTriggerTime = 0;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
-  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это просто залипательно." },
+  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
-function stopBasicsTourRoulette() {
+function stopBasicsTourRoulette(options = {}) {
+  if (basicsTourRouletteTimer !== null) {
+    clearTimeout(basicsTourRouletteTimer);
+    basicsTourRouletteTimer = null;
+  }
   basicsTourRouletteAnimation?.cancel();
   basicsTourRouletteAnimation = null;
   if (basicsTourRouletteFrame !== null) cancelAnimationFrame(basicsTourRouletteFrame);
@@ -2841,68 +2857,153 @@ function stopBasicsTourRoulette() {
   strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
   strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
   document.getElementById("selection")?.style.removeProperty("transform");
-  if (basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
+  if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
     selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
   }
   basicsTourRouletteOriginalDate = null;
 }
 
-function startBasicsTourRoulette() {
-  stopBasicsTourRoulette();
+function tourRouletteEase(x) {
+  // Кубическая кривая Безье: выраженный разгон на старте и плавное затяжное замедление на финише
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const p1x = 0.38, p1y = 0.04, p2x = 0.16, p2y = 1.0;
+  const cx = 3 * p1x;
+  const bx = 3 * (p2x - p1x) - cx;
+  const ax = 1 - cx - bx;
+  const cy = 3 * p1y;
+  const by = 3 * (p2y - p1y) - cy;
+  const ay = 1 - cy - by;
+
+  let t = x;
+  for (let i = 0; i < 6; i++) {
+    const currentX = ((ax * t + bx) * t + cx) * t;
+    const currentSlope = (3 * ax * t + 2 * bx) * t + cx;
+    if (Math.abs(currentSlope) < 1e-5) break;
+    t -= (currentX - x) / currentSlope;
+    t = Math.max(0, Math.min(1, t));
+  }
+  return ((ay * t + by) * t + cy) * t;
+}
+
+function getTourRoulettePosition(waypoints, normalizedProgress) {
+  let totalDist = 0;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    totalDist += Math.abs(waypoints[i + 1] - waypoints[i]);
+  }
+  if (totalDist === 0) return waypoints[0];
+  let targetDist = normalizedProgress * totalDist;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const from = waypoints[i];
+    const to = waypoints[i + 1];
+    const segLen = Math.abs(to - from);
+    if (targetDist <= segLen || i === waypoints.length - 2) {
+      const frac = segLen === 0 ? 0 : Math.min(1, Math.max(0, targetDist / segLen));
+      return from + (to - from) * frac;
+    }
+    targetDist -= segLen;
+  }
+  return waypoints[waypoints.length - 1];
+}
+
+function startBasicsTourRoulette(options = {}) {
+  const initialDelay = typeof options.delay === "number" ? options.delay : 650;
+  stopBasicsTourRoulette({ keepDate: Boolean(options.keepDate) });
+
   const strip = document.getElementById("strip");
   const selection = document.getElementById("selection");
   if (!strip || !selection) return;
+
   const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
   const originalDate = new Date(state.selected);
   const originalWeek = weekStart(originalDate);
   basicsTourRouletteOriginalDate = originalDate;
-  const countLessons = index => visibleSlotsFor(addDays(originalWeek, index)).filter(slot =>
-    slot && !slot.empty && !slot.window && !slot.cancelled && slot.subject && slot.subject !== "окно"
-  ).length;
-  let leftPairs = 0;
-  let rightPairs = 0;
-  for (let index = 0; index < current; index += 1) leftPairs += countLessons(index);
-  for (let index = current + 1; index < 7; index += 1) rightPairs += countLessons(index);
-  const targetIndex = rightPairs >= leftPairs ? 6 : 0;
-  strip.classList.add("is-tour-demo", "is-pressing", "is-scrubbing");
-  const duration = 2600 + Math.abs(targetIndex - current) * 70;
-  const startedAt = performance.now();
-  let lastIndex = current;
-  const ease = value => value * value * (3 - 2 * value);
-  const paintFingerSwipe = now => {
-    if (!selection.isConnected || basicsTourStep !== 1) return;
-    const progress = Math.min(1, (now - startedAt) / duration);
-    const phase = progress <= .5 ? ease(progress * 2) : ease((progress - .5) * 2);
-    const position = progress <= .5
-      ? current + (targetIndex - current) * phase
-      : targetIndex + (current - targetIndex) * phase;
-    selection.style.transform = `translate3d(${position * 100}%,0,0)`;
-    const selectedIndex = Math.max(0, Math.min(6, Math.round(position)));
-    if (selectedIndex !== lastIndex) {
-      lastIndex = selectedIndex;
-      selectDate(addDays(originalWeek, selectedIndex), null, { silent: true, preview: true, animated: false });
-    }
-    const center = selection.getBoundingClientRect().left + selection.getBoundingClientRect().width / 2;
+
+  // Визуальное нажатие перед стартом вращения
+  const pressDelay = Math.max(0, initialDelay - 200);
+  basicsTourRouletteTimer = window.setTimeout(() => {
+    if (basicsTourStep !== 1 || !selection.isConnected) return;
+    strip.classList.add("is-tour-demo", "is-pressing");
     const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-    let nearest = null, distance = Infinity;
-    buttons.forEach(button => {
-      const rect = button.getBoundingClientRect();
-      const nextDistance = Math.abs(rect.left + rect.width / 2 - center);
-      if (nextDistance < distance) { nearest = button; distance = nextDistance; }
-    });
-    buttons.forEach(button => button.toggleAttribute("data-under-selection", button === nearest));
-    if (progress < 1) {
+    buttons.forEach((btn, i) => btn.toggleAttribute("data-under-selection", i === current));
+
+    basicsTourRouletteTimer = window.setTimeout(() => {
+      basicsTourRouletteTimer = null;
+      if (basicsTourStep !== 1 || !selection.isConnected) return;
+
+      strip.classList.add("is-scrubbing");
+
+      // Траектория полного оборота по всей неделе с возвратом в исходный день
+      let waypoints;
+      if (current === 0) {
+        waypoints = [0, 6, 0];
+      } else if (current === 6) {
+        waypoints = [6, 0, 6];
+      } else if (current <= 3) {
+        waypoints = [current, 6, 0, current];
+      } else {
+        waypoints = [current, 0, 6, current];
+      }
+
+      const reducedMotion = motionQuery.matches || state.perfMode;
+      const duration = reducedMotion ? 1200 : 2700;
+      const startedAt = performance.now();
+      let lastIndex = current;
+
+      const paintFingerSwipe = now => {
+        if (!selection.isConnected || basicsTourStep !== 1) return;
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const easedProgress = reducedMotion
+          ? progress * progress * (3 - 2 * progress)
+          : tourRouletteEase(progress);
+
+        const position = getTourRoulettePosition(waypoints, easedProgress);
+        selection.style.transform = `translate3d(${position * 100}%,0,0)`;
+
+        const selectedIndex = Math.max(0, Math.min(6, Math.round(position)));
+        if (selectedIndex !== lastIndex) {
+          lastIndex = selectedIndex;
+          selectDate(addDays(originalWeek, selectedIndex), null, { silent: true, preview: true, animated: false });
+        }
+
+        const center = selection.getBoundingClientRect().left + selection.getBoundingClientRect().width / 2;
+        const buttons = [...strip.querySelectorAll("button[data-date-index]")];
+        let nearest = null, distance = Infinity;
+        buttons.forEach(button => {
+          const rect = button.getBoundingClientRect();
+          const nextDistance = Math.abs(rect.left + rect.width / 2 - center);
+          if (nextDistance < distance) { nearest = button; distance = nextDistance; }
+        });
+        buttons.forEach(button => button.toggleAttribute("data-under-selection", button === nearest));
+
+        if (progress < 1) {
+          basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
+          return;
+        }
+
+        selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+        selection.style.removeProperty("transform");
+        strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
+        buttons.forEach(button => button.removeAttribute("data-under-selection"));
+        basicsTourRouletteOriginalDate = null;
+        basicsTourRouletteFrame = null;
+      };
+
       basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
-      return;
-    }
-    selectDate(originalDate, null, { silent: true, preview: true, animated: false });
-    selection.style.removeProperty("transform");
-    strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
-    buttons.forEach(button => button.removeAttribute("data-under-selection"));
-    basicsTourRouletteOriginalDate = null;
-    basicsTourRouletteFrame = null;
-  };
-  basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
+    }, Math.max(1, initialDelay - pressDelay));
+  }, pressDelay);
+}
+
+function triggerTourRoulette(clickedDate) {
+  if (basicsTourStep !== 1) return;
+  const now = performance.now();
+  if (now - basicsTourLastTriggerTime < 240) return;
+  basicsTourLastTriggerTime = now;
+  stopBasicsTourRoulette({ keepDate: true });
+  if (clickedDate) {
+    selectDate(clickedDate, null, { silent: true, preview: true, animated: false });
+  }
+  startBasicsTourRoulette({ delay: 160, keepDate: true });
 }
 
 function finishBasicsTour() {
@@ -2953,11 +3054,50 @@ function renderBasicsTour() {
     </div>`;
   host.onclick = event => {
     const action = event.target.closest("[data-tour]")?.dataset.tour;
-    if (action === "skip") finishBasicsTour();
+    if (action === "skip") { finishBasicsTour(); return; }
     if (action === "next") {
       basicsTourStep += 1;
       if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
       else renderBasicsTour();
+      return;
+    }
+    if (basicsTourStep === 1) {
+      const strip = document.getElementById("strip");
+      if (strip) {
+        const stripRect = strip.getBoundingClientRect();
+        if (
+          event.clientX >= stripRect.left - 10 &&
+          event.clientX <= stripRect.right + 10 &&
+          event.clientY >= stripRect.top - 12 &&
+          event.clientY <= stripRect.bottom + 12
+        ) {
+          const buttons = [...strip.querySelectorAll("button[data-date-index]")];
+          let clickedBtn = null, nearestBtn = null;
+          let minDistance = Infinity;
+          buttons.forEach(btn => {
+            const r = btn.getBoundingClientRect();
+            if (
+              event.clientX >= r.left && event.clientX <= r.right &&
+              event.clientY >= r.top && event.clientY <= r.bottom
+            ) {
+              clickedBtn = btn;
+            }
+            const dist = Math.abs(r.left + r.width / 2 - event.clientX);
+            if (dist < minDistance) {
+              minDistance = dist;
+              if (!clickedBtn) nearestBtn = btn;
+            }
+          });
+          const btn = clickedBtn || nearestBtn;
+          let targetDate = null;
+          if (btn && btn.dataset.date) {
+            const [y, m, d] = btn.dataset.date.split("-").map(Number);
+            targetDate = new Date(y, m - 1, d);
+          }
+          triggerTourRoulette(targetDate || state.selected);
+          return;
+        }
+      }
     }
   };
   requestAnimationFrame(() => {
@@ -2971,7 +3111,7 @@ function renderBasicsTour() {
     copy.style.left = `${copyLeft}px`;
     copy.style.top = `${copyTop}px`;
     copy.style.width = `${copyWidth}px`;
-    if (basicsTourStep === 1) startBasicsTourRoulette();
+    if (basicsTourStep === 1) startBasicsTourRoulette({ delay: 650 });
   });
 }
 

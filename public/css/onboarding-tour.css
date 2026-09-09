@@ -178,6 +178,35 @@
   outline-offset: 2px;
 }
 
+.sched-tour-copy .sched-tour-accent {
+  display: inline;
+  font-weight: 600;
+  color: var(--sched-blue);
+  background: linear-gradient(135deg, var(--sched-blue) 0%, color-mix(in srgb, var(--sched-blue) 35%, #a855f7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sched-tour.is-ready .sched-tour-copy strong {
+  animation: sched-tour-text-flow 0.36s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+}
+
+.sched-tour.is-ready .sched-tour-copy small {
+  animation: sched-tour-text-flow 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+@keyframes sched-tour-text-flow {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @media (max-height: 720px) {
   .sched-onboarding-telegram-mark { width: 68px; height: 68px; margin: 4px auto 10px; border-radius: 22px; }
   .sched-onboarding-telegram-mark svg { width: 30px; height: 30px; }
@@ -188,4 +217,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sched-tour-spotlight rect { animation: none; }
+  .sched-tour.is-ready .sched-tour-copy strong,
+  .sched-tour.is-ready .sched-tour-copy small {
+    animation: none;
+  }
 }
+
