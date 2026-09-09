@@ -9,6 +9,9 @@ export function bindDaySwipe({
   let gesture = null, peek = null, settling = null, timer = null, active = false;
   let viewportWidth = innerWidth;
   let stageWidth = 0;
+  // On iOS, moving #stage is expensive because it also contains every future
+  // day in week mode. Move only the currently visible day instead.
+  let mover = stage;
   let frame = null, frameHandle = null;
   let warm = null, warmHandle = null;
   const idle = globalThis.requestIdleCallback || (fn => setTimeout(() => fn(), 1));
@@ -29,9 +32,9 @@ export function bindDaySwipe({
   };
   // Inline transforms beat the CSS var rules and avoid invalidating the style
   // of the whole subtree that inherits --swipe-x on every frame.
-  // Whole pixels only: WebKit re-rasterises text layers on fractional offsets,
-  // which is exactly what makes a slow drag look like dropped frames on iOS.
-  const shiftStage = x => { stage.style.transform = `translate3d(${Math.round(x)}px, 0, 0)`; };
+  // Keep sub-pixel precision, like the smooth date roulette. Rounding to whole
+  // CSS pixels is visibly stair-stepped on a 3x iPhone display.
+  const shiftStage = x => { mover.style.transform = `translate3d(${x.toFixed(2)}px, 0, 0)`; };
   const selectionOffset = progress => {
     const index = Number(strip.dataset.selectedIndex) || 0;
     return Math.max(0, Math.min(6, index + progress)) * 100;
@@ -44,22 +47,38 @@ export function bindDaySwipe({
     frameHandle = null;
     frame = null;
   };
-  const paint = () => {
+  const paint = now => {
     frameHandle = null;
     const f = frame;
-    frame = null;
-    if (!f || !gesture) return;
-    shiftStage(f.shift);
-    f.preview.style.transform = `translate3d(${Math.round(f.previewX)}px, 0, 0)`;
+    const g = gesture;
+    if (!f || !g || g.axis !== "x") return;
+
+    /* iOS Safari dispatches touchmove much less often than the display refresh
+       rate (especially on ProMotion). Applying the last event directly makes a
+       slow swipe advance in visible steps. The roulette is smooth because it
+       runs an interpolation loop on every animation frame; do the same here. */
+    const previousTime = g.paintTime || now - 16.7;
+    const dt = Math.min(0.05, Math.max(0.001, (now - previousTime) / 1000));
+    g.paintTime = now;
+    const target = f.shift;
+    const current = Number.isFinite(g.visualShift) ? g.visualShift : 0;
+    const alpha = reduced() ? 1 : 1 - Math.exp(-58 * dt);
+    let visual = current + (target - current) * alpha;
+    if (Math.abs(target - visual) < 0.12) visual = target;
+    g.visualShift = visual;
+
+    shiftStage(visual);
+    f.preview.style.transform = `translate3d(${(f.direction * f.width + visual).toFixed(2)}px, 0, 0)`;
     if (f.blocked) {
-      f.preview.style.setProperty("--easter-egg-width", `${f.eggWidth}px`);
-      f.preview.style.setProperty("--easter-egg-opacity", f.eggOpacity);
+      f.preview.style.setProperty("--easter-egg-width", `${Math.round(Math.max(1, Math.abs(visual)))}px`);
+      f.preview.style.setProperty("--easter-egg-opacity", String(Math.min(1, Math.max(0, (Math.abs(visual) - 20) / 64))));
     }
-    selection.style.transform = `translate3d(${f.selection.toFixed(2)}%, 0, 0)`;
+    selection.style.transform = `translate3d(${selectionOffset(f.blocked ? 0 : -visual / f.width).toFixed(2)}%, 0, 0)`;
+
+    // Keep drawing between sparse touch events until the visual catches up.
+    if (Math.abs(target - visual) >= 0.12) frameHandle = requestAnimationFrame(paint);
   };
   const schedule = next => {
-    // Coalesce: pointer events can outpace the display (120 Hz panels), and
-    // only the last position of a frame is ever visible.
     frame = next;
     if (frameHandle === null) frameHandle = requestAnimationFrame(paint);
   };
@@ -130,6 +149,9 @@ export function bindDaySwipe({
     peek = null;
     scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
     scene.style.removeProperty("--swipe-anim-dur");
+    mover.style.removeProperty("transform");
+    mover.classList.remove("is-swipe-mover");
+    mover = stage;
     stage.style.removeProperty("transform");
     stage.style.removeProperty("--swipe-x");
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
@@ -175,7 +197,12 @@ export function bindDaySwipe({
     // Finish an earlier committed swipe before taking the next starting date.
     complete(true);
     const date = new Date(getDate());
-    gesture = { x: touch.clientX, y: touch.clientY, shift: 0, axis: null, date, blocked: false };
+    gesture = {
+      x: touch.clientX, y: touch.clientY, shift: 0, visualShift: 0,
+      paintTime: 0, direction: 0, axis: null, date, blocked: false,
+    };
+    mover = stage.querySelector("#day-scene > .sched-day-block:first-child") || stage;
+    mover.classList.add("is-swipe-mover");
     measure();
     prewarm(date);
   }, { passive: true });
@@ -201,6 +228,12 @@ export function bindDaySwipe({
     if (gesture.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
     const w = width(), direction = dx < 0 ? 1 : -1;
+    if (gesture.direction && gesture.direction !== direction) {
+      // Direction changes cross zero; don't drag a preview from the other edge.
+      gesture.visualShift = 0;
+      gesture.paintTime = 0;
+    }
+    gesture.direction = direction;
     gesture.blocked = addDays(gesture.date, direction) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), w);
     gesture.shift = gesture.blocked ? limited * 0.55 : limited;
@@ -208,11 +241,9 @@ export function bindDaySwipe({
     schedule({
       preview,
       shift: gesture.shift,
-      previewX: direction * w + gesture.shift,
+      direction,
+      width: w,
       blocked: gesture.blocked,
-      eggWidth: Math.round(Math.max(1, Math.abs(gesture.shift))),
-      eggOpacity: String(Math.min(1, Math.max(0, (Math.abs(gesture.shift) - 20) / 64))),
-      selection: selectionOffset(gesture.blocked ? 0 : -gesture.shift / w),
     });
   }, { passive: false });
 
@@ -224,14 +255,17 @@ export function bindDaySwipe({
     // starts from where the finger actually left the screen.
     cancelFrame();
     dropWarm();
-    shiftStage(g.shift);
-    if (peek) peek.style.transform = `translate3d(${Math.round(direction * w + g.shift)}px, 0, 0)`;
-    shiftSelection(g.blocked ? 0 : -g.shift / w);
+    // Settle from the last actually painted position, not from a newer sparse
+    // touch event; otherwise Safari shows a jump exactly at finger release.
+    const visibleShift = Number.isFinite(g.visualShift) ? g.visualShift : g.shift;
+    shiftStage(visibleShift);
+    if (peek) peek.style.transform = `translate3d(${(direction * w + visibleShift).toFixed(2)}px, 0, 0)`;
+    shiftSelection(g.blocked ? 0 : -visibleShift / w);
     const commit = allowCommit && !g.blocked && Math.abs(g.shift) >= Math.max(64, Math.min(110, w * 0.22));
-    const distance = commit ? w - Math.abs(g.shift) : Math.abs(g.shift);
+    const distance = commit ? w - Math.abs(visibleShift) : Math.abs(visibleShift);
     const duration = reduced() ? 0 : Math.round(Math.min(320, Math.max(170, 140 + distance * 0.45)));
     // Flush the last finger position before enabling the settle transition.
-    stage.getBoundingClientRect();
+    mover.getBoundingClientRect();
     peek?.getBoundingClientRect();
     scene.style.setProperty("--swipe-anim-dur", `${duration}ms`);
     strip.style.setProperty("--strip-swipe-duration", `${duration}ms`);
