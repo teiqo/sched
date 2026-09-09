@@ -1528,7 +1528,7 @@ function endScrub(options = {}) {
     // в фазу отпускания, где он задерживается на выбранном дне и плавно опускается.
     stripEl.classList.add("is-settling");
     window.requestAnimationFrame(() => {
-      /* Если пользователь уже нач��л новый жест, дожимать старую анимацию нельзя. */
+      /* Если пользователь уже начал новый жест, дожимать старую анимацию нельзя. */
       if (scrub) return;
       stripEl.classList.remove("is-settling");
       stripEl.classList.add("is-releasing");
@@ -1618,7 +1618,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    /* Предыдущий жест мог не успеть доиграть (резко отпустили �� сразу нажали
+    /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
     dragClick = false;
@@ -2581,7 +2581,7 @@ function openProfile() {
             </span>
             <span class="sched-settings-copy">
               <strong>настроить уведомления</strong>
-              <span>ч��о показывать и куда дублировать</span>
+              <span>что показывать и куда дублировать</span>
             </span>
           </span>
           ${ICON_CHEVRON}
@@ -2710,7 +2710,7 @@ function closeOnboarding() {
     host.hidden = true;
     host.classList.remove("is-closing");
     host.innerHTML = "";
-    playBrandIntro(); /* главный экран появи��ся — теперь интро лого */
+    playBrandIntro(); /* главный экран появился — теперь интро лого */
   }, 320);
   state.onboarded = true;
   save();
@@ -3720,7 +3720,7 @@ function planScheduleRetry() {
   window.addEventListener("online", () => refreshSchedule(true));
 })();
 
-/* Слишком светлый акцент на с������етлом фоне и слишком тёмный на тёмном
+/* Слишком светлый акцент на светлом фоне и слишком тёмный на тёмном
    не читаются, поэтому для текста и иконок берём подправленный оттенок */
 function accentLuminance(hex) {
   const n = String(hex || "").replace("#", "");
@@ -4230,7 +4230,7 @@ async function cloudFetch(url, options = {}) {
 function encodeSwapKey(key) {
   /* Слеш в ключе (тм-303/б|...) для Firebase — разделитель пути: %2F в REST
      раскодируется обратно в "/", запись уходит глубже $key, и .validate правил
-     проверяет родительскую мапу вместо записи — отсюда вечный 401. За��еняем
+     проверяет родительскую мапу вместо записи — отсюда вечный 401. Заменяем
      "/" на "~" (разрешён в ключах Firebase) и получаем плоский ключ. Точки
      по-прежнему экранируем — они в ключах Firebase запрещены. */
   return encodeURIComponent(String(key).replace(/\//g, "~")).replace(/\./g, "%2E");
@@ -4754,7 +4754,7 @@ function renderAccountRow() {
     const pHint = document.getElementById("settings-pending-hint");
     if (pHint)
       pHint.textContent = pendingCount
-        ? "ждут проверк��: " + pendingCount
+        ? "ждут проверки: " + pendingCount
         : "проверка замен и права";
   }
 
@@ -5149,7 +5149,7 @@ function describeSwapForNotif(key, entry) {
   var what = "замена";
   if (entry.deleted) what = "сброс замены";
   else if (entry.cancelled) what = "отмена пары";
-  else if (entry.moved) what = entry.makeWindow ? "окно после перен��са" : "перенос";
+  else if (entry.moved) what = entry.makeWindow ? "окно после переноса" : "перенос";
   /* Номер, предмет, преподаватель и аудитория уже показаны в мини-карточке. */
   return what;
 }
@@ -5552,7 +5552,7 @@ function renderUpdatesBody(data) {
   const entries = data && Array.isArray(data.entries) ? data.entries : [];
   if (!entries.length) {
     html +=
-      '<p class="sched-replace-hint sched-updates-empty">изменений пока не было. как только парсер найдёт отличия в PDF колледжа, они появятся здесь — по ка��дой группе отдельно.</p>';
+      '<p class="sched-replace-hint sched-updates-empty">изменений пока не было. как только парсер найдёт отличия в PDF колледжа, они появятся здесь — по каждой группе отдельно.</p>';
   } else {
     html +=
       '<div class="sched-tg-section"><span>изменения по всем группам (' +
