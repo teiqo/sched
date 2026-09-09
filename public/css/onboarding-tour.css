@@ -1,4 +1,5 @@
 /* Optional first-run Telegram link and compact basics tour. */
+.sched-onboarding-top.is-progress-only { justify-content: center; }
 .sched-onboarding-slide.is-telegram-link {
   grid-template-rows: minmax(0, 1fr) auto;
 }

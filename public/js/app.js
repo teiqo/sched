@@ -2662,6 +2662,20 @@ function openProfile() {
         </div>
         ${""}
       </div>
+      <div class="sched-profile-group">
+        <button class="sched-settings-row" type="button" data-act="repeat-tutorial-profile">
+          <span class="sched-settings-row-main">
+            <span class="sched-settings-icon is-onboarding">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M17 3h4v4"/></svg>
+            </span>
+            <span class="sched-settings-copy">
+              <strong>повторить обучение</strong>
+              <span>редактор, рулетка и настройки</span>
+            </span>
+          </span>
+          ${ICON_CHEVRON}
+        </button>
+      </div>
       ${authStatusHtml()}
       ${accountBlock}
       ${ownerActionsBlock}`;
@@ -2723,9 +2737,8 @@ function onboardingHtml() {
   }
   const draft = state.draftGroup;
   const count = lessonCount(draft);
-  return `<div class="sched-onboarding-top">
+  return `<div class="sched-onboarding-top is-progress-only">
     <div class="sched-onboarding-progress">${dots.join("")}</div>
-    <button class="sched-onboarding-browser-skip" type="button" data-act="skip-onboarding">пропустить</button>
   </div>
   <div class="sched-onboarding-slides" style="--onboarding-count:${total};--onboarding-slide-width:${
     100 / total
@@ -2815,7 +2828,7 @@ var basicsTourRouletteFrame = null;
 var basicsTourRouletteOriginalDate = null;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
-  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это капец как залипательно." },
+  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это просто залипательно." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3057,6 +3070,12 @@ function bindExtra() {
     }
     if (act.dataset.act === "refresh-stats") {
       loadApplicationStats(true);
+      return;
+    }
+    if (act.dataset.act === "repeat-tutorial-profile") {
+      closeProfile();
+      closeSettings();
+      startBasicsTour();
       return;
     }
     if (act.dataset.act === "back") {
