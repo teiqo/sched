@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-09-v40-tour-finger";
+const CACHE = CACHE_PREFIX + "2026-09-09-v42-telegram-onboarding";
 const ASSETS = [
   "./",
   "./index.html",

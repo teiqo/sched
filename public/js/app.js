@@ -2023,7 +2023,6 @@ function bindEvents() {
     state.tab = "bells";
     render();
   });
-  $("#repeat-tutorial")?.addEventListener("click", startBasicsTour);
 
   document.addEventListener("click", (e) => {
     if (!state.settingsOpen) return;
@@ -2768,12 +2767,20 @@ function onboardingHtml() {
         <div class="sched-onboarding-telegram-mark">${ICON_BELL}</div>
         <span class="sched-onboarding-kicker">необязательно</span>
         <h1>привязать telegram?</h1>
-        <p>можно привязать telegram, чтобы предложения были подписаны твоим именем и туда приходили уведомления. без входа предложения тоже работают.</p>
+        <p>это не обязательно, но ты можешь настроить, чтобы тебе приходили уведомления прямо в мессенджер.</p>
+        <div class="sched-onboarding-tg-example" aria-label="пример уведомления в telegram">
+          <span>пример уведомления</span>
+          <div class="sched-onboarding-tg-notification">
+            <i class="sched-onboarding-tg-avatar">s</i>
+            <div><div class="sched-onboarding-tg-head"><strong>🎧 sched</strong><time>9:06</time></div>
+            <p>🔄 11 сентября заменили 4 пару<br><b>комп. графика · аудитория 307</b></p></div>
+          </div>
+        </div>
         <div data-login-panel>${tgSession ? `<strong class="sched-onboarding-linked">telegram уже привязан</strong>` : authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW)}</div>
       </div>
       <div class="sched-onboarding-finish-actions">
-        <button class="sched-onboarding-action" type="button" data-act="finish-tour">показать обучение</button>
-        <button class="sched-onboarding-text-action" type="button" data-act="finish-no-tour">пропустить обучение</button>
+        <button class="sched-onboarding-action" type="button" data-act="finish-tour">продолжить</button>
+        <button class="sched-onboarding-text-action" type="button" data-act="finish-no-telegram">неа</button>
       </div>
     </div>
   </div>`;
@@ -2805,10 +2812,11 @@ var basicsTourStep = -1;
 var basicsTourOpenedEditor = false;
 var basicsTourRouletteAnimation = null;
 var basicsTourRouletteFrame = null;
+var basicsTourRouletteOriginalDate = null;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. это капец как залипательно." },
-  { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления. отсюда же обучение можно запустить ещё раз." },
+  { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
 function stopBasicsTourRoulette() {
@@ -2819,6 +2827,11 @@ function stopBasicsTourRoulette() {
   const strip = document.getElementById("strip");
   strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
   strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
+  document.getElementById("selection")?.style.removeProperty("transform");
+  if (basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
+    selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
+  }
+  basicsTourRouletteOriginalDate = null;
 }
 
 function startBasicsTourRoulette() {
@@ -2827,19 +2840,27 @@ function startBasicsTourRoulette() {
   const selection = document.getElementById("selection");
   if (!strip || !selection) return;
   const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
+  const originalDate = new Date(state.selected);
+  const originalWeek = weekStart(originalDate);
+  basicsTourRouletteOriginalDate = originalDate;
   strip.classList.add("is-tour-demo", "is-pressing", "is-scrubbing");
-  basicsTourRouletteAnimation = selection.animate([
-    { transform: `translate3d(${current * 100}%,0,0)`, offset: 0, easing: "cubic-bezier(.45,0,.18,1)" },
-    { transform: "translate3d(600%,0,0)", offset: 0.38, easing: "cubic-bezier(.45,0,.18,1)" },
-    { transform: "translate3d(0%,0,0)", offset: 0.76, easing: "cubic-bezier(.45,0,.18,1)" },
-    { transform: `translate3d(${current * 100}%,0,0)`, offset: 1 },
-  ], {
-    duration: 6200,
-    iterations: Infinity,
-    easing: "linear",
-  });
-  const followSelection = () => {
-    if (!basicsTourRouletteAnimation || !selection.isConnected) return;
+  const duration = 4600;
+  const startedAt = performance.now();
+  let lastIndex = current;
+  const ease = value => value * value * (3 - 2 * value);
+  const paintFingerSwipe = now => {
+    if (!selection.isConnected || basicsTourStep !== 1) return;
+    const progress = Math.min(1, (now - startedAt) / duration);
+    const phase = progress <= .5 ? ease(progress * 2) : ease((progress - .5) * 2);
+    const position = progress <= .5
+      ? current + (6 - current) * phase
+      : 6 + (current - 6) * phase;
+    selection.style.transform = `translate3d(${position * 100}%,0,0)`;
+    const selectedIndex = Math.max(0, Math.min(6, Math.round(position)));
+    if (selectedIndex !== lastIndex) {
+      lastIndex = selectedIndex;
+      selectDate(addDays(originalWeek, selectedIndex), null, { silent: true, preview: true, animated: false });
+    }
     const center = selection.getBoundingClientRect().left + selection.getBoundingClientRect().width / 2;
     const buttons = [...strip.querySelectorAll("button[data-date-index]")];
     let nearest = null, distance = Infinity;
@@ -2849,9 +2870,18 @@ function startBasicsTourRoulette() {
       if (nextDistance < distance) { nearest = button; distance = nextDistance; }
     });
     buttons.forEach(button => button.toggleAttribute("data-under-selection", button === nearest));
-    basicsTourRouletteFrame = requestAnimationFrame(followSelection);
+    if (progress < 1) {
+      basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
+      return;
+    }
+    selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+    selection.style.removeProperty("transform");
+    strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
+    buttons.forEach(button => button.removeAttribute("data-under-selection"));
+    basicsTourRouletteOriginalDate = null;
+    basicsTourRouletteFrame = null;
   };
-  basicsTourRouletteFrame = requestAnimationFrame(followSelection);
+  basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
 }
 
 function finishBasicsTour() {
@@ -2880,17 +2910,19 @@ function renderBasicsTour() {
     document.body.appendChild(host);
   }
   const rect = target.getBoundingClientRect();
-  const pad = 7;
-  const left = Math.max(8, rect.left - pad);
-  const top = Math.max(8, rect.top - pad);
-  const width = Math.min(innerWidth - left - 8, rect.width + pad * 2);
+  const pad = basicsTourStep === 1 ? 0 : 6;
+  const left = basicsTourStep === 1 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+  const top = basicsTourStep === 1 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+  const width = basicsTourStep === 1
+    ? Math.min(innerWidth - left, rect.width)
+    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
   const height = rect.height + pad * 2;
   const copyWidth = Math.min(340, innerWidth - 24);
   const below = top + height + 14;
   const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === 1 ? 20 : 999;
-  host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${previousSpot ? previousSpot.left : left}px;top:${previousSpot ? previousSpot.top : top}px;width:${previousSpot ? previousSpot.width : width}px;height:${previousSpot ? previousSpot.height : height}px;border-radius:${spotRadius}px"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect pathLength="100" /></svg></div>
+  const spotRadius = basicsTourStep === 1 ? 20 : 16;
+  host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${previousSpot ? previousSpot.left : left}px;top:${previousSpot ? previousSpot.top : top}px;width:${previousSpot ? previousSpot.width : width}px;height:${previousSpot ? previousSpot.height : height}px;border-radius:${spotRadius}px"><svg aria-hidden="true"><rect pathLength="100" /></svg></div>
     <div class="sched-tour-copy" style="left:${previousCopy ? previousCopy.left : copyLeft}px;top:${previousCopy ? previousCopy.top : copyTop}px;width:${previousCopy ? previousCopy.width : copyWidth}px">
       <span>шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span><strong>${step.title}</strong><small>${step.text}</small>
       <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
@@ -3092,13 +3124,13 @@ function bindExtra() {
       prepareTelegramLogin();
       return;
     }
-    if (kind === "skip-onboarding" || kind === "finish-no-tour") {
+    if (kind === "skip-onboarding") {
       state.group = state.draftGroup;
       closeOnboarding();
       render();
       return;
     }
-    if (kind === "finish-tour") {
+    if (kind === "finish-tour" || kind === "finish-no-telegram") {
       state.group = state.draftGroup;
       closeOnboarding();
       render();
