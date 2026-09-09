@@ -891,3 +891,80 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   align-self: center;
   transform: none !important;
 }
+
+
+/* ==========================================================================
+   Трёхпанельная карусель дней: [предыдущий] [текущий] [следующий].
+   Все панели создаются заранее; во время жеста двигается один track, поэтому
+   левый и правый день всегда остаются стык-в-стык без независимой отрисовки.
+   ========================================================================== */
+.sched-swipe-carousel {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 300%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  opacity: 0;
+  contain: layout paint style;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: none;
+}
+.sched-swipe-carousel.is-active,
+.sched-swipe-carousel.is-settling {
+  opacity: 1;
+}
+.sched-swipe-carousel.is-settling {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+.sched-swipe-panel {
+  position: relative;
+  width: calc(100% / 3);
+  min-width: calc(100% / 3);
+  max-width: calc(100% / 3);
+  flex: 0 0 calc(100% / 3);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--sched-bg);
+  contain: layout paint style;
+  pointer-events: none;
+}
+.sched-swipe-panel > .sched-day-block {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Живая сцена сохраняет место в потоке для будущих дней, но текущую карточку
+   рисует центральная панель карусели — двойного текста и двойного paint нет. */
+.sched-days-scene.is-carousel-swiping #day-scene > .sched-day-block:first-child {
+  visibility: hidden;
+}
+.sched-swipe-panel.is-blocked {
+  min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
+  display: grid;
+  place-items: center;
+  color: var(--sched-secondary);
+}
+.sched-swipe-panel.is-blocked .sched-easter-egg-wrap {
+  display: grid;
+  width: 100%;
+  min-height: inherit;
+  place-items: center;
+}
+.sched-swipe-panel.is-blocked .sched-easter-egg-msg {
+  font-size: 24px;
+  font-weight: 700;
+}
+/* Старый transform на stage больше не участвует в новом алгоритме. */
+:root.is-day-swiping #stage {
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-swipe-carousel.is-settling { transition: none !important; }
+}
