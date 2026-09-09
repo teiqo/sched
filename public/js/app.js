@@ -5139,7 +5139,9 @@ function encodeSwapKey(key) {
 }
 function decodeSwapKey(enc) {
   try {
-    return decodeURIComponent(enc).replace(/~/g, "/");
+    /* Суффикс "*xxxx" добавляется анонимным предложениям, чтобы не
+       перезаписывать чужой узел; на слот он не влияет. */
+    return decodeURIComponent(String(enc).replace(/\*[A-Za-z0-9]+$/, "")).replace(/~/g, "/");
   } catch (e) {
     return enc;
   }
@@ -5313,22 +5315,32 @@ async function anonymousProposalIdentity() {
 async function cloudWriteAnonymousPendingPerKey(payloads, signal) {
   const keys = Object.keys(payloads || {});
   if (!keys.length) return false;
+  const putKey = async (nodeKey, body) => {
+    const response = await fetch(
+      cloudRoot() + "/" + CLOUD_PATHS.pending + "/" + nodeKey + ".json",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        signal,
+      },
+    );
+    if (!response.ok) lastCloudStatus = response.status;
+    return response.ok;
+  };
   let sent = 0;
   for (const key of keys) {
     try {
-      const response = await fetch(
-        cloudRoot() + "/" + CLOUD_PATHS.pending + "/" + encodeURIComponent(key) + ".json",
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payloads[key]),
-          credentials: "omit",
-          referrerPolicy: "no-referrer",
-          signal,
-        },
-      );
-      if (response.ok) sent += 1;
-      else lastCloudStatus = response.status;
+      if (await putKey(key, payloads[key])) { sent += 1; continue; }
+      /* Правила разрешают анониму только создание узла: если по этой паре
+         заявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
+         видят его как ту же пару (суффикс срезается при раскодировке). */
+      if (lastCloudStatus === 401 || lastCloudStatus === 403) {
+        const suffix = "*" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+        if (await putKey(key + suffix, payloads[key])) { sent += 1; continue; }
+      }
     } catch (_) {
       lastCloudStatus = -1;
     }
@@ -5445,12 +5457,7 @@ async function publishSwapBatch(entries, label = "изменены пары") {
         "pending",
       );
     } else {
-      toast("предложение сохранено у тебя, но не ушло: " + cloudFailHint());
-      pushNotif(
-        "предложение не ушло редакторам: " + cloudFailHint() + " · повторим автоматически",
-        "pending",
-        "cancel",
-      );
+      toast("предложение не ушло — повторю сам");
     }
   }
   return ok;
@@ -6235,8 +6242,41 @@ function notifyAboutPending() {
 }
 
 /* Уведомляем только при изменении самих пар, а не checkedAt/updatedAt. */
+function normalizeScheduleGroups(groups) {
+  /* Парсер может отдать те же пары в другом порядке, с пустыми полями
+     или другим регистром — такое обновление не должно будить уведомление. */
+  const text = value => String(value == null ? "" : value).trim().replace(/\s+/g, " ").toLowerCase();
+  const extras = value => {
+    if (!value || typeof value !== "object") return "";
+    return Object.keys(value)
+      .filter(k => value[k] !== null && value[k] !== undefined && value[k] !== "" && value[k] !== false)
+      .sort()
+      .map(k => k + "=" + text(value[k]))
+      .join(",");
+  };
+  return (Array.isArray(groups) ? groups : [])
+    .map(group => {
+      const days = group && typeof group.days === "object" && group.days ? group.days : {};
+      const normDays = Object.keys(days)
+        .sort()
+        .map(dayId => {
+          const items = (Array.isArray(days[dayId]) ? days[dayId] : [])
+            .map(item => {
+              const list = Array.isArray(item) ? item : [];
+              return [Number(list[0]) || 0, text(list[1]), text(list[2]), text(list[3]), extras(list[4])].join("|");
+            })
+            .filter(line => line.split("|").slice(1, 4).some(Boolean))
+            .sort();
+          return dayId + ">" + items.join(";");
+        })
+        .join("/");
+      return text(group && group.id) + "#" + normDays;
+    })
+    .sort()
+    .join("\n");
+}
 function scheduleContentStamp(groups) {
-  const raw = JSON.stringify(Array.isArray(groups) ? groups : []);
+  const raw = normalizeScheduleGroups(groups);
   let hash = 2166136261;
   for (let i = 0; i < raw.length; i += 1) {
     hash ^= raw.charCodeAt(i);
