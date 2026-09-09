@@ -618,11 +618,7 @@ function headingHtml(d, sub, primary = false) {
 function editorToolbarHtml(dIso) {
   if (!state.editorMode) return "";
   const role = myRole();
-  const primary = role === "owner" || role === "editor"
-    ? "сохранить"
-    : role === "user"
-      ? "предложить"
-      : "сохранить у себя";
+  const primary = role === "owner" || role === "editor" ? "сохранить" : "предложить";
   const undoDisabled = !editorSession?.history.length ? " disabled" : "";
   return `<div class="sched-editor-toolbar" role="toolbar" aria-label="редактор расписания">
     <div class="sched-editor-toolbar-copy"><strong>режим редактора</strong><span>видны все пары, окна, вакансии и самостоятельные</span></div>
@@ -2429,6 +2425,39 @@ var profileView = "profile";
 var appStatsCache = null;
 var appStatsLoading = false;
 var appStatsError = "";
+var STATS_VISITOR_KEY = "sched:visitor:v1";
+var STATS_VISIT_SENT_KEY = "sched:visitor-sent:v1";
+
+function statsVisitorId() {
+  try {
+    let id = localStorage.getItem(STATS_VISITOR_KEY) || "";
+    if (!/^[A-Za-z0-9_-]{20,100}$/.test(id)) {
+      id = crypto.randomUUID
+        ? crypto.randomUUID().replace(/-/g, "")
+        : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      localStorage.setItem(STATS_VISITOR_KEY, id);
+    }
+    return id;
+  } catch (_) {
+    return "";
+  }
+}
+
+function trackStatsVisit(force = false) {
+  if (LOCAL_PREVIEW || !window.SCHED_NOTIFY_URL) return;
+  const visitorId = statsVisitorId();
+  if (!visitorId) return;
+  const authenticated = Boolean(tgSessionVerified && tgSession?.session_token);
+  try {
+    const sent = JSON.parse(localStorage.getItem(STATS_VISIT_SENT_KEY) || "null");
+    if (!force && sent && sent.authenticated === authenticated && Date.now() - Number(sent.at || 0) < 6 * 60 * 60 * 1000) return;
+  } catch (_) {}
+  botRequest("stats/visit", { visitor_id: visitorId }, authenticated ? tgSession.session_token : "", { timeout: 5000 })
+    .then(() => {
+      try { localStorage.setItem(STATS_VISIT_SENT_KEY, JSON.stringify({ at: Date.now(), authenticated })); } catch (_) {}
+    })
+    .catch(() => {});
+}
 
 function compactNumber(value) {
   const n = Number(value);
@@ -2472,16 +2501,17 @@ function statsPanelHtml() {
     </div>
     ${appStatsError ? `<p class="sched-stats-error">${escapeHtml(appStatsError)}</p>` : ""}
     <div class="sched-stats-grid">
-      ${statCard(users.total, "реальных пользователей", "primary")}
+      ${statCard(users.total, "всего пользователей", "primary")}
+      ${statCard(users.anonymous ?? 0, "без авторизации", "accent")}
+      ${statCard(users.authorized ?? users.total, "авторизованы")}
       ${statCard(users.active_7d, "активны за 7 дней", "positive")}
-      ${statCard(local.replaced, "заменено пар", "accent")}
-      ${statCard(local.activeChanges, "активных изменений")}
     </div>
     <div class="sched-stats-section">
       <h3>сейчас</h3>
       <div class="sched-stats-list">
         ${statRow("подписаны на telegram", telegram.subscribers)}
         ${statRow("активны за 30 дней", users.active_30d)}
+        ${statRow("без авторизации за 7 дней", users.anonymous_active_7d ?? 0)}
         ${statRow("заявок на проверке", local.pending)}
         ${statRow("групп с изменениями", local.groups)}
       </div>
@@ -2489,6 +2519,8 @@ function statsPanelHtml() {
     <div class="sched-stats-section">
       <h3>изменения</h3>
       <div class="sched-stats-list">
+        ${statRow("активных изменений", local.activeChanges)}
+        ${statRow("заменено пар", local.replaced)}
         ${statRow("перенесено пар", local.moved)}
         ${statRow("отменено пар", local.cancelled)}
         ${statRow("создано окон", local.windows)}
@@ -2504,7 +2536,7 @@ function statsPanelHtml() {
         ${statRow("получено отчётов", activity.reports_30d)}
       </div>
     </div>
-    <p class="sched-stats-note">пользователь считается реальным после подтверждённого входа через telegram или запуска бота. данные о заменах показывают актуальные записи в общей базе.</p>
+    <p class="sched-stats-note">пользователи без авторизации считаются по уникальной установке браузера. сырой идентификатор не сохраняется; после входа этот браузер больше не входит в анонимный счётчик.</p>
   </section>`;
 }
 function profileTabsHtml(canReview) {
@@ -2987,6 +3019,7 @@ function init() {
   }
 
   tickTimer = window.setInterval(tick, 1000);
+  window.setTimeout(() => trackStatsVisit(), 1000);
 
   if (!LOCAL_PREVIEW && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
     /* Новая версия должна заменить уже открытую старую страницу, иначе в памяти
@@ -3072,8 +3105,11 @@ function resetEditorDay(dIso) {
   Object.keys(editorSession.draft).forEach(key => {
     if (key.startsWith(prefix)) delete editorSession.draft[key];
   });
+  Object.entries(editorSession.baseline).forEach(([key, entry]) => {
+    if (key.startsWith(prefix)) editorSession.draft[key] = cloneSwapMap(entry);
+  });
   render();
-  toast("день возвращён к исходному расписанию в черновике");
+  toast("день возвращён к подтверждённому расписанию");
 }
 
 async function saveEditorMode() {
@@ -3104,6 +3140,8 @@ async function saveEditorMode() {
   if (sharedSwapsEnabled() && role !== "anon") {
     const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
     if (!ok) toast(cloudFailHint());
+  } else if (role === "anon" && sharedSwapsEnabled()) {
+    toast("сохранено у тебя · войди через telegram, чтобы отправить редакторам");
   } else {
     toast("изменения сохранены на этом устройстве");
   }
@@ -4161,6 +4199,7 @@ async function ensurePushSession(force = false) {
       tgAuthError = null;
       tgAuthState = "ready";
       saveTgSession();
+      trackStatsVisit(true);
       const profileChanged = previousAuthState !== "ready" ||
         previous.role !== session.role ||
         previous.username !== session.username ||
@@ -4258,6 +4297,7 @@ function applyTgSession(result, epoch = tgAuthEpoch) {
   tgRoles = { owner: null, editors: {}, boundTg: session.id };
   saveTgSession();
   refreshAuthUi();
+  trackStatsVisit(true);
   toast("привет, " + tgDisplayName(session) + "!");
   refreshTgSubscription();
   tgSyncRoles().then(() => pullSharedSwaps()).catch(() => {});

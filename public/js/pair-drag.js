@@ -147,7 +147,15 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const items = new Map();
     slots.forEach(slot => {
       const temp = document.createElement('div');
-      temp.innerHTML = renderRow({ ...slot, window: Boolean(slot.window || slot.cancelled) }, p.date);
+      /* A cancelled lesson is only a free target while dragging. Do not pass
+         its cancelled/swapped styling to the preview, otherwise it appears as
+         a random struck-through lesson at the bottom of the day. */
+      temp.innerHTML = renderRow({
+        ...slot,
+        window: Boolean(slot.window || slot.cancelled),
+        cancelled: false,
+        swapped: slot.cancelled ? false : slot.swapped,
+      }, p.date);
       const row = temp.firstElementChild;
       row.dataset.dragOrigin = slot.n; row.dataset.dropN = slot.n;
       row.removeAttribute('tabindex'); row.removeAttribute('role'); row.inert = true;

@@ -139,6 +139,10 @@ class Store:
             name TEXT NOT NULL DEFAULT '', username TEXT NOT NULL DEFAULT '',
             logins INTEGER NOT NULL DEFAULT 1
           );
+          CREATE TABLE IF NOT EXISTS app_visitors (
+            id TEXT PRIMARY KEY, first_seen REAL NOT NULL, last_seen REAL NOT NULL,
+            authenticated_user TEXT NOT NULL DEFAULT ''
+          );
           CREATE TABLE IF NOT EXISTS outbox (
             event_id TEXT NOT NULL, chat_id TEXT NOT NULL, text TEXT NOT NULL,
             attempts INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'pending',
@@ -246,13 +250,36 @@ class Store:
                 logins=app_users.logins + ?
             """, (uid, now, now, name, username, int(bool(login))))
 
+    def record_visitor(self, visitor_id, authenticated_user=""):
+        """Count a browser without storing its raw installation identifier."""
+        if not isinstance(visitor_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{20,100}", visitor_id):
+            raise ValueError("invalid visitor id")
+        digest_id = hashlib.sha256(visitor_id.encode("utf-8")).hexdigest()
+        user_id = str(authenticated_user or "") if str(authenticated_user or "").isdigit() else ""
+        now = time.time()
+        with self.lock, self.db:
+            self.db.execute("""
+              INSERT INTO app_visitors(id,first_seen,last_seen,authenticated_user)
+              VALUES (?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET
+                last_seen=excluded.last_seen,
+                authenticated_user=CASE
+                  WHEN excluded.authenticated_user!='' THEN excluded.authenticated_user
+                  ELSE app_visitors.authenticated_user
+                END
+            """, (digest_id, now, now, user_id))
+        return True
+
     def app_stats(self):
         now = time.time()
         with self.lock:
             known = {r[0] for r in self.db.execute("SELECT id FROM app_users")}
             known.update(r[0] for r in self.db.execute("SELECT id FROM chats WHERE started=1"))
-            one_week = self.db.execute("SELECT COUNT(*) FROM app_users WHERE last_seen>=?", (now-7*86400,)).fetchone()[0]
-            one_month = self.db.execute("SELECT COUNT(*) FROM app_users WHERE last_seen>=?", (now-30*86400,)).fetchone()[0]
+            authorized_week = self.db.execute("SELECT COUNT(*) FROM app_users WHERE last_seen>=?", (now-7*86400,)).fetchone()[0]
+            authorized_month = self.db.execute("SELECT COUNT(*) FROM app_users WHERE last_seen>=?", (now-30*86400,)).fetchone()[0]
+            anonymous = self.db.execute("SELECT COUNT(*) FROM app_visitors WHERE authenticated_user='' ").fetchone()[0]
+            anonymous_week = self.db.execute("SELECT COUNT(*) FROM app_visitors WHERE authenticated_user='' AND last_seen>=?", (now-7*86400,)).fetchone()[0]
+            anonymous_month = self.db.execute("SELECT COUNT(*) FROM app_visitors WHERE authenticated_user='' AND last_seen>=?", (now-30*86400,)).fetchone()[0]
             bot_users = self.db.execute("SELECT COUNT(*) FROM chats WHERE started=1").fetchone()[0]
             subscribers = self.db.execute("SELECT COUNT(*) FROM chats WHERE active=1 AND started=1").fetchone()[0]
             groups = self.db.execute("SELECT COUNT(DISTINCT group_name) FROM chats WHERE group_name!=''").fetchone()[0]
@@ -265,7 +292,16 @@ class Store:
         return {
             "ok": True,
             "generated_at": int(now * 1000),
-            "users": {"total": len(known), "active_7d": one_week, "active_30d": one_month, "bot_started": bot_users},
+            "users": {
+                "total": len(known) + anonymous,
+                "authorized": len(known),
+                "anonymous": anonymous,
+                "active_7d": authorized_week + anonymous_week,
+                "active_30d": authorized_month + anonymous_month,
+                "anonymous_active_7d": anonymous_week,
+                "anonymous_active_30d": anonymous_month,
+                "bot_started": bot_users,
+            },
             "telegram": {"subscribers": subscribers, "groups": groups, "deliveries_30d": deliveries},
             "activity": {"change_events_30d": changes, "reports_30d": reports},
         }
@@ -467,7 +503,7 @@ class App:
 
 
 REPORT_ROUTES = ("/reports", "/reports/list", "/reports/file", "/reports/delete")
-STATS_ROUTES = ("/stats",)
+STATS_ROUTES = ("/stats", "/stats/visit")
 AUTH_ROUTES = ("/auth/start", "/auth/status", "/auth/cancel",
                "/auth/verify", "/auth/logout", "/auth/firebase")
 
@@ -630,7 +666,14 @@ def handler_for(app):
                     if not app.limit(rate_key, 120 if who else 10):
                         self.respond(429, {"ok": False, "error": "Too many requests"})
                         return
-                    if route in STATS_ROUTES:
+                    if route == "/stats/visit":
+                        visitor_id = data.get("visitor_id")
+                        if not app.limit("visit:" + self.client_address[0], 30):
+                            status, result = 429, {"ok": False, "error": "Too many requests"}
+                        else:
+                            app.store.record_visitor(visitor_id, who if who not in (None, "server") else "")
+                            status, result = 200, {"ok": True}
+                    elif route == "/stats":
                         # The UI exposes this aggregate-only view to owners/editors.
                         # Any verified session may fetch it so Firebase-granted editors
                         # (not only env admins) work without trusting a client role flag.

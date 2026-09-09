@@ -51,7 +51,10 @@ export function bindDaySwipe({
     panel.inert = true;
     if (blocked) {
       panel.classList.add("is-blocked");
-      panel.innerHTML = '<div class="sched-easter-egg-wrap"><span class="sched-easter-egg-msg">привет=)</span></div>';
+      /* At the earliest allowed day, mirror that day behind the elastic edge.
+         A real panel avoids flashing the old "привет=)" placeholder. */
+      panel.innerHTML = renderDay(date);
+      sanitize(panel);
     } else {
       panel.innerHTML = renderDay(date);
       sanitize(panel);
@@ -75,7 +78,7 @@ export function bindDaySwipe({
     track.setAttribute("aria-hidden", "true");
     track.inert = true;
     track.append(
-      dayPanel(leftDate, "left", leftBlocked),
+      dayPanel(leftBlocked ? date : leftDate, "left", leftBlocked),
       dayPanel(date, "current"),
       dayPanel(addDays(date, 1), "right"),
     );
