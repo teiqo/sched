@@ -968,3 +968,18 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .sched-swipe-carousel.is-settling { transition: none !important; }
 }
+
+
+/* Перенос пары: нейтральный пунктир темнее, а на исходном месте взятой пары
+   остаётся только пустая подложка без второй пунктирной рамки. */
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+:root .sched-drag-board > .agenda-row.is-drag-ghost {
+  outline-color: color-mix(in srgb, var(--sched-tertiary) 58%, var(--sched-bg)) !important;
+}
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  outline-color: color-mix(in srgb, var(--sched-tertiary) 68%, var(--sched-bg)) !important;
+}
