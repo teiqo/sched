@@ -1647,11 +1647,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    if (basicsTourStep === 1) {
-      const [y, m, d] = btn.dataset.date.split("-").map(Number);
-      triggerTourRoulette(new Date(y, m - 1, d));
-      return;
-    }
+    if (basicsTourStep === 1) return;
     /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
@@ -2985,17 +2981,22 @@ function startBasicsTourRoulette(options = {}) {
   }, pressDelay);
 }
 
+function isTourRouletteRunning() {
+  return basicsTourRouletteFrame !== null || basicsTourRouletteTimer !== null;
+}
+
 function triggerTourRoulette(clickedDate) {
   if (basicsTourStep !== 1) return;
   const now = performance.now();
-  if (now - basicsTourLastTriggerTime < 240) return;
+  if (now - basicsTourLastTriggerTime < 500) return;
+  if (isTourRouletteRunning()) return;
   basicsTourLastTriggerTime = now;
   stopBasicsTourRoulette({ keepDate: true });
   if (clickedDate) {
     const dir = clickedDate > state.selected ? "forward" : clickedDate < state.selected ? "backward" : null;
     selectDate(clickedDate, dir, { silent: true, preview: true, animated: true });
   }
-  startBasicsTourRoulette({ delay: 160, keepDate: true });
+  startBasicsTourRoulette({ delay: 180, keepDate: true });
 }
 
 function finishBasicsTour() {
@@ -3054,42 +3055,25 @@ function renderBasicsTour() {
       return;
     }
     if (basicsTourStep === 1) {
+      if (event.target.closest(".sched-tour-copy")) return;
       const strip = document.getElementById("strip");
       if (strip) {
-        const stripRect = strip.getBoundingClientRect();
-        if (
-          event.clientX >= stripRect.left - 10 &&
-          event.clientX <= stripRect.right + 10 &&
-          event.clientY >= stripRect.top - 12 &&
-          event.clientY <= stripRect.bottom + 12
-        ) {
-          const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-          let clickedBtn = null, nearestBtn = null;
-          let minDistance = Infinity;
-          buttons.forEach(btn => {
-            const r = btn.getBoundingClientRect();
-            if (
-              event.clientX >= r.left && event.clientX <= r.right &&
-              event.clientY >= r.top && event.clientY <= r.bottom
-            ) {
-              clickedBtn = btn;
-            }
-            const dist = Math.abs(r.left + r.width / 2 - event.clientX);
-            if (dist < minDistance) {
-              minDistance = dist;
-              if (!clickedBtn) nearestBtn = btn;
-            }
-          });
-          const btn = clickedBtn || nearestBtn;
-          let targetDate = null;
-          if (btn && btn.dataset.date) {
-            const [y, m, d] = btn.dataset.date.split("-").map(Number);
-            targetDate = new Date(y, m - 1, d);
-          }
-          triggerTourRoulette(targetDate || state.selected);
-          return;
+        const buttons = [...strip.querySelectorAll("button[data-date-index]")];
+        const clickedBtn = buttons.find(btn => {
+          const r = btn.getBoundingClientRect();
+          return (
+            event.clientX >= r.left &&
+            event.clientX <= r.right &&
+            event.clientY >= r.top &&
+            event.clientY <= r.bottom
+          );
+        });
+        if (clickedBtn && clickedBtn.dataset.date) {
+          const [y, m, d] = clickedBtn.dataset.date.split("-").map(Number);
+          triggerTourRoulette(new Date(y, m - 1, d));
         }
       }
+      return;
     }
   };
   requestAnimationFrame(() => {
