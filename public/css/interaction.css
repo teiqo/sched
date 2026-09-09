@@ -651,3 +651,93 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   animation: none !important;
   transition: none !important;
 }
+
+
+/* ==========================================================================
+   Горизонтальный свайп дня: пока палец на экране, страница не должна
+   перерисовывать дорогие эффекты. Слой #stage и превью — единственное, что
+   двигается; всё остальное на время жеста упрощается.
+   ========================================================================== */
+
+/* Липкие поверхности с backdrop-filter пересчитывают размытие на каждом кадре,
+   когда под ними едет контент. На время свайпа заменяем размытие на
+   непрозрачный фон. */
+:root.is-day-swiping :is(
+  .sched-date-controls,
+  .sched-header,
+  .date-strip,
+  .sched-schedule-footer,
+  .sched-app > header,
+  .sched-schedule-view > header
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root.is-day-swiping .sched-date-controls {
+  background: var(--sched-bg) !important;
+}
+
+/* Никаких размытий, теней и фильтров внутри едущих слоёв: они заставляют
+   браузер перерисовывать растр вместо простого сдвига композитного слоя. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) :is(
+  .agenda-row,
+  .agenda-list,
+  .agenda-break,
+  .agenda-break-chip,
+  .live-lesson-card,
+  .completed-lessons,
+  .sched-day-block,
+  .sched-empty-day
+) {
+  filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* Любая работающая анимация (частицы живой пары, пульсации, шиммеры) держит
+   главный поток занятым весь жест. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-date-controls) *,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
+  animation-play-state: paused !important;
+}
+/* Переходы внутри едущих слоёв не нужны, но подчёркивание дня в полоске
+   продолжает доводиться своим переходом — его не трогаем. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) * {
+  transition: none !important;
+}
+:root.is-day-swiping .live-card-particles,
+:root.is-day-swiping .live-card-particles i {
+  display: none !important;
+}
+
+/* Два композитных слоя на весь жест: сам день и превью соседнего дня. */
+:root.is-day-swiping #stage,
+:root.is-day-swiping .sched-swipe-peek {
+  contain: layout paint style;
+  will-change: transform;
+  transform-style: flat;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* Дочерние элементы наоборот не должны получать собственные слои. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) * {
+  will-change: auto !important;
+}
+
+
+/* Предварительно собранные превью соседних дней висят за краями экрана, пока
+   палец ещё не поехал: WebKit успевает растрировать их до начала движения. */
+.sched-swipe-peek.is-warming {
+  pointer-events: none;
+  contain: layout paint style;
+  will-change: transform;
+}
+
+/* Safari растрирует только видимую часть слоя, но при сдвиге добирает соседние
+   тайлы. Для превью высота выше экрана всё равно никогда не видна. */
+.sched-swipe-peek {
+  max-height: calc(var(--sched-viewport-height, 100dvh) + 120px);
+  overflow: hidden;
+}

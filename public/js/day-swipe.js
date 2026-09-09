@@ -21,12 +21,17 @@ export function bindDaySwipe({
   const setActive = value => {
     if (active === value) return;
     active = value;
+    // Paint-heavy chrome (sticky blur, shadows, particles) is switched off for
+    // the duration of the gesture through a single root-level class.
+    document.documentElement.classList.toggle("is-day-swiping", value);
     strip.classList.toggle("is-day-swiping", value);
     onActiveChange?.(value);
   };
   // Inline transforms beat the CSS var rules and avoid invalidating the style
   // of the whole subtree that inherits --swipe-x on every frame.
-  const shiftStage = x => { stage.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`; };
+  // Whole pixels only: WebKit re-rasterises text layers on fractional offsets,
+  // which is exactly what makes a slow drag look like dropped frames on iOS.
+  const shiftStage = x => { stage.style.transform = `translate3d(${Math.round(x)}px, 0, 0)`; };
   const selectionOffset = progress => {
     const index = Number(strip.dataset.selectedIndex) || 0;
     return Math.max(0, Math.min(6, index + progress)) * 100;
@@ -45,7 +50,7 @@ export function bindDaySwipe({
     frame = null;
     if (!f || !gesture) return;
     shiftStage(f.shift);
-    f.preview.style.transform = `translate3d(${f.previewX.toFixed(1)}px, 0, 0)`;
+    f.preview.style.transform = `translate3d(${Math.round(f.previewX)}px, 0, 0)`;
     if (f.blocked) {
       f.preview.style.setProperty("--easter-egg-width", `${f.eggWidth}px`);
       f.preview.style.setProperty("--easter-egg-opacity", f.eggOpacity);
@@ -61,6 +66,12 @@ export function bindDaySwipe({
   const dropWarm = () => {
     if (warmHandle !== null) unidle(warmHandle);
     warmHandle = null;
+    if (warm) {
+      for (const direction of [1, -1]) {
+        const node = warm[direction];
+        if (node && node !== peek) node.remove();
+      }
+    }
     warm = null;
   };
   const buildPeek = (date, direction, blocked) => {
@@ -81,18 +92,29 @@ export function bindDaySwipe({
     return node;
   };
   // Rendering a whole day inside the first move frame is the one heavy step of
-  // the gesture; build both neighbours while the finger is still resting.
+  // the gesture. Build BOTH neighbours while the finger is still resting and
+  // mount them off-screen, so WebKit lays them out, paints them and promotes
+  // the compositor layers before anything starts moving.
   const prewarm = date => {
     dropWarm();
+    const w = width();
     warmHandle = idle(() => {
       warmHandle = null;
       if (!gesture) return;
       const forwardBlocked = addDays(date, 1) < minDate();
       const backBlocked = addDays(date, -1) < minDate();
+      const forward = buildPeek(date, 1, forwardBlocked);
+      const back = buildPeek(date, -1, backBlocked);
+      forward.style.transform = `translate3d(${w}px, 0, 0)`;
+      back.style.transform = `translate3d(${-w}px, 0, 0)`;
+      forward.classList.add("is-warming");
+      back.classList.add("is-warming");
+      scene.appendChild(forward);
+      scene.appendChild(back);
       warm = {
         date,
-        1: buildPeek(date, 1, forwardBlocked),
-        "-1": buildPeek(date, -1, backBlocked),
+        1: forward,
+        "-1": back,
         blocked: { 1: forwardBlocked, "-1": backBlocked },
       };
     });
@@ -126,11 +148,20 @@ export function bindDaySwipe({
   };
   const ensurePeek = (direction, blocked) => {
     if (peek?.dataset.direction === String(direction)) return peek;
-    peek?.remove();
+    if (peek && peek !== warm?.[direction]) peek.remove();
     const cached = warm && warm.date.getTime() === gesture.date.getTime() &&
       warm.blocked[direction] === blocked ? warm[direction] : null;
-    peek = cached || buildPeek(gesture.date, direction, blocked);
-    scene.appendChild(peek);
+    if (cached) {
+      // Already mounted and rasterised: only drop the parked state.
+      cached.classList.remove("is-warming");
+      peek = cached;
+    } else {
+      peek = buildPeek(gesture.date, direction, blocked);
+      scene.appendChild(peek);
+    }
+    // The opposite preview must not keep a live layer during the gesture.
+    const other = warm?.[direction === 1 ? -1 : 1];
+    if (other && other !== peek) other.remove();
     return peek;
   };
 
@@ -194,7 +225,7 @@ export function bindDaySwipe({
     cancelFrame();
     dropWarm();
     shiftStage(g.shift);
-    if (peek) peek.style.transform = `translate3d(${(direction * w + g.shift).toFixed(1)}px, 0, 0)`;
+    if (peek) peek.style.transform = `translate3d(${Math.round(direction * w + g.shift)}px, 0, 0)`;
     shiftSelection(g.blocked ? 0 : -g.shift / w);
     const commit = allowCommit && !g.blocked && Math.abs(g.shift) >= Math.max(64, Math.min(110, w * 0.22));
     const distance = commit ? w - Math.abs(g.shift) : Math.abs(g.shift);
