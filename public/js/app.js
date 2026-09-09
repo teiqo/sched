@@ -1612,7 +1612,7 @@ function endScrub(options = {}) {
   const keepVisual = Boolean(options.keepVisual);
   const skipRender = Boolean(options.skipRender);
   /* Работает и без активного scrub: используется как полный сброс состояния,
-     чтобы после резкого отпускания не оставались инлайн-трансформ и блюр. */
+     чтобы после резкого о��пускания не оставались инлайн-трансформ и блюр. */
   const stripEl = (scrub && scrub.strip) || $("#strip");
   if (!stripEl) return;
   const wasActive = Boolean(scrub && (scrub.active || scrub.targetIndex !== undefined));
@@ -2339,7 +2339,7 @@ function futureDaysHtml() {
       : cachedFutureDay(d),
   );
   /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
-     а не возникали резко вместе со сменой сцены. */
+     а не возникали резко вмест�� со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
@@ -3812,19 +3812,34 @@ function undoEditorAction() {
   render();
 }
 
+function editorDayKeys(dIso) {
+  const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+  return [...new Set([
+    ...Object.keys(editorSession?.baseline || {}).filter(key => key.startsWith(prefix)),
+    ...Object.keys(editorSession?.draft || {}).filter(key => key.startsWith(prefix)),
+  ])];
+}
+
+function restoreEditorSwap(key) {
+  const confirmed = editorSession?.baseline?.[key];
+  if (confirmed) editorSession.draft[key] = cloneSwapMap(confirmed);
+  else delete editorSession.draft[key];
+}
+
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
-  const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-  /* «Исходный день» = базовое расписание парсера: сносим все правки дня,
-     а не возвращаем уже подтверждённые замены из baseline. */
-  const dayKeys = Object.keys(editorSession.draft).filter(key => key.startsWith(prefix));
-  const live = dayKeys.filter(key => editorSession.draft[key] && !editorSession.draft[key].deleted);
-  if (!live.length) {
+  /* «Исходный день» = утверждённое расписание на входе в редактор:
+     черновые правки сбрасываем, подтверждённые замены из baseline оставляем. */
+  const dayKeys = editorDayKeys(dIso);
+  const changed = dayKeys.filter(key =>
+    JSON.stringify(editorSession.baseline[key] || null) !== JSON.stringify(editorSession.draft[key] || null)
+  );
+  if (!changed.length) {
     toast("этот день и так исходный");
     return;
   }
   editorSession.history.push(cloneSwapMap(editorSession.draft));
-  dayKeys.forEach(key => { delete editorSession.draft[key]; });
+  dayKeys.forEach(restoreEditorSwap);
   render();
   toast("день возвращён к исходному расписанию");
 }
@@ -6369,7 +6384,7 @@ function buildNotifFrag(key, entry) {
   };
 }
 
-/* Длительность пары из расписания звонков: «1 ч 35 мин». Без времени начала/конца. */
+/* Длительность пары из ��асписания звонков: «1 ч 35 мин». Без времени начала/конца. */
 function lessonDurationLabel(dIso, n) {
   const d = dateFromIso(dIso);
   const bell = BELLS.find((b) => b.n === Number(n));
