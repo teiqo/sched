@@ -36,6 +36,20 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.removeEventListener('touchcancel', onTouchCancel, true);
   };
   const announce = text => { if (drag && drag.status.textContent !== text) drag.status.textContent = text; };
+  const placeClone = (d, left, top) => {
+    const x = Math.round(left * 2) / 2, y = Math.round(top * 2) / 2;
+    if (d.renderX === x && d.renderY === y) return;
+    d.renderX = x; d.renderY = y;
+    d.clone.style.setProperty('--sched-drag-x', `${x}px`);
+    d.clone.style.setProperty('--sched-drag-y', `${y}px`);
+  };
+  const measureBoard = (d, includeRows = false) => {
+    const rect = d.board.getBoundingClientRect();
+    d.boardRect = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    if (includeRows) d.hitRows = [...d.board.children].map(row => ({
+      row, top: row.offsetTop - 4, bottom: row.offsetTop + row.offsetHeight + 4,
+    }));
+  };
   const applyOrder = targetN => {
     const d = drag;
     if (!d || d.previewN === targetN) return;
@@ -55,6 +69,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       fragment.appendChild(row);
     });
     d.board.appendChild(fragment);
+    measureBoard(d, true);
     for (const row of d.items.values()) {
       const delta = before.get(row) - row.getBoundingClientRect().top;
       // Only real neighbours move on hover. Windows and the source are static targets.
@@ -66,20 +81,19 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const d = drag;
     if (!d) return;
     d.clone.classList.remove('is-magnetized');
-    d.clone.style.left = Math.max(0, Math.min(innerWidth - d.clone.offsetWidth, d.x - d.grabX)) + 'px';
-    d.clone.style.top = d.y - d.grabY + 'px';
+    placeClone(d, Math.max(0, Math.min(innerWidth - d.cloneWidth, d.x - d.grabX)), d.y - d.grabY);
   };
   const centerCloneOnPlaceholder = () => {
     const d = drag, placeholder = d?.items.get(d.fromN);
     if (!placeholder?.isConnected) return;
     const targetRect = placeholder.getBoundingClientRect();
-    d.clone.style.left = targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2 + 'px';
-    d.clone.style.top = targetRect.top + (targetRect.height - d.clone.offsetHeight) / 2 + 'px';
+    placeClone(d, targetRect.left + (targetRect.width - d.cloneWidth) / 2,
+      targetRect.top + (targetRect.height - d.cloneHeight) / 2);
   };
-  const updateTarget = () => {
+  const updateTarget = (recenter = false) => {
     const d = drag;
     if (!d || !d.moved) return false;
-    const boardRect = d.board.getBoundingClientRect();
+    const boardRect = d.boardRect;
     const inside = d.x >= boardRect.left - 16 && d.x <= boardRect.right + 16 &&
       d.y >= boardRect.top - 20 && d.y <= boardRect.bottom + 20;
     if (!inside) {
@@ -88,25 +102,23 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       announce('в пределах этого дня · Esc — отмена');
       return false;
     }
-    // Layout coordinates exclude FLIP transforms, so an animating neighbour cannot flicker the target.
-    const row = [...d.board.children].find(row => {
-      const top = boardRect.top + row.offsetTop;
-      return d.y >= top - 4 && d.y <= top + row.offsetHeight + 4;
-    });
+    // Hit ranges are measured only after a reorder, not for every pointer event.
+    const localY = d.y - boardRect.top;
+    const row = d.hitRows.find(hit => localY >= hit.top && localY <= hit.bottom)?.row;
     if (!row) {
       d.targetN = null;
       d.clone.classList.remove('is-magnetized');
       return false;
     }
     const targetN = Number(row.dataset.dropN);
+    const changed = d.targetN !== targetN;
     d.targetN = targetN;
-    applyOrder(targetN);
-    if (!d.clone.classList.contains('is-magnetized')) {
+    if (changed) applyOrder(targetN);
+    if (changed && !d.clone.classList.contains('is-magnetized')) {
       d.clone.classList.add('is-magnetized');
-      void d.clone.offsetWidth;
     }
-    centerCloneOnPlaceholder();
-    announce(targetN === d.fromN ? 'исходное место · Esc — отмена' : `отпусти на ${targetN}-ю пару · Esc — отмена`);
+    if (changed || recenter) centerCloneOnPlaceholder();
+    if (changed) announce(targetN === d.fromN ? 'исходное место · Esc — отмена' : `отпусти на ${targetN}-ю пару · Esc — отмена`);
     return true;
   };
   const animate = () => {
@@ -119,8 +131,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       : d.y > viewport.bottom - edge ? Math.min(13, (d.y - viewport.bottom + edge) / 5) : 0;
     if (speed) {
       d.scroller.scrollTop += speed;
-      if (!updateTarget()) followPointer();
+      measureBoard(d, false);
     }
+    // Pointer/touch events can arrive at 120 Hz. Paint at most once per frame.
+    if (d.moved && !updateTarget(Boolean(speed))) followPointer();
     frame = requestAnimationFrame(animate);
   };
   const start = () => {
@@ -136,7 +150,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
     clone.setAttribute('aria-hidden', 'true'); clone.inert = true;
-    Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: rect.left + 'px', top: rect.top + 'px' });
+    Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: '0px', top: '0px' });
+    clone.style.setProperty('--sched-drag-x', `${rect.left}px`);
+    clone.style.setProperty('--sched-drag-y', `${rect.top}px`);
     document.body.appendChild(clone);
     const status = document.createElement('div');
     status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -157,12 +173,14 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     });
     drag = { ...p, fromN: p.n, scope, slots, clone, status, board, items, hidden, scroller, originalScroll: scroller.scrollTop,
       oldScrollBehavior: scroller.style.scrollBehavior, grabX: p.x - rect.left, grabY: p.y - rect.top,
-      x: p.x, y: p.y, moved: false, previewN: p.n, targetN: null };
+      cloneWidth: rect.width, cloneHeight: rect.height, renderX: rect.left, renderY: rect.top,
+      startX: p.x, startY: p.y, x: p.x, y: p.y, moved: false, previewN: p.n, targetN: null };
     onActiveChange(true);
     scroller.style.scrollBehavior = 'auto';
     document.body.classList.add('is-dragging-pair'); scope.classList.add('is-pair-dragging');
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
     scope.appendChild(board);
+    measureBoard(drag, true);
     // Reveal windows above the source without moving the grabbed card under the finger.
     const delta = items.get(p.n).getBoundingClientRect().top - rect.top;
     scroller.scrollTop += delta;
@@ -176,6 +194,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       drag.scrollSpacer = spacer;
       scroller.scrollTop += items.get(p.n).getBoundingClientRect().top - rect.top;
     }
+    measureBoard(drag, true);
     /* The drag board can be wider or shift after windows are revealed. Recenter
        the scaled card against the actual dashed source placeholder, not the old row. */
     centerCloneOnPlaceholder();
@@ -209,9 +228,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (drag) {
       event?.preventDefault();
       const d = drag;
-      d.moved ||= Math.hypot(x - d.x, y - d.y) > 3;
+      d.moved ||= Math.hypot(x - d.startX, y - d.startY) > 3;
       d.x = x; d.y = y;
-      if (!updateTarget()) followPointer();
     } else if (pending && Math.hypot(x - pending.x, y - pending.y) > 7) {
       if (pending.handle) { start(); if (drag) move(x, y, event); }
       else { clearPending(); removeListeners(); } // A swipe on the card scrolls normally before the hold.

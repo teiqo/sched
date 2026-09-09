@@ -2909,7 +2909,12 @@ function applyDayChanges(dIso, changes, label = "замена") {
     map[key] = entry; entries[key] = entry;
   }
   saveSwaps();
-  if (Object.keys(entries).length) publishSwapBatch(entries, label);
+  if (Object.keys(entries).length) {
+    const expectedCloudWrite = sharedSwapsEnabled() && myRole() !== "anon";
+    publishSwapBatch(entries, label)
+      .then(ok => { if (expectedCloudWrite && !ok) toast(cloudFailHint()); })
+      .catch(error => { if (expectedCloudWrite) toast(error?.message || cloudFailHint()); });
+  }
   return true;
 }
 
@@ -4035,7 +4040,7 @@ async function tgSyncRoles() {
       await ensurePushSession();
       if (!sharedSwapsEnabled()) return;
       await tgRegister();
-      const response = await fetch(await sharedUrlWithAuth(cloudRoot() + "/" + CLOUD_PATHS.editors + ".json"), { cache: "no-store" });
+      const response = await cloudFetch(cloudRoot() + "/" + CLOUD_PATHS.editors + ".json", { cache: "no-store" });
       if (epoch !== tgAuthEpoch) return;
       tgRoles.owner = tgSession.role === "owner" ? tgSession.id : null;
       if (response.ok) tgRoles.editors = await response.json() || {};
@@ -4074,6 +4079,21 @@ document.addEventListener("click", event => {
 /* Корень базы без имени файла: из ".../sched-swaps.json" делаем "...". */
 function cloudRoot() {
   return sharedSwapsUrl().replace(/\/[^/]*\.json.*$/, "");
+}
+
+/* Reads use the same verified Firebase identity as writes. This matters when
+   production rules do not allow anonymous reads. A rejected/expired ID token
+   is refreshed once; callers still receive the final response and can show a
+   useful setup/login error instead of creating a request storm. */
+async function cloudFetch(url, options = {}) {
+  const canAuthenticate = firebaseAuthEnabled() && Boolean(tgSession?.session_token);
+  let response = null;
+  for (let attempt = 0; attempt < (canAuthenticate ? 2 : 1); attempt += 1) {
+    const target = canAuthenticate ? await sharedUrlWithAuth(url, attempt > 0) : url;
+    response = await fetch(target, options);
+    if (response.status !== 401 || attempt > 0) break;
+  }
+  return response;
 }
 
 /* В ключах замен есть "/" (группы вида "тм-303/б") и могут быть точки —
@@ -4261,7 +4281,9 @@ async function publishSwapBatch(entries, label = "изменены пары") {
   if (!identity) return false;
   const payloads = {};
   Object.entries(entries).forEach(([key, entry]) => {
-    payloads[decodeURIComponent(encodeSwapKey(key))] = sanitizeSwapPayload({ ...entry, by: identity, byName: tgDisplayName(tgSession) });
+    /* Keep the encoded Firebase key in the JSON PATCH body. Decoding it here
+       reintroduced forbidden characters such as "." and made the whole batch fail. */
+    payloads[encodeSwapKey(key)] = sanitizeSwapPayload({ ...entry, by: identity, byName: tgDisplayName(tgSession) });
   });
   await waitTgRoles();
   if (tgSession?.id !== identity || !tgSessionVerified && !LOCAL_PREVIEW) return false;
@@ -4301,14 +4323,18 @@ function publishSwapKey(key) {
 
 async function pullPending() {
   try {
-    const resp = await fetch(
-      await sharedUrlWithAuth(cloudRoot() + ("/" + CLOUD_PATHS.pending + ".json")),
-      {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      },
+    const resp = await cloudFetch(
+      cloudRoot() + ("/" + CLOUD_PATHS.pending + ".json"),
+      { headers: { Accept: "application/json" }, cache: "no-store" },
     );
-    const data = resp.ok ? await resp.json() : null;
+    if (!resp.ok) {
+      lastCloudStatus = resp.status;
+      lastCloudMessage = resp.status === 401
+        ? "сессия облака истекла — войди через телеграм заново"
+        : "не удалось загрузить заявки (" + resp.status + ")";
+      return;
+    }
+    const data = await resp.json();
     pendingMap = data && typeof data === "object" ? data : {};
     notifyAboutPending();
   } catch (e) {
@@ -4334,9 +4360,10 @@ async function approvePending(enc) {
   }
   const updates = {};
   for (const [key, entry] of entries) {
-    const literal = decodeURIComponent(key);
-    updates[CLOUD_PATHS.swaps + "/" + literal] = sanitizeSwapPayload(entry);
-    updates[CLOUD_PATHS.pending + "/" + literal] = null;
+    /* `key` is already the exact flat Firebase child key. Never decode it into
+       a slash/dot before using it as a multi-location update path. */
+    updates[CLOUD_PATHS.swaps + "/" + key] = sanitizeSwapPayload(entry);
+    updates[CLOUD_PATHS.pending + "/" + key] = null;
   }
   if (!await cloudWrite("", updates, { method: "PATCH", notify: false })) { toast(cloudFailHint()); return; }
   const map = loadSwaps();
@@ -4350,7 +4377,7 @@ async function approvePending(enc) {
 async function rejectPending(enc) {
   if (myRole() !== "owner") { toast("только владелец может отклонять заявки"); return; }
   const entries = pendingOperation(enc);
-  const updates = Object.fromEntries(entries.map(([key]) => [decodeURIComponent(key), null]));
+  const updates = Object.fromEntries(entries.map(([key]) => [key, null]));
   if (!entries.length || !await cloudWrite(CLOUD_PATHS.pending, updates, { method: "PATCH", notify: false })) return;
   entries.forEach(([key]) => { delete pendingMap[key]; });
   updateTgButton(); renderTgSheetBody();
@@ -4447,18 +4474,27 @@ async function pullSharedSwaps() {
   /* Пока открыт редактор замены, сеть не дёргаем, чтобы не потерять ввод. */
   if (pairDragActive || document.getElementById("swap-backdrop") || document.getElementById("move-backdrop")) return;
   try {
-    const resp = await fetch(url, {
+    const resp = await cloudFetch(url, {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if ((resp.status === 401 || resp.status === 403) && !pullSharedSwaps._warned) {
-      /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
-      pullSharedSwaps._warned = true;
-      console.warn(
-        "sched: облако отклоняет чтение (" +
-          resp.status +
-          ") — опубликуй правила из firebase-rules.json в firebase Console и включи Anonymous-вход",
-      );
+    if (resp.status === 401 || resp.status === 403) {
+      lastCloudStatus = resp.status;
+      lastCloudMessage = resp.status === 401
+        ? "облако не приняло сессию — войди через телеграм заново"
+        : "нет доступа к общей базе — проверь опубликованные правила Firebase";
+      if (!pullSharedSwaps._warned) {
+        /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
+        pullSharedSwaps._warned = true;
+        console.warn(
+          "sched: облако отклоняет чтение (" +
+            resp.status +
+            ") — опубликуй config/firebase.rules.json и войди через телеграм заново",
+        );
+      }
+    } else if (resp.ok) {
+      lastCloudStatus = 0;
+      lastCloudMessage = "";
     }
     let remote = {};
     if (resp.ok) {
