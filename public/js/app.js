@@ -2861,11 +2861,216 @@ var basicsTourRouletteFrame = null;
 var basicsTourRouletteTimer = null;
 var basicsTourRouletteOriginalDate = null;
 var basicsTourLastTriggerTime = 0;
+var basicsTourEditorDemoState = "idle";
+var basicsTourEditorTimers = [];
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
+
+function queueBasicsTourEditorAction(callback, delay) {
+  const timer = window.setTimeout(() => {
+    basicsTourEditorTimers = basicsTourEditorTimers.filter(item => item !== timer);
+    callback();
+  }, delay);
+  basicsTourEditorTimers.push(timer);
+  return timer;
+}
+
+function stopBasicsTourEditorDemo(options = {}) {
+  basicsTourEditorTimers.forEach(timer => clearTimeout(timer));
+  basicsTourEditorTimers = [];
+  basicsTourEditorDemoState = "idle";
+  document.getElementById("editor-btn")?.classList.remove("is-tour-clicking");
+  document.getElementById("basics-tour")?.classList.remove("is-editor-demo", "is-copy-closing");
+  if (options.closeEditor && basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) {
+    finishEditorMode();
+    basicsTourOpenedEditor = false;
+  }
+}
+
+function pulseBasicsTourEditorButton(afterPress) {
+  const button = document.getElementById("editor-btn");
+  if (!button || basicsTourStep !== 0) return;
+  button.classList.remove("is-tour-clicking");
+  void button.offsetWidth;
+  button.classList.add("is-tour-clicking");
+  queueBasicsTourEditorAction(() => {
+    button.classList.remove("is-tour-clicking");
+    if (basicsTourStep === 0) afterPress?.();
+  }, 280);
+}
+
+function basicsTourGeometry(stepIndex) {
+  const step = BASICS_TOUR[stepIndex];
+  const target = step && document.querySelector(step.selector);
+  if (!step || !target) return null;
+  const visualTarget = stepIndex === 2 && target.classList.contains("is-avatar")
+    ? target.querySelector(".sched-trigger-avatar") || target
+    : target;
+  const rect = visualTarget.getBoundingClientRect();
+  const pad = stepIndex === 1 ? 0 : stepIndex === 2 ? 3 : 4;
+  const left = stepIndex === 1 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+  const top = stepIndex === 1 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+  const width = stepIndex === 1
+    ? Math.min(innerWidth - left, rect.width)
+    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
+  const height = rect.height + pad * 2;
+  const copyWidth = Math.min(340, innerWidth - 24);
+  const below = top + height + 14;
+  const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
+  const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
+  const spotRadius = stepIndex === 1 ? 20 : 12;
+  return { step, left, top, width, height, copyWidth, copyTop, copyLeft, spotRadius };
+}
+
+function measureBasicsTourCopyHeight(copy, width) {
+  const prevWidth = copy.style.width;
+  const prevHeight = copy.style.height;
+  copy.style.width = `${width}px`;
+  copy.style.height = "auto";
+  const height = copy.offsetHeight;
+  copy.style.width = prevWidth;
+  copy.style.height = prevHeight;
+  return height;
+}
+
+function paintBasicsTourCopy(copy, stepIndex, step) {
+  copy.innerHTML = `<span>шаг ${stepIndex + 1} из ${BASICS_TOUR.length}</span><strong>${step.title}</strong><small>${step.text}</small>
+      <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${stepIndex + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>`;
+}
+
+function applyBasicsTourGeometry(host, geo, options = {}) {
+  const spotlight = host.querySelector(".sched-tour-spotlight");
+  const copy = host.querySelector(".sched-tour-copy");
+  if (!spotlight || !copy || !geo) return;
+  const copyHeight = measureBasicsTourCopyHeight(copy, geo.copyWidth);
+  spotlight.style.setProperty("--tour-radius", `${geo.spotRadius}px`);
+  const apply = () => {
+    spotlight.style.left = `${geo.left}px`;
+    spotlight.style.top = `${geo.top}px`;
+    spotlight.style.width = `${geo.width}px`;
+    spotlight.style.height = `${geo.height}px`;
+    spotlight.style.borderRadius = `${geo.spotRadius}px`;
+    copy.style.left = `${geo.copyLeft}px`;
+    copy.style.top = `${geo.copyTop}px`;
+    copy.style.width = `${geo.copyWidth}px`;
+    copy.style.height = `${copyHeight}px`;
+  };
+  if (options.immediate) {
+    spotlight.style.transition = "none";
+    copy.style.transition = "none";
+    apply();
+    void spotlight.offsetWidth;
+    spotlight.style.removeProperty("transition");
+    copy.style.removeProperty("transition");
+    return;
+  }
+  apply();
+}
+
+function bindBasicsTourClicks(host) {
+  if (host.dataset.bound === "true") return;
+  host.dataset.bound = "true";
+  host.addEventListener("click", event => {
+    const action = event.target.closest("[data-tour]")?.dataset.tour;
+    if (action === "skip") { finishBasicsTour(); return; }
+    if (action === "next") {
+      if (basicsTourStep === 0) stopBasicsTourEditorDemo({ closeEditor: true });
+      if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
+        finishEditorMode();
+        basicsTourOpenedEditor = false;
+      }
+      basicsTourStep += 1;
+      if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
+      else renderBasicsTour();
+      return;
+    }
+    if (basicsTourStep === 1) {
+      if (event.target.closest(".sched-tour-copy")) return;
+      const strip = document.getElementById("strip");
+      if (!strip) return;
+      const buttons = [...strip.querySelectorAll("button[data-date-index]")];
+      const clickedBtn = buttons.find(btn => {
+        const r = btn.getBoundingClientRect();
+        return (
+          event.clientX >= r.left &&
+          event.clientX <= r.right &&
+          event.clientY >= r.top &&
+          event.clientY <= r.bottom
+        );
+      });
+      if (clickedBtn && clickedBtn.dataset.date) {
+        const [y, m, d] = clickedBtn.dataset.date.split("-").map(Number);
+        triggerTourRoulette(new Date(y, m - 1, d));
+      }
+    }
+  });
+}
+
+function ensureBasicsTourHost() {
+  let host = document.getElementById("basics-tour");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "basics-tour";
+    host.className = "sched-tour";
+    host.setAttribute("role", "dialog");
+    host.setAttribute("aria-modal", "true");
+    host.setAttribute("aria-label", "обучение");
+    host.innerHTML = `<div class="sched-tour-spotlight"><svg aria-hidden="true"><rect pathLength="100" /></svg></div>
+      <div class="sched-tour-copy"></div>`;
+    document.body.appendChild(host);
+  }
+  bindBasicsTourClicks(host);
+  return host;
+}
+
+function startBasicsTourEditorDemo() {
+  if (basicsTourStep !== 0 || basicsTourEditorDemoState !== "pending") return;
+  basicsTourEditorDemoState = "running";
+  const host = document.getElementById("basics-tour");
+  host?.classList.add("is-editor-demo");
+  host?.classList.remove("is-ready", "is-copy-closing");
+
+  queueBasicsTourEditorAction(() => {
+    pulseBasicsTourEditorButton(() => {
+      if (state.editorMode || basicsTourStep !== 0) return;
+      startEditorMode();
+      basicsTourOpenedEditor = true;
+      queueBasicsTourEditorAction(() => {
+        if (basicsTourStep !== 0) return;
+        const current = document.getElementById("basics-tour");
+        const geo = basicsTourGeometry(0);
+        if (current && geo) applyBasicsTourGeometry(current, geo);
+        current?.classList.add("is-ready");
+      }, 180);
+    });
+  }, 280);
+
+  queueBasicsTourEditorAction(() => {
+    if (basicsTourStep !== 0) return;
+    pulseBasicsTourEditorButton(() => {
+      if (basicsTourStep !== 0) return;
+      const currentHost = document.getElementById("basics-tour");
+      currentHost?.classList.add("is-copy-closing");
+      currentHost?.classList.remove("is-ready");
+      queueBasicsTourEditorAction(() => {
+        if (basicsTourStep !== 0) return;
+        if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) {
+          finishEditorMode();
+          basicsTourOpenedEditor = false;
+        }
+        queueBasicsTourEditorAction(() => {
+          if (basicsTourStep !== 0) return;
+          basicsTourEditorDemoState = "idle";
+          basicsTourStep = 1;
+          renderBasicsTour();
+        }, 420);
+      }, 90);
+    });
+  }, 3600);
+}
 
 function stopBasicsTourRoulette(options = {}) {
   if (basicsTourRouletteTimer !== null) {
@@ -3077,6 +3282,7 @@ function triggerTourRoulette(clickedDate) {
 }
 
 function finishBasicsTour() {
+  stopBasicsTourEditorDemo();
   stopBasicsTourRoulette();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
@@ -3088,92 +3294,33 @@ function finishBasicsTour() {
 
 function renderBasicsTour() {
   stopBasicsTourRoulette();
+  if (basicsTourStep !== 0) stopBasicsTourEditorDemo();
   if (basicsTourStep === 1 && state.editorMode && !editorChangedEntries().length) {
     finishEditorMode();
     basicsTourOpenedEditor = false;
   }
-  const step = BASICS_TOUR[basicsTourStep];
-  const target = step && document.querySelector(step.selector);
-  if (!step || !target) { finishBasicsTour(); return; }
-  let host = document.getElementById("basics-tour");
-  const previousSpot = host?.querySelector(".sched-tour-spotlight")?.getBoundingClientRect();
-  const previousCopy = host?.querySelector(".sched-tour-copy")?.getBoundingClientRect();
-  if (!host) {
-    host = document.createElement("div");
-    host.id = "basics-tour";
-    host.className = "sched-tour";
-    host.setAttribute("role", "dialog");
-    host.setAttribute("aria-modal", "true");
-    host.setAttribute("aria-label", "обучение");
-    document.body.appendChild(host);
+  const geo = basicsTourGeometry(basicsTourStep);
+  if (!geo) { finishBasicsTour(); return; }
+  const host = ensureBasicsTourHost();
+  const copy = host.querySelector(".sched-tour-copy");
+  const hadCopy = Boolean(copy.innerHTML.trim());
+  paintBasicsTourCopy(copy, basicsTourStep, geo.step);
+  const hideForEditorDemo = basicsTourStep === 0 && basicsTourEditorDemoState === "pending";
+  if (hideForEditorDemo) {
+    host.classList.add("is-editor-demo");
+    host.classList.remove("is-ready", "is-copy-closing");
+    applyBasicsTourGeometry(host, geo, { immediate: true });
+  } else {
+    host.classList.remove("is-editor-demo", "is-copy-closing");
+    if (!hadCopy) applyBasicsTourGeometry(host, geo, { immediate: true });
   }
-  const visualTarget = basicsTourStep === 2 && target.classList.contains("is-avatar")
-    ? target.querySelector(".sched-trigger-avatar") || target
-    : target;
-  const rect = visualTarget.getBoundingClientRect();
-  const pad = basicsTourStep === 1 ? 0 : basicsTourStep === 2 ? 3 : 4;
-  const left = basicsTourStep === 1 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-  const top = basicsTourStep === 1 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-  const width = basicsTourStep === 1
-    ? Math.min(innerWidth - left, rect.width)
-    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
-  const height = rect.height + pad * 2;
-  const copyWidth = Math.min(340, innerWidth - 24);
-  const below = top + height + 14;
-  const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
-  const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === 1 ? 20 : 12;
-  host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${previousSpot ? previousSpot.left : left}px;top:${previousSpot ? previousSpot.top : top}px;width:${previousSpot ? previousSpot.width : width}px;height:${previousSpot ? previousSpot.height : height}px;border-radius:${spotRadius}px"><svg aria-hidden="true"><rect pathLength="100" /></svg></div>
-    <div class="sched-tour-copy" style="left:${previousCopy ? previousCopy.left : copyLeft}px;top:${previousCopy ? previousCopy.top : copyTop}px;width:${previousCopy ? previousCopy.width : copyWidth}px">
-      <span>шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span><strong>${step.title}</strong><small>${step.text}</small>
-      <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
-    </div>`;
-  host.onclick = event => {
-    const action = event.target.closest("[data-tour]")?.dataset.tour;
-    if (action === "skip") { finishBasicsTour(); return; }
-    if (action === "next") {
-      if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
-        finishEditorMode();
-        basicsTourOpenedEditor = false;
-      }
-      basicsTourStep += 1;
-      if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
-      else renderBasicsTour();
-      return;
-    }
-    if (basicsTourStep === 1) {
-      if (event.target.closest(".sched-tour-copy")) return;
-      const strip = document.getElementById("strip");
-      if (strip) {
-        const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-        const clickedBtn = buttons.find(btn => {
-          const r = btn.getBoundingClientRect();
-          return (
-            event.clientX >= r.left &&
-            event.clientX <= r.right &&
-            event.clientY >= r.top &&
-            event.clientY <= r.bottom
-          );
-        });
-        if (clickedBtn && clickedBtn.dataset.date) {
-          const [y, m, d] = clickedBtn.dataset.date.split("-").map(Number);
-          triggerTourRoulette(new Date(y, m - 1, d));
-        }
-      }
-      return;
-    }
-  };
   requestAnimationFrame(() => {
+    if (hideForEditorDemo) {
+      startBasicsTourEditorDemo();
+      return;
+    }
     host.classList.add("is-ready");
-    const spotlight = host.querySelector(".sched-tour-spotlight");
-    const copy = host.querySelector(".sched-tour-copy");
-    spotlight.style.left = `${left}px`;
-    spotlight.style.top = `${top}px`;
-    spotlight.style.width = `${width}px`;
-    spotlight.style.height = `${height}px`;
-    copy.style.left = `${copyLeft}px`;
-    copy.style.top = `${copyTop}px`;
-    copy.style.width = `${copyWidth}px`;
+    applyBasicsTourGeometry(host, geo);
     if (basicsTourStep === 1) startBasicsTourRoulette({ delay: 650 });
   });
 }
@@ -3181,7 +3328,10 @@ function renderBasicsTour() {
 function startBasicsTour() {
   closeSettings();
   closeProfile();
-  if (!state.editorMode) { startEditorMode(); basicsTourOpenedEditor = true; }
+  stopBasicsTourEditorDemo();
+  if (state.editorMode && !editorChangedEntries().length) finishEditorMode();
+  basicsTourOpenedEditor = false;
+  basicsTourEditorDemoState = state.editorMode ? "idle" : "pending";
   basicsTourStep = 0;
   document.body.classList.add("is-tour-active");
   applyPerfMode();
