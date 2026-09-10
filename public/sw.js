@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-09-v59-reset-day-fix";
+const CACHE = CACHE_PREFIX + "2026-09-09-v46-tour-storyboard";
 const ASSETS = [
   "./",
   "./index.html",
@@ -26,11 +26,9 @@ const ASSETS = [
   "./css/fixes.css",
   "./css/interaction.css",
   "./css/editor-mode.css",
-  "./css/editor-mode-close.css",
   "./css/onboarding-tour.css",
   "./assets/fonts/inter.ttf",
   "./assets/icons/sched.svg",
-  "./assets/icons/tg-bot-avatar.jpg",
   "./assets/icons/sched-180.png",
   "./assets/icons/sched-192.png",
   "./assets/icons/sched-512.png",
