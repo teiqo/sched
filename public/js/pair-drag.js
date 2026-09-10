@@ -62,24 +62,18 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
         { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
   };
-  const CLONE_EDGE = 8;
-  const cloneWidth = width => Math.min(width, Math.max(160, innerWidth - CLONE_EDGE * 2));
-  const clampLeft = (left, width) => {
-    const max = Math.max(CLONE_EDGE, innerWidth - width - CLONE_EDGE);
-    return Math.min(Math.max(left, CLONE_EDGE), max);
-  };
   const followPointer = () => {
     const d = drag;
     if (!d) return;
     d.clone.classList.remove('is-magnetized');
-    d.clone.style.left = clampLeft(d.x - d.grabX, d.clone.offsetWidth) + 'px';
+    d.clone.style.left = Math.max(0, Math.min(innerWidth - d.clone.offsetWidth, d.x - d.grabX)) + 'px';
     d.clone.style.top = d.y - d.grabY + 'px';
   };
   const centerCloneOnPlaceholder = () => {
     const d = drag, placeholder = d?.items.get(d.fromN);
     if (!placeholder?.isConnected) return;
     const targetRect = placeholder.getBoundingClientRect();
-    d.clone.style.left = clampLeft(targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2, d.clone.offsetWidth) + 'px';
+    d.clone.style.left = targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2 + 'px';
     d.clone.style.top = targetRect.top + (targetRect.height - d.clone.offsetHeight) / 2 + 'px';
   };
   const updateTarget = () => {
@@ -91,7 +85,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (!inside) {
       d.targetN = null;
       d.clone.classList.remove('is-magnetized');
-      announce('в пределах этого дня');
+      announce('в пределах этого дня · Esc — отмена');
       return false;
     }
     // Layout coordinates exclude FLIP transforms, so an animating neighbour cannot flicker the target.
@@ -112,7 +106,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       void d.clone.offsetWidth;
     }
     centerCloneOnPlaceholder();
-    announce(targetN === d.fromN ? 'исходное место' : `отпусти на ${targetN}-ю пару`);
+    announce(targetN === d.fromN ? 'исходное место · Esc — отмена' : `отпусти на ${targetN}-ю пару · Esc — отмена`);
     return true;
   };
   const animate = () => {
@@ -142,12 +136,11 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
     clone.setAttribute('aria-hidden', 'true'); clone.inert = true;
-    const cloneW = cloneWidth(rect.width);
-    Object.assign(clone.style, { width: cloneW + 'px', height: rect.height + 'px', left: clampLeft(rect.left, cloneW) + 'px', top: rect.top + 'px' });
+    Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: rect.left + 'px', top: rect.top + 'px' });
     document.body.appendChild(clone);
     const status = document.createElement('div');
-    status.className = 'sched-drag-status is-sr-only'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    status.textContent = 'перетащи пару'; document.body.appendChild(status);
+    status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    status.textContent = 'перетащи пару · Esc — отмена'; document.body.appendChild(status);
     const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading')
       && !el.classList.contains('sched-editor-toolbar'));
     const hidden = original.map(el => [el, el.hidden]);
