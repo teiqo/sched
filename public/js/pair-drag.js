@@ -141,7 +141,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const status = document.createElement('div');
     status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     status.textContent = 'перетащи пару · Esc — отмена'; document.body.appendChild(status);
-    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading'));
+    /* Панель «режим редактора» остаётся на месте: прячем только пары, не окно редактора. */
+    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading')
+      && !el.classList.contains('sched-editor-toolbar'));
     const hidden = original.map(el => [el, el.hidden]);
     const board = document.createElement('div'); board.className = 'agenda-list sched-drag-board';
     const items = new Map();
@@ -239,6 +241,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (document.documentElement.dataset.editorMode !== 'true') return null;
     const row = target.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
     if (!row || row.classList.contains('is-cancelled')) return null;
+    /* Живую карточку «далее/сейчас» не уводим в перенос: иначе отсчёт «через N мин»
+       пропадает, а панель редактора вместе с днём скрывается. */
+    if (row.classList.contains('live-lesson-card')) return null;
     const handle = target.closest('.lesson-swap-btn[data-act="swap"]');
     if (!handle && target.closest('button, a, input, textarea, select')) return null;
     const button = row.querySelector('.lesson-swap-btn[data-act="swap"]');
