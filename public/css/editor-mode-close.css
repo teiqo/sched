@@ -50,27 +50,14 @@ body.is-editor-closing #stage {
   }
 }
 
-/* Нажатие на окно: iOS красит role=button белым. Цвет и фон остаются теми же. */
+/* Нажатие на окно: текст не должен белеть от подсветки и выделения. */
 :root #stage .agenda-row.is-window-row,
 :root #stage .agenda-row.is-window-row * {
-  -webkit-tap-highlight-color: transparent !important;
-  -webkit-touch-callout: none !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
-:root #stage .agenda-row.is-window-row,
-:root #stage .agenda-row.is-window-row:hover,
-:root #stage .agenda-row.is-window-row:active,
-:root #stage .agenda-row.is-window-row:focus,
-:root #stage .agenda-row.is-window-row:focus-visible,
-:root #stage .agenda-row.is-window-row:focus-within,
-:root #stage .agenda-row.is-window-row.is-pressed {
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  background: var(--sched-window-bg, var(--sched-fill)) !important;
-  color: var(--sched-secondary) !important;
-}
-:root #stage .agenda-row.is-window-row strong,
 :root #stage .agenda-row.is-window-row:active strong,
 :root #stage .agenda-row.is-window-row:focus strong,
 :root #stage .agenda-row.is-window-row:focus-visible strong,
@@ -81,11 +68,10 @@ body.is-editor-closing #stage {
 }
 :root #stage .agenda-row.is-window-row:active .agenda-row-time,
 :root #stage .agenda-row.is-window-row:active .agenda-row-time *,
-:root #stage .agenda-row.is-window-row:active .agenda-row-num,
 :root #stage .agenda-row.is-window-row:active small,
 :root #stage .agenda-row.is-window-row:active .lesson-meta,
 :root #stage .agenda-row.is-window-row:active .lesson-meta * {
-  -webkit-text-fill-color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
 }
 :root #stage .agenda-row.is-window-row ::selection,
 :root #stage .agenda-row.is-window-row::selection {
@@ -233,65 +219,6 @@ html.is-dragging-pair,
 body.is-dragging-pair {
   overflow-x: clip;
   max-width: 100%;
-}
-
-/* Чип перерыва без translate(-50%). На iOS при таче transform сбрасывается,
-   и текст улетает вправо-вниз. Flex-центр этого не делает. */
-:root #stage .agenda-break,
-:root .sched-drag-board > .agenda-break,
-:root body.is-dragging-pair #stage .agenda-break,
-:root #stage .sched-day-block.is-pair-dragging .agenda-break {
-  position: relative !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  left: auto !important;
-  top: auto !important;
-  width: auto !important;
-  height: 13px !important;
-  margin: 0 !important;
-  border: 0 !important;
-  transform: none !important;
-  pointer-events: none !important;
-}
-:root #stage .agenda-break::before,
-:root .sched-drag-board > .agenda-break::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  border-top: 1px solid var(--sched-separator);
-}
-:root #stage .agenda-break-chip,
-:root .sched-drag-board .agenda-break-chip,
-:root body.is-dragging-pair #stage .agenda-break-chip,
-:root #stage .sched-day-block.is-pair-dragging .agenda-break-chip {
-  position: relative !important;
-  left: auto !important;
-  right: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  transform: none !important;
-  margin: 0 !important;
-  font-size: 10px !important;
-  line-height: 14px !important;
-  white-space: nowrap !important;
-}
-
-/* Счётчик до следующей пары не должен наследовать маленький серый стиль
-   контейнера во время тача/перетаскивания. */
-:root body.is-dragging-pair #stage .live-lesson-card.is-next .live-card-timing.is-next-timing #live-left,
-:root #stage .sched-day-block.is-pair-dragging .live-lesson-card.is-next .live-card-timing.is-next-timing #live-left {
-  color: var(--palette-accent-1, var(--sched-blue)) !important;
-  -webkit-text-fill-color: var(--palette-accent-1, var(--sched-blue)) !important;
-  font-size: 17px !important;
-  font-weight: 750 !important;
-  line-height: 1.1 !important;
-  letter-spacing: -0.01em !important;
-  white-space: nowrap !important;
 }
 :root :is(.agenda-row, .live-lesson-card).is-drag-float {
   max-width: calc(100vw - 16px) !important;

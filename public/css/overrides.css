@@ -886,23 +886,13 @@ html.sched-page #root::-webkit-scrollbar,
   color: var(--sched-secondary);
 }
 
-.live-card-timing.is-next-timing #live-left,
-.live-lesson-card.is-next:active .live-card-timing.is-next-timing #live-left,
-.live-lesson-card.is-next:focus .live-card-timing.is-next-timing #live-left,
-.live-lesson-card.is-next:focus-within .live-card-timing.is-next-timing #live-left {
-  color: var(--palette-accent-1, var(--sched-blue)) !important;
-  -webkit-text-fill-color: var(--palette-accent-1, var(--sched-blue)) !important;
-  font-size: 17px !important;
-  font-weight: 750 !important;
-  line-height: 1.1 !important;
-  letter-spacing: -0.01em !important;
-  white-space: nowrap !important;
-}
-.live-lesson-card,
-.live-lesson-card * {
-  -webkit-tap-highlight-color: transparent;
-  -webkit-user-select: none;
-  user-select: none;
+.live-card-timing.is-next-timing #live-left {
+  color: var(--palette-accent-1);
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .live-card-timing.is-next-timing .live-next-range {

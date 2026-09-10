@@ -449,7 +449,28 @@ function liveState(d) {
     }
   }
   const next = list.find((s) => mins(s.from) > cur);
-  if (next) return { kind: "next", slot: next, left: mins(next.from) - cur, progress: 0, now };
+  if (next) {
+    /* Если до этого уже была пара — сейчас идёт перерыв, а не ожидание первой пары. */
+    const prev = [...list].reverse().find((s) => mins(s.to) <= cur);
+    if (prev) {
+      const from = mins(prev.to);
+      const to = mins(next.from);
+      const total = to - from;
+      return {
+        kind: "break",
+        slot: next,
+        prev,
+        from: prev.to,
+        to: next.from,
+        total,
+        left: to - cur,
+        passed: cur - from,
+        progress: total > 0 ? (cur - from) / total : 1,
+        now,
+      };
+    }
+    return { kind: "next", slot: next, left: mins(next.from) - cur, progress: 0, now };
+  }
   return { kind: "done", slot: list[list.length - 1], left: 0, progress: 1, now };
 }
 
@@ -493,8 +514,39 @@ function changeLabel(slot) {
   return slot.moved ? "перенос" : isRoomOnlySwap(slot) ? "другая аудитория" : "замена";
 }
 
+/* Перерыв показывается такой же большой плашкой, как идущая пара,
+   только с отсчётом до следующей пары. */
+function breakCardHtml(live, dIso) {
+  const s = live.slot;
+  const title = live.total >= 30 ? "большой перерыв" : "перерыв";
+  const dateStr = dIso || iso(live.now || state.selected || currentDate());
+  const swapBtn = swapButtonHtml(dateStr, s.n);
+  const room = s.room
+    ? ` · <span class="lesson-room">ауд. ${escapeHtml(s.room)}</span>`
+    : "";
+  const body = `
+    <div class="live-card-status">
+      <span><i></i>сейчас · перерыв ${bellDuration(Math.max(0, Math.round(live.total)))}</span>
+      <div class="live-card-status-right">
+        <time id="live-clock">${clockText(live.now)}</time>
+        ${swapBtn}
+      </div>
+    </div>
+    <h3>${title}</h3>
+    <p class="lesson-meta"><span class="lesson-type-accent">дальше · ${s.n} пара</span> ${escapeHtml(s.subject)}${room}</p>
+    <div class="live-card-progress"><i id="live-progress" style="transform:scaleX(${live.progress.toFixed(3)})"></i></div>
+    <div class="live-card-timing"><span class="live-card-range">${live.from}–${live.to}<small id="live-passed">прошло ${fmtLeft(live.passed)}</small></span><span id="live-left">осталось ${fmtLeft(live.left)}</span></div>`;
+  return `<article class="live-lesson-card is-current is-break" data-row-n="${s.n}">
+    <div class="live-card-glass">
+      <div class="live-card-particles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      ${body}
+    </div>
+  </article>`;
+}
+
 function liveCardHtml(live, dIso) {
   if (!live || live.kind === "done") return "";
+  if (live.kind === "break") return breakCardHtml(live, dIso);
   const s = live.slot;
   const current = live.kind === "current";
   const dateStr = dIso || iso(live.now || state.selected || currentDate());
@@ -729,7 +781,7 @@ function dayHtml(d, withLive, future) {
     body = emptyDayHtml(d);
   } else if (!today || !withLive || future) {
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}</div>` : "";
-  } else if (live && (live.kind === "current" || live.kind === "next")) {
+  } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
     const liveN = live.slot.n;
     const earlier = rows.filter((s) => s.n < liveN);
     const later = rows.filter((s) => s.n > liveN);
@@ -1184,13 +1236,13 @@ function tick() {
   const clock = $("#live-clock");
   const left = $("#live-left");
   const bar = $("#live-progress");
-  if (clock && live.kind === "current") clock.textContent = clockText(live.now);
+  if (clock && (live.kind === "current" || live.kind === "break")) clock.textContent = clockText(live.now);
   if (left) {
     left.textContent =
-      live.kind === "current" ? `осталось ${fmtLeft(live.left)}` : `через ${fmtLeft(live.left)}`;
+      live.kind === "next" ? `через ${fmtLeft(live.left)}` : `осталось ${fmtLeft(live.left)}`;
   }
   const passed = $("#live-passed");
-  if (passed && live.kind === "current") passed.textContent = `прошло ${fmtLeft(live.passed)}`;
+  if (passed && (live.kind === "current" || live.kind === "break")) passed.textContent = `прошло ${fmtLeft(live.passed)}`;
   if (bar) bar.style.transform = `scaleX(${live.progress.toFixed(3)})`;
 }
 
@@ -2069,6 +2121,11 @@ function bindEvents() {
   document.addEventListener("click", (e) => {
     const row = e.target.closest(".sched-settings-row");
     if (!row || e.target.closest("button, a, input, select, label")) return;
+    /* Строки настроек остаются в DOM и при закрытой панели — без этой
+       проверки случайный клик (например, после перетаскивания пары) открывал
+       системное окно выбора цвета поверх расписания. */
+    if (!state.settingsOpen || !row.closest("#settings")) return;
+    if (document.body.classList.contains("is-dragging-pair")) return;
     const sw = row.querySelector(".sched-setting-switch");
     if (sw) {
       sw.click();
@@ -2123,6 +2180,15 @@ function bindEvents() {
 
   /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
   const scene = $("#scene");
+  let motionLiteTimer = null;
+  const holdMotionLite = (ms = 420) => {
+    scene.classList.add("is-motion-lite");
+    window.clearTimeout(motionLiteTimer);
+    motionLiteTimer = window.setTimeout(() => {
+      scene.classList.remove("is-motion-lite");
+      motionLiteTimer = null;
+    }, ms);
+  };
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
@@ -2131,17 +2197,15 @@ function bindEvents() {
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
       // The neighbour has already slid into place: do not play a second entrance.
-      scene.classList.add("is-motion-lite");
+      holdMotionLite();
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
-      scene.classList.remove("is-motion-lite");
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
         daySwipeRenderPending = false;
-        scene.classList.add("is-motion-lite");
+        holdMotionLite();
         render();
-        scene.classList.remove("is-motion-lite");
       }
     },
   });
@@ -2816,8 +2880,8 @@ function onboardingHtml() {
         <div class="sched-onboarding-tg-example" aria-label="пример уведомления в telegram">
           <span>пример уведомления</span>
           <div class="sched-onboarding-tg-notification">
-            <i class="sched-onboarding-tg-avatar">s</i>
-            <div><div class="sched-onboarding-tg-head"><strong>🎧 sched</strong><time>9:06</time></div>
+            <i class="sched-onboarding-tg-avatar has-photo"><img src="assets/icons/tg-bot-avatar.jpg" alt="" width="42" height="42" loading="lazy" decoding="async" /></i>
+            <div><div class="sched-onboarding-tg-head"><strong>sched</strong><time>9:06</time></div>
             <p>🔄 11 сентября заменили 4 пару<br><b>комп. графика · аудитория 307</b></p></div>
           </div>
         </div>
@@ -2825,7 +2889,6 @@ function onboardingHtml() {
       </div>
       <div class="sched-onboarding-finish-actions">
         <button class="sched-onboarding-action" type="button" data-act="finish-tour">продолжить</button>
-        <button class="sched-onboarding-text-action" type="button" data-act="finish-no-telegram">неа</button>
       </div>
     </div>
   </div>`;
@@ -3123,32 +3186,8 @@ function startBasicsTourEditorDemo() {
     }
   }, 710);
 
-  // 3. Пользователь видит открытую панель (~1900ms = 2610ms), повторное нажатие на карандаш
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.add("is-tour-pressed");
-  }, 2610);
-
-  // 4. Отпускание и плавное скрытие панели редактора (+160ms = 2770ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.remove("is-tour-pressed");
-    const toolbar = document.querySelector(".sched-editor-toolbar");
-    if (toolbar) {
-      toolbar.classList.add("is-closing");
-    }
-  }, 2770);
-
-  // 5. Завершение анимации закрытия (+320ms = 3090ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    if (state.editorMode && !editorChangedEntries().length) {
-      finishEditorMode();
-      basicsTourOpenedEditor = false;
-    }
-  }, 3090);
+  /* 3. Дальше панель остаётся открытой: редактор закроется только когда
+     пользователь нажмёт «дальше» (или «пропустить»), а не сам по таймеру. */
 }
 
 function finishBasicsTour() {
@@ -3261,7 +3300,7 @@ function renderBasicsTour() {
     if (action === "next") {
       stopBasicsTourEditorDemo();
       if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
-        finishEditorMode();
+        closeEditorAnimated();
         basicsTourOpenedEditor = false;
       }
       basicsTourStep += 1;
@@ -3646,6 +3685,13 @@ function activeSwapMap() {
   return state.editorMode && editorSession ? editorSession.draft : loadSwaps();
 }
 
+function playEditorToolbarOpen() {
+  const toolbar = document.querySelector("#scene .sched-editor-toolbar");
+  if (!toolbar || editorReducedMotion()) return;
+  toolbar.classList.add("is-opening");
+  window.setTimeout(() => toolbar.classList.remove("is-opening"), 420);
+}
+
 function startEditorMode() {
   if (state.editorMode) return;
   closeSettings();
@@ -3656,6 +3702,7 @@ function startEditorMode() {
   completedOpen = false;
   applyFlags();
   render();
+  playEditorToolbarOpen();
 }
 
 function finishEditorMode() {
@@ -3667,17 +3714,90 @@ function finishEditorMode() {
   render();
 }
 
-function cancelEditorMode(options = {}) {
-  if (!state.editorMode) return;
-  const changed = editorChangedEntries().length > 0;
-  if (changed && !confirm("выйти из редактора и отменить несохранённые изменения?")) return;
-  const toolbar = document.querySelector(".sched-editor-toolbar");
-  if (toolbar && !options.immediate) {
-    toolbar.classList.add("is-closing");
-    window.setTimeout(() => finishEditorMode(), 300);
+/* Закрытие редактора: панель и окна уезжают плавно, а оставшиеся пары
+   доезжают на новые места (FLIP), а не прыгают одним кадром. */
+const EDITOR_CLOSE_MS = 340;
+const EDITOR_SETTLE_MS = 420;
+let editorClosing = false;
+
+function editorReducedMotion() {
+  return (
+    document.documentElement.hasAttribute("data-perf") ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function lessonRowTops() {
+  const map = new Map();
+  document.querySelectorAll("#scene [data-day] .agenda-row[data-row-n]").forEach(row => {
+    const day = row.closest("[data-day]")?.dataset.day;
+    if (day) map.set(day + "|" + row.dataset.rowN, row.getBoundingClientRect().top);
+  });
+  return map;
+}
+
+function settleLessonRows(before) {
+  if (!before || !before.size || editorReducedMotion()) return;
+  document.querySelectorAll("#scene [data-day] .agenda-row[data-row-n]").forEach(row => {
+    const day = row.closest("[data-day]")?.dataset.day;
+    if (!day) return;
+    const was = before.get(day + "|" + row.dataset.rowN);
+    if (was === undefined) return;
+    const delta = was - row.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1 || Math.abs(delta) > 700) return;
+    row.animate(
+      [{ transform: `translate3d(0, ${delta}px, 0)` }, { transform: "translate3d(0, 0, 0)" }],
+      { duration: EDITOR_SETTLE_MS, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+    );
+  });
+}
+
+function playEditorClose(done) {
+  const scene = document.getElementById("scene");
+  const toolbar = scene?.querySelector(".sched-editor-toolbar");
+  const rows = scene ? [...scene.querySelectorAll(".agenda-row.is-window-row")] : [];
+  if (editorReducedMotion() || (!toolbar && !rows.length)) {
+    done(null);
     return;
   }
-  finishEditorMode();
+  toolbar?.classList.add("is-closing");
+  /* Каскад снизу вверх: нижние окна сворачиваются раньше, и день
+     собирается одной волной. */
+  rows.forEach((row, i) => {
+    row.style.setProperty("--sched-window-leave-height", row.offsetHeight + "px");
+    row.style.setProperty("--sched-window-leave-delay", Math.min((rows.length - 1 - i) * 22, 88) + "ms");
+    row.classList.add("is-window-leaving");
+  });
+  window.setTimeout(() => done(lessonRowTops()), EDITOR_CLOSE_MS);
+}
+
+function closeEditorAnimated() {
+  if (!state.editorMode || editorClosing) {
+    if (!editorClosing) finishEditorMode();
+    return Promise.resolve();
+  }
+  editorClosing = true;
+  document.body.classList.add("is-editor-closing");
+  return new Promise(resolve => {
+    playEditorClose(before => {
+      editorClosing = false;
+      document.body.classList.remove("is-editor-closing");
+      finishEditorMode();
+      if (before) window.requestAnimationFrame(() => settleLessonRows(before));
+      resolve();
+    });
+  });
+}
+
+function cancelEditorMode(options = {}) {
+  if (!state.editorMode || editorClosing) return;
+  const changed = editorChangedEntries().length > 0;
+  if (changed && !confirm("выйти из редактора и отменить несохранённые изменения?")) return;
+  if (options.immediate) {
+    finishEditorMode();
+    return;
+  }
+  closeEditorAnimated();
 }
 
 function editorChangedEntries() {
@@ -3694,16 +3814,19 @@ function undoEditorAction() {
 
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
-  editorSession.history.push(cloneSwapMap(editorSession.draft));
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-  Object.keys(editorSession.draft).forEach(key => {
-    if (key.startsWith(prefix)) delete editorSession.draft[key];
-  });
-  Object.entries(editorSession.baseline).forEach(([key, entry]) => {
-    if (key.startsWith(prefix)) editorSession.draft[key] = cloneSwapMap(entry);
-  });
+  /* «Исходный день» = базовое расписание парсера: сносим все правки дня,
+     а не возвращаем уже подтверждённые замены из baseline. */
+  const dayKeys = Object.keys(editorSession.draft).filter(key => key.startsWith(prefix));
+  const live = dayKeys.filter(key => editorSession.draft[key] && !editorSession.draft[key].deleted);
+  if (!live.length) {
+    toast("этот день и так исходный");
+    return;
+  }
+  editorSession.history.push(cloneSwapMap(editorSession.draft));
+  dayKeys.forEach(key => { delete editorSession.draft[key]; });
   render();
-  toast("день возвращён к подтверждённому расписанию");
+  toast("день возвращён к исходному расписанию");
 }
 
 async function saveEditorMode() {
@@ -3711,7 +3834,7 @@ async function saveEditorMode() {
   const changedKeys = editorChangedEntries();
   if (!changedKeys.length) {
     toast("изменений нет");
-    finishEditorMode();
+    await closeEditorAnimated();
     return;
   }
   const map = loadSwaps();
@@ -3730,7 +3853,7 @@ async function saveEditorMode() {
   });
   saveSwaps();
   const role = myRole();
-  finishEditorMode();
+  await closeEditorAnimated();
   if (sharedSwapsEnabled()) {
     const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
     if (!ok) toast(cloudFailHint());
@@ -3981,7 +4104,7 @@ function slotsFor(d) {
 
 function hasDaySwaps(dIso) {
   if (!dIso) return false;
-  const map = loadSwaps();
+  const map = activeSwapMap();
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   for (const key in map) {
     if (key.indexOf(prefix) === 0 && map[key] && !map[key].deleted) {
@@ -3995,7 +4118,7 @@ async function resetDaySwaps(dIso) {
   if (!dIso) return;
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   const changes = {};
-  for (const [key, value] of Object.entries(loadSwaps())) {
+  for (const [key, value] of Object.entries(activeSwapMap())) {
     if (key.startsWith(prefix) && value && !value.deleted) changes[Number(key.slice(prefix.length))] = null;
   }
   if (!applyDayChanges(dIso, changes, "возвращено исходное расписание дня")) return;
@@ -4167,7 +4290,8 @@ function openSwapSheet(dIso, n) {
     '<button class="is-primary" type="button" data-swap="save">' +
     swapPrimaryLabel() +
     "</button>" +
-    '<button type="button" data-swap="cancel-lesson">отменить пару</button>' +
+    /* В окне отменять нечего — пары там нет. */
+    (isWindowSlot ? "" : '<button type="button" data-swap="cancel-lesson">отменить пару</button>') +
     '<button type="button" data-swap="reset">вернуть как было</button>' +
     '<button type="button" data-swap="close">закрыть</button>' +
     "</div>" +
@@ -4251,6 +4375,10 @@ function openSwapSheet(dIso, n) {
       return;
     }
     if (act === "cancel-lesson") {
+      if (isWindowSlot) {
+        toast("в окне нет пары — отменять нечего");
+        return;
+      }
       setSwap(dIso, n, { cancelled: true });
 
       commit();
@@ -4341,7 +4469,9 @@ var swapDragSuppressUntil = 0;
 /* Shared movement controller for all lesson card types. */
 bindPairDrag({
   scene: document.getElementById("scene"),
-  slotsForDate: date => slotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
+  /* Те же строки, что и на экране: иначе в режиме редактора превью переноса
+     собиралось из другого набора пар и места путались. */
+  slotsForDate: date => visibleSlotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
   onSwap: movePair, onReorder: (date, from, to) => movePairRelative(date, from, to, to > from),
   onActiveChange: active => {
     pairDragActive = active;
@@ -5012,7 +5142,9 @@ function encodeSwapKey(key) {
 }
 function decodeSwapKey(enc) {
   try {
-    return decodeURIComponent(enc).replace(/~/g, "/");
+    /* Суффикс "*xxxx" добавляется анонимным предложениям, чтобы не
+       перезаписывать чужой узел; на слот он не влияет. */
+    return decodeURIComponent(String(enc).replace(/\*[A-Za-z0-9]+$/, "")).replace(/~/g, "/");
   } catch (e) {
     return enc;
   }
@@ -5183,6 +5315,42 @@ async function anonymousProposalIdentity() {
   }
 }
 
+async function cloudWriteAnonymousPendingPerKey(payloads, signal) {
+  const keys = Object.keys(payloads || {});
+  if (!keys.length) return false;
+  const putKey = async (nodeKey, body) => {
+    const response = await fetch(
+      cloudRoot() + "/" + CLOUD_PATHS.pending + "/" + nodeKey + ".json",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        signal,
+      },
+    );
+    if (!response.ok) lastCloudStatus = response.status;
+    return response.ok;
+  };
+  let sent = 0;
+  for (const key of keys) {
+    try {
+      if (await putKey(key, payloads[key])) { sent += 1; continue; }
+      /* Правила разрешают анониму только создание узла: если по этой паре
+         заявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
+         видят его как ту же пару (суффикс срезается при раскодировке). */
+      if (lastCloudStatus === 401 || lastCloudStatus === 403) {
+        const suffix = "*" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+        if (await putKey(key + suffix, payloads[key])) { sent += 1; continue; }
+      }
+    } catch (_) {
+      lastCloudStatus = -1;
+    }
+  }
+  return sent === keys.length;
+}
+
 async function cloudWriteAnonymousPending(payloads) {
   if (!sharedSwapsEnabled() || LOCAL_PREVIEW) return false;
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
@@ -5197,9 +5365,19 @@ async function cloudWriteAnonymousPending(payloads) {
     });
     lastCloudStatus = response.status;
     if (!response.ok) {
-      lastCloudMessage = response.status === 401 || response.status === 403
-        ? "опубликуй новые firebase rules — анонимные предложения пока запрещены базой"
-        : "не удалось отправить предложение (" + response.status + ")";
+      /* Многопутевой PATCH в корень weeqo-pending база проверяет по правилам
+         родителя, а разрешение для анонимных описано на $key. Дожимаем каждый ключ отдельно. */
+      if (response.status === 401 || response.status === 403) {
+        const perKey = await cloudWriteAnonymousPendingPerKey(payloads, controller.signal);
+        if (perKey) {
+          lastCloudStatus = 0;
+          lastCloudMessage = "";
+          return true;
+        }
+        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или войди через телеграм";
+        return false;
+      }
+      lastCloudMessage = "не удалось отправить предложение (" + response.status + ")";
       return false;
     }
     lastCloudStatus = 0;
@@ -5270,7 +5448,21 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       }).catch(reportPushError);
     }
   }
-  if (ok && section === CLOUD_PATHS.pending) toast("изменения отправлены на проверку и сохранены у тебя");
+  if (section === CLOUD_PATHS.pending) {
+    const count = Object.keys(entries).length;
+    const word = plural(count, "пару", "пары", "пар");
+    const author = anonymous ? "без авторизации" : tgDisplayName(tgSession);
+    if (ok) {
+      toast("предложено " + count + " " + word + " — ждём проверку редакторов");
+      pushNotif(
+        "ты предложил " + count + " " + word + " · на проверке у редакторов (" + author + ")",
+        "pending",
+        "pending",
+      );
+    } else {
+      toast("предложение не ушло — повторю сам");
+    }
+  }
   return ok;
 }
 
@@ -5477,8 +5669,9 @@ async function pullSharedSwaps() {
       saveSwaps();
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
-    /* Редакторы дожимают записи, не ушедшие из-за офлайна. */
-    if (myRole() === "owner" || myRole() === "editor") {
+    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
+       тоже есть право записи в weeqo-pending. */
+    {
       const batches = new Map();
       for (const [key, entry] of Object.entries(map)) {
         if (!entry?.pendingSync) continue;
@@ -6052,8 +6245,41 @@ function notifyAboutPending() {
 }
 
 /* Уведомляем только при изменении самих пар, а не checkedAt/updatedAt. */
+function normalizeScheduleGroups(groups) {
+  /* Парсер может отдать те же пары в другом порядке, с пустыми полями
+     или другим регистром — такое обновление не должно будить уведомление. */
+  const text = value => String(value == null ? "" : value).trim().replace(/\s+/g, " ").toLowerCase();
+  const extras = value => {
+    if (!value || typeof value !== "object") return "";
+    return Object.keys(value)
+      .filter(k => value[k] !== null && value[k] !== undefined && value[k] !== "" && value[k] !== false)
+      .sort()
+      .map(k => k + "=" + text(value[k]))
+      .join(",");
+  };
+  return (Array.isArray(groups) ? groups : [])
+    .map(group => {
+      const days = group && typeof group.days === "object" && group.days ? group.days : {};
+      const normDays = Object.keys(days)
+        .sort()
+        .map(dayId => {
+          const items = (Array.isArray(days[dayId]) ? days[dayId] : [])
+            .map(item => {
+              const list = Array.isArray(item) ? item : [];
+              return [Number(list[0]) || 0, text(list[1]), text(list[2]), text(list[3]), extras(list[4])].join("|");
+            })
+            .filter(line => line.split("|").slice(1, 4).some(Boolean))
+            .sort();
+          return dayId + ">" + items.join(";");
+        })
+        .join("/");
+      return text(group && group.id) + "#" + normDays;
+    })
+    .sort()
+    .join("\n");
+}
 function scheduleContentStamp(groups) {
-  const raw = JSON.stringify(Array.isArray(groups) ? groups : []);
+  const raw = normalizeScheduleGroups(groups);
   let hash = 2166136261;
   for (let i = 0; i < raw.length; i += 1) {
     hash ^= raw.charCodeAt(i);
@@ -6209,6 +6435,7 @@ function closeBellSheet() {
 function notifTitle(n, tone) {
   if (tone === "swap") return "замена";
   if (tone === "cancel") return "отмена пары";
+  if (tone === "pending") return "предложено на проверку";
   return (n && n.text) || "";
 }
 
