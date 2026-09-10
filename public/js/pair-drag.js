@@ -138,6 +138,16 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const slots = slotsForDate(p.date).slice().sort((a, b) => a.n - b.n);
     if (!slots.some(slot => slot.n === p.n && !slot.window && !slot.cancelled)) return;
     const rect = p.row.getBoundingClientRect(), scroller = scrollerFor(scope);
+    /* Геометрию снимаем до скрытия оригиналов: доска должна повторить высоты
+       реальных строк и живой карточки «сейчас/далее», а высота самого дня
+       обязана остаться прежней. Иначе на телефоне при зажатии день сжимается
+       и всё ниже (перерывы, следующие пары) уезжает под пальцем. */
+    const scopeRect = scope.getBoundingClientRect();
+    const realHeights = new Map();
+    scope.querySelectorAll('.agenda-row[data-row-n]').forEach(el => {
+      const h = el.getBoundingClientRect().height;
+      if (h) realHeights.set(Number(el.dataset.rowN), h);
+    });
     const clone = p.row.cloneNode(true);
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
@@ -168,17 +178,27 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       row.dataset.dragOrigin = slot.n; row.dataset.dropN = slot.n;
       row.removeAttribute('tabindex'); row.removeAttribute('role'); row.inert = true;
       if (slot.window || slot.cancelled) row.classList.add('is-drag-ghost');
+      const realH = realHeights.get(slot.n);
+      if (realH) { row.style.height = realH + 'px'; row.style.minHeight = realH + 'px'; }
       if (slot.n === p.n) { row.classList.add('is-drag-src'); row.style.minHeight = rect.height + 'px'; }
       board.appendChild(row); items.set(slot.n, row);
     });
     drag = { ...p, fromN: p.n, scope, slots, clone, status, board, items, hidden, scroller, originalScroll: scroller.scrollTop,
+      scopeMinHeight: scope.style.minHeight,
       oldScrollBehavior: scroller.style.scrollBehavior, grabX: p.x - rect.left, grabY: p.y - rect.top,
       x: p.x, y: p.y, moved: false, previewN: p.n, targetN: null };
     onActiveChange(true);
     scroller.style.scrollBehavior = 'auto';
     document.body.classList.add('is-dragging-pair'); scope.classList.add('is-pair-dragging');
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
+    scope.style.minHeight = scopeRect.height + 'px';
     scope.appendChild(board);
+    /* Добираем остаток зазором между карточками: чипы перерывов и зазоры доски
+       занимают разное место, а день должен остаться ровно той же высоты. */
+    const grown = scope.getBoundingClientRect().height - scopeRect.height;
+    if (grown > 0 && items.size > 1) {
+      board.style.gap = Math.max(0, 8 - grown / (items.size - 1)) + 'px';
+    }
     /* Ничего не скроллим и не сдвигаем страницу: окна раскрываются на месте,
        а сама карточка под пальцем остаётся точно там, где её взяли. */
     /* The drag board can be wider or shift after windows are revealed. Recenter
@@ -198,6 +218,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     try { if (scene.hasPointerCapture(d.pointerId)) scene.releasePointerCapture(d.pointerId); } catch (_) {}
     d.clone.remove(); d.status.remove(); d.board.remove();
     d.hidden.forEach(([el, hidden]) => { el.hidden = hidden; el.classList.remove('sched-drag-original'); });
+    d.scope.style.minHeight = d.scopeMinHeight || '';
     d.scope.classList.remove('is-pair-dragging'); document.body.classList.remove('is-dragging-pair');
     d.scroller.style.scrollBehavior = d.oldScrollBehavior;
     suppressUntil = Date.now() + 450;

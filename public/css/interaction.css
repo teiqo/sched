@@ -25,12 +25,19 @@
 :root .sched-drag-original[hidden] { display: none !important; }
 :root .sched-drag-board {
   position: relative; display: flex; flex-direction: column; overflow: visible;
-  padding: 0; margin: 0; gap: 8px; background: transparent !important; border: 0 !important;
+  padding: 0; margin: 0; gap: 8px; background: transparent !important;
+  /* Прозрачная рамка вместо border: 0 — у .agenda-list есть своя рамка 1px,
+     без неё строки на зажатие съезжали на 1px влево и становились шире на 2px,
+     а текст внутри переломлялся по-другому. */
+  border: 1px solid transparent !important;
+  box-sizing: border-box;
   isolation: isolate; overflow-anchor: none;
 }
 :root .sched-drag-board > .agenda-row {
-  flex: none; margin: 0; border: 1px solid var(--sched-separator); border-radius: 12px;
-  background: var(--sched-surface); box-sizing: border-box; min-height: 80px;
+  flex: none; margin: 0; border: 0; border-radius: 12px;
+  /* Рамка тенью: не добавляет 2px к высоте и ширине строки. */
+  box-shadow: inset 0 0 0 1px var(--sched-separator);
+  background: var(--sched-surface); box-sizing: border-box; min-height: 75px;
 }
 /* No cascading entrances on hold, including accent+ and an interrupted day entry.
    WAAPI transform animations for neighbours are started only by applyOrder(). */
