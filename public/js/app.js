@@ -148,6 +148,9 @@ let pairRenderPending = false;
 let daySwipeActive = false;
 let daySwipeRenderPending = false;
 var daySwipeController = null;
+/* Номер последней отрисовки расписания: по нему карусель дней понимает,
+   что заготовленные панели устарели. */
+var sceneRevision = 0;
 let quietMotion = false;
 let scrubPendingRender = false;
 let sceneTimer = null;
@@ -1190,6 +1193,8 @@ function render(direction) {
     liveKey = liveSignature();
   }
   quietMotion = false;
+  sceneRevision += 1;
+  daySwipeController?.invalidate?.();
   updateDayRevertBtn();
   save();
   window.requestAnimationFrame(checkCompactHeading);
@@ -1612,7 +1617,7 @@ function endScrub(options = {}) {
   const keepVisual = Boolean(options.keepVisual);
   const skipRender = Boolean(options.skipRender);
   /* Работает и без активного scrub: используется как полный сброс состояния,
-     чтобы после резкого отпускания не оставались инлайн-трансформ и блюр. */
+     чтобы после резкого о��пускания не оставались инлайн-трансформ и блюр. */
   const stripEl = (scrub && scrub.strip) || $("#strip");
   if (!stripEl) return;
   const wasActive = Boolean(scrub && (scrub.active || scrub.targetIndex !== undefined));
@@ -2194,6 +2199,10 @@ function bindEvents() {
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
     getDate: () => state.selected, minDate: minAllowedDate, addDays,
     renderDay: d => dayHtml(d, true),
+    /* Копии соседних дней готовятся заранее. Ключ меняется на каждой
+       перерисовке, поэтому панель никогда не показывает устаревший день
+       (например, расписание без открытого редактора). */
+    contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
       // The neighbour has already slid into place: do not play a second entrance.
@@ -2339,7 +2348,7 @@ function futureDaysHtml() {
       : cachedFutureDay(d),
   );
   /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
-     а не возникали резко вместе со сменой сцены. */
+     а не возникали резко вмест�� со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
@@ -4011,7 +4020,7 @@ function openMoveSheet(dIso, n) {
   backdrop.id = "move-backdrop";
   backdrop.className = "sched-replace-backdrop is-open";
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
-    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
+    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} па��а · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
     <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n ? 'disabled aria-current="true"' : ""}>
       <span class="sched-move-number">${slot.n}</span><span class="sched-move-target-copy"><strong>${escapeHtml(slot.window || slot.cancelled ? "окно" : slot.subject)}</strong>
@@ -5284,7 +5293,7 @@ function cloudWrite(path, body, options = {}) {
   cloudMutationChain = task.catch(() => {});
   return task;
 }
-function cloudFailHint() { return lastCloudMessage || "не отправилось — проверь интернет"; }
+function cloudFailHint() { return lastCloudMessage || "не отправилось — проверь ин��ернет"; }
 
 /* Приводим запись к виду, который пропускает .validate в правилах базы:
    updatedAt — число не из будущего, строки — строками и в пределах лимитов. */
@@ -6369,7 +6378,7 @@ function buildNotifFrag(key, entry) {
   };
 }
 
-/* Длительность пары из расписания звонков: «1 ч 35 мин». Без времени начала/конца. */
+/* Длительность пары из ��асписания звонков: «1 ч 35 мин». Без времени начала/конца. */
 function lessonDurationLabel(dIso, n) {
   const d = dateFromIso(dIso);
   const bell = BELLS.find((b) => b.n === Number(n));

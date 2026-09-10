@@ -186,14 +186,12 @@ body.is-editor-closing #stage {
 
 .sched-swipe-carousel .agenda-row,
 .sched-swipe-carousel .agenda-break,
-.sched-swipe-carousel .agenda-break-chip,
 .sched-swipe-carousel .live-lesson-card,
 .sched-swipe-carousel .live-card-glass,
 .sched-swipe-carousel .live-card-particles i,
 .sched-swipe-carousel .sched-editor-toolbar,
 .sched-swipe-panel .agenda-row,
 .sched-swipe-panel .agenda-break,
-.sched-swipe-panel .agenda-break-chip,
 .sched-swipe-panel .live-lesson-card,
 .sched-swipe-panel .live-card-glass,
 .sched-swipe-panel .sched-editor-toolbar {
@@ -201,6 +199,18 @@ body.is-editor-closing #stage {
   transition: none !important;
   opacity: 1 !important;
   transform: none !important;
+}
+
+/* Чип перерыва стоит по центру только за счёт своего transform.
+   Обнулять его в копиях дней нельзя — плашка улетает вправо и вниз. */
+.sched-swipe-carousel .agenda-break-chip,
+.sched-swipe-panel .agenda-break-chip,
+.sched-swipe-peek .agenda-break-chip {
+  animation: none !important;
+  transition: none !important;
+  opacity: 1 !important;
+  top: 0 !important;
+  transform: translate3d(-50%, -50%, 0) !important;
 }
 .sched-swipe-carousel,
 .sched-swipe-panel {

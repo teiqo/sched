@@ -5,11 +5,12 @@
    moves one compositor layer only. */
 export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
-  renderDay, onCommit, onActiveChange, onFinish,
+  renderDay, onCommit, onActiveChange, onFinish, contentKey,
 }) {
   let gesture = null;
   let carousel = null;
   let carouselDate = null;
+  let carouselKey = null;
   let carouselWidth = 0;
   let settling = null;
   let settleTimer = null;
@@ -35,8 +36,15 @@ export function bindDaySwipe({
     onActiveChange?.(value);
   };
 
+  /* Копия дня не должна дублировать id живой сцены, но часть оформления
+     («через 15 мин», часы, прогресс) привязана именно к id. Переносим имя
+     id в класс, иначе в панели текст теряет акцент и становится серым. */
   const sanitize = node => {
-    node.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+    node.querySelectorAll("[id]").forEach(el => {
+      const id = el.getAttribute("id");
+      if (id) el.classList.add(id);
+      el.removeAttribute("id");
+    });
     node.querySelectorAll("button, a, input, textarea, select").forEach(el => {
       el.setAttribute("tabindex", "-1");
     });
@@ -63,8 +71,17 @@ export function bindDaySwipe({
     carousel?.remove();
     carousel = null;
     carouselDate = null;
+    carouselKey = null;
     carouselWidth = 0;
   };
+
+  /* Панели готовятся заранее, поэтому они устаревают после любой
+     перерисовки (режим редактора, окна, замены). Ключ содержимого
+     заставляет пересобрать карусель вместо показа старого дня. */
+  const currentKey = () => (contentKey ? String(contentKey()) : "");
+  const isStale = date =>
+    !carousel || !carousel.isConnected || !carouselDate ||
+    dateKey(carouselDate) !== dateKey(date) || carouselKey !== currentKey();
 
   const buildCarousel = date => {
     removeCarousel();
@@ -82,14 +99,14 @@ export function bindDaySwipe({
     scene.appendChild(track);
     carousel = track;
     carouselDate = new Date(date);
+    carouselKey = currentKey();
     carouselWidth = stage.offsetWidth || innerWidth;
     track.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
     return track;
   };
 
   const ensureCarousel = date => {
-    if (!carousel || !carousel.isConnected || !carouselDate ||
-        dateKey(carouselDate) !== dateKey(date)) {
+    if (isStale(date)) {
       return buildCarousel(date);
     }
     carouselWidth = stage.offsetWidth || innerWidth;
@@ -101,9 +118,9 @@ export function bindDaySwipe({
     if (warmHandle !== null) cancelIdle(warmHandle);
     warmHandle = idle(() => {
       warmHandle = null;
-      if (gesture || settling) return;
+      if (gesture || settling || active) return;
       const date = new Date(getDate());
-      if (!carouselDate || dateKey(carouselDate) !== dateKey(date)) buildCarousel(date);
+      if (isStale(date)) buildCarousel(date);
     });
   };
 
@@ -147,6 +164,7 @@ export function bindDaySwipe({
     selection.style.removeProperty("transform");
     if (carousel) {
       carousel.classList.remove("is-active", "is-settling");
+      carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
       carousel.style.removeProperty("--blocked-reveal");
       carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
@@ -175,9 +193,12 @@ export function bindDaySwipe({
     }
     complete(true);
     const date = new Date(getDate());
+    /* Панель только готовится. Показываем её исключительно после того, как
+       жест признан горизонтальным: обычное нажатие, скролл или удержание
+       пары в редакторе больше не подменяют живой день его копией. */
     const track = ensureCarousel(date);
-    track.classList.remove("is-warmed", "is-settling");
-    track.classList.add("is-active");
+    track.classList.remove("is-settling");
+    track.classList.add("is-warmed");
     gesture = {
       x: touch.clientX,
       y: touch.clientY,
@@ -202,6 +223,10 @@ export function bindDaySwipe({
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       g.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       if (g.axis === "x") {
+        const track = ensureCarousel(g.date);
+        track.classList.remove("is-warmed", "is-settling");
+        track.classList.add("is-active");
+        g.width = carouselWidth || g.width;
         setActive(true);
         scene.classList.add("is-swiping");
         strip.classList.add("is-swipe-linked");
@@ -276,6 +301,13 @@ export function bindDaySwipe({
     cancel: () => {
       if (gesture || settling || active) complete(false);
       else removeCarousel();
+    },
+    /* Вызывается после перерисовки расписания: заранее подготовленные
+       панели пересобираются с актуальным содержимым. */
+    invalidate: () => {
+      if (gesture || settling || active) return;
+      removeCarousel();
+      prewarm();
     },
   };
 }

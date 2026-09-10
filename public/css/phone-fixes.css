@@ -1,0 +1,33 @@
+/* Починки для телефона.
+
+   Копии дня (карусель свайпа) создаются клонированием разметки, но id в них
+   снимаются, чтобы не было дублей на странице. Из-за этого часть оформления,
+   привязанная к id (#live-left, #live-progress, #live-host), пропадала —
+   крупный синий текст «через N мин» превращался в мелкий серый.
+   day-swipe.js теперь переносит имя id в одноимённый класс, а правила ниже
+   повторяют оформление уже для классов. */
+
+.live-card-timing.is-next-timing .live-left {
+  color: var(--palette-accent-1);
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+:root[data-sched-palette="accent-plus"] .live-card-progress > .live-progress {
+  background: var(--sched-accent-gradient) !important;
+  color: var(--sched-on-accent) !important;
+}
+
+.live-host:empty {
+  display: none;
+}
+
+/* Плашка перерыва центрируется собственным transform и обязана сохранять его
+   в любом состоянии — и в живой сцене, и в копиях дня. */
+.agenda-break-chip {
+  top: 0;
+  transform: translate3d(-50%, -50%, 0);
+}
