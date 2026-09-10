@@ -148,6 +148,13 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       const r = el.getBoundingClientRect();
       if (r.height) realRects.set(Number(el.dataset.rowN), { top: r.top, height: r.height });
     });
+    /* Чипы перерывов переносим в доску такими же: раньше на зажатие они просто
+       исчезали, и текст «перерыв · N мин» ломался. */
+    const realBreaks = new Map();
+    scope.querySelectorAll('.agenda-row[data-row-n]').forEach(el => {
+      const next = el.nextElementSibling;
+      if (next && next.classList.contains('agenda-break')) realBreaks.set(Number(el.dataset.rowN), next);
+    });
     const clone = p.row.cloneNode(true);
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
@@ -184,14 +191,23 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       board.appendChild(row); items.set(slot.n, row);
     });
     /* Повторяем исходные отступы между парами (чипы перерывов занимают место),
-       чтобы во время удержания ни одна строка не сдвинулась ни на п��ксель. */
+       чтобы во время удержания ни одна строка не сдвинулась ни на пиксель. */
     board.style.gap = '0px';
     for (let i = 0; i < slots.length - 1; i += 1) {
       const row = items.get(slots[i].n);
       if (!row) continue;
       const cur = realRects.get(slots[i].n), nxt = realRects.get(slots[i + 1].n);
       const space = cur && nxt ? Math.max(0, nxt.top - (cur.top + cur.height)) : 0;
-      row.style.marginBottom = space + 'px';
+      const brk = realBreaks.get(slots[i].n);
+      if (brk && space > 2) {
+        const chip = brk.cloneNode(true);
+        chip.classList.add('is-drag-break');
+        chip.style.margin = ((space - 1) / 2) + 'px 0';
+        row.style.marginBottom = '0px';
+        board.insertBefore(chip, row.nextSibling);
+      } else {
+        row.style.marginBottom = space + 'px';
+      }
     }
     drag = { ...p, fromN: p.n, scope, slots, clone, status, board, items, hidden, scroller, originalScroll: scroller.scrollTop,
       scopeMinHeight: scope.style.minHeight,

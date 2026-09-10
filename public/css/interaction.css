@@ -39,6 +39,10 @@
   box-shadow: inset 0 0 0 1px var(--sched-separator);
   background: var(--sched-surface); box-sizing: border-box; min-height: 75px;
 }
+/* Чипы перерывов остаются видны внутри доски на своих местах. */
+:root .sched-day-block.is-pair-dragging .sched-drag-board .agenda-break {
+  display: block; flex: none; align-self: stretch;
+}
 /* No cascading entrances on hold, including accent+ and an interrupted day entry.
    WAAPI transform animations for neighbours are started only by applyOrder(). */
 :root #scene #stage .sched-drag-board,

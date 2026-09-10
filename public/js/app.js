@@ -1615,7 +1615,7 @@ function endScrub(options = {}) {
   const keepVisual = Boolean(options.keepVisual);
   const skipRender = Boolean(options.skipRender);
   /* Работает и без активного scrub: используется как полный сброс состояния,
-     чтобы после резкого о��������пускания не оставались инлайн-трансформ и блюр. */
+     чтобы после резкого отпускания не оставались инлайн-трансформ и блюр. */
   const stripEl = (scrub && scrub.strip) || $("#strip");
   if (!stripEl) return;
   const wasActive = Boolean(scrub && (scrub.active || scrub.targetIndex !== undefined));
@@ -1969,7 +1969,7 @@ function bindStrip() {
     selectDate(newDate, dir);
   });
 
-  /* колесо мыши: шаг без ��адержки и без очереди — анимация перехватывается на лету */
+  /* колесо мыши: шаг без задержки и без очереди — анимация перехватывается на лету */
   const WHEEL_STEP = 24;
   let wheelAcc = 0;
   let wheelFrame = null;
@@ -2341,8 +2341,8 @@ function futureDaysHtml() {
         'px" aria-hidden="true"></div>'
       : cachedFutureDay(d),
   );
-  /* Обёртка нужна, чтобы будущие дни проявлялис�� каскадом,
-     а не возникали резко вмест�� со сменой сцены. */
+  /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
+     а не возникали резко вместе со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
@@ -2646,7 +2646,7 @@ function statsPanelHtml() {
         ${statRow("получено отчётов", activity.reports_30d)}
       </div>
     </div>
-    <p class="sched-stats-note">пользователи без авторизации считаются по уникальной установке браузера. сырой идентификатор не сохраняется; после входа этот браузер больше не вход��т в анонимный счётчик.</p>
+    <p class="sched-stats-note">пользователи без авторизации считаются по уникальной установке браузера. сырой идентификатор не сохраняется; после входа этот браузер больше не входит в анонимный счётчик.</p>
   </section>`;
 }
 function profileTabsHtml(canReview) {
@@ -4572,7 +4572,14 @@ bindPairDrag({
   scene: document.getElementById("scene"),
   /* Те же строки, что и на экране: иначе в режиме редактора превью переноса
      собиралось из другого набора пар и места путались. */
-  slotsForDate: date => visibleSlotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
+  slotsForDate: date => visibleSlotsFor(dateFromIso(date)),
+  /* Метки «сейчас/далее» рисуем и в превью переноса: без них текст пары
+     пересобирался на зажатие и «телепортировался». */
+  renderRow: (slot, date) => {
+    const d = dateFromIso(date);
+    const live = sameDay(d, startOfDay(currentDate())) ? liveState(d) : null;
+    return rowHtml(slot, live, date);
+  },
   onSwap: movePair, onReorder: (date, from, to) => movePairRelative(date, from, to, to > from),
   onActiveChange: active => {
     pairDragActive = active;
@@ -4814,7 +4821,7 @@ async function ensureFbToken() {
 }
 async function sharedUrlWithAuth(url, forceFresh = false) {
   const target = new URL(url);
-  if (target.origin !== new URL(sharedSwapsUrl()).origin) throw new Error("неверный адре���� общей базы");
+  if (target.origin !== new URL(sharedSwapsUrl()).origin) throw new Error("неверный адрес общей базы");
   if (forceFresh) resetFirebaseIdentity();
   const token = await ensureFbToken();
   if (token) target.searchParams.set("auth", token);
@@ -5340,7 +5347,7 @@ function notifyCloudEvent(path, body) {
   queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group }).catch(reportPushError);
 }
 
-/* Единая точк�� записи: PUT с телом или DELETE (body === null). true = база приняла. */
+/* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
 /* Статус последней ошибки облака: 401/403 = права/правила, -1 = сеть. */
 var lastCloudStatus = 0;
 var lastCloudMessage = "";
@@ -5451,7 +5458,7 @@ async function cloudWriteAnonymousPendingPerKey(payloads, signal) {
     try {
       if (await putKey(key, payloads[key])) { sent += 1; continue; }
       /* Правила разрешают анониму только создание узла: если по этой паре
-         ��аявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
+         заявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
          видят его как ту же пару (суффикс срезается при раскодировке). */
       if (lastCloudStatus === 401 || lastCloudStatus === 403) {
         const suffix = "*" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
@@ -5685,7 +5692,7 @@ async function rejectPending(enc) {
 async function grantEditor(tgId, name) {
   const ok = await cloudWrite(CLOUD_PATHS.editors + "/" + tgId, name || "редактор");
   if (!ok) {
-    toast("не получилось выдать дос��уп");
+    toast("не получилось выдать доступ");
     return;
   }
   toast("редактор добавлен");
@@ -5808,7 +5815,7 @@ async function pullSharedSwaps() {
       saveSwaps();
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
-    /* Не ушедшие записи дожимаем люб��й ролью: у автора предложения
+    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
        тоже есть право записи в weeqo-pending. */
     {
       const batches = new Map();
@@ -5818,7 +5825,7 @@ async function pullSharedSwaps() {
         if (!batches.has(id)) batches.set(id, {});
         batches.get(id)[key] = entry;
       }
-      for (const batch of batches.values()) publishSwapBatch(batch, "повторн����я отправка изменений");
+      for (const batch of batches.values()) publishSwapBatch(batch, "повторная отправка изменений");
     }
   } catch (e) {
     /* офлайн — повторим в следующий тик */
@@ -5970,7 +5977,7 @@ function pendingRowHtml(enc, entry, role) {
         '">+ редактор</button>';
     }
   } else {
-    actions = '<span class="sched-pending-readonly-label">н�� проверке у редакторов</span>';
+    actions = '<span class="sched-pending-readonly-label">на проверке у редакторов</span>';
   }
   return (
     '<div class="sched-tg-row"><div class="sched-tg-row-text"><strong>' +
@@ -6508,7 +6515,7 @@ function buildNotifFrag(key, entry) {
   };
 }
 
-/* Длительность пары из ��асписания звонков: «1 ч 35 мин». Без времени начала/конца. */
+/* Длительность пары из расписания звонков: «1 ч 35 мин». Без времени начала/конца. */
 function lessonDurationLabel(dIso, n) {
   const d = dateFromIso(dIso);
   const bell = BELLS.find((b) => b.n === Number(n));
