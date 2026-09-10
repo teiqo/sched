@@ -25,6 +25,24 @@
   display: none;
 }
 
+/* Зажатая пара (летающая карточка) тоже обводится пунктиром, как пустое
+   место и цель переноса, но синим и со скруглением карточки.
+   Рамка рисуется псевдоэлементом, а не outline: так штрихи повторяют углы
+   и не гасятся правилом outline: none в editor-mode-close.css. */
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  border-color: transparent !important;
+}
+:root :is(.agenda-row, .live-lesson-card).is-drag-float::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 2px dashed var(--sched-blue);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 /* Плашка перерыва центрируется собственным transform и обязана сохранять его
    в любом состоянии — и в живой сцене, и в копиях дня. */
 .agenda-break-chip {
