@@ -18,7 +18,7 @@ def main():
     handler = partial(PreviewHandler, directory=str(root))
     with ThreadingHTTPServer(("127.0.0.1", args.port), handler) as server:
         print(f"Открой http://localhost:{args.port}", flush=True)
-        print("Настройки → профиль → тестовый вход Telegram. Общая база и отправка сообщений отключены.", flush=True)
+        print("Настройки -> профиль -> тестовый вход Telegram. Общая база и отправка сообщений отключены.", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

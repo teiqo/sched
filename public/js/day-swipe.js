@@ -1,65 +1,169 @@
-/* One gesture owns the scene until it settles. Only transforms are animated. */
+/* Three-panel day carousel.
+   The previous implementation moved the live schedule and a separately-created
+   preview. On iOS Safari those two layers could be painted on different frames.
+   This carousel prepares left/current/right panels ahead of the gesture and
+   moves one compositor layer only. */
 export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
   renderDay, onCommit, onActiveChange, onFinish,
 }) {
-  let gesture = null, peek = null, settling = null, timer = null, active = false;
+  let gesture = null;
+  let carousel = null;
+  let carouselDate = null;
+  let carouselWidth = 0;
+  let settling = null;
+  let settleTimer = null;
+  let frameHandle = null;
+  let warmHandle = null;
+  let active = false;
   let viewportWidth = innerWidth;
+
+  const idle = globalThis.requestIdleCallback || (fn => setTimeout(fn, 1));
+  const cancelIdle = globalThis.cancelIdleCallback || clearTimeout;
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const width = () => stage.offsetWidth || innerWidth;
+  const dateKey = date => date.getTime();
+  const selectedIndex = () => Number(strip.dataset.selectedIndex) || 0;
+  const selectionOffset = progress =>
+    Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
+
   const setActive = value => {
     if (active === value) return;
     active = value;
+    document.documentElement.classList.toggle("is-day-swiping", value);
+    scene.classList.toggle("is-carousel-swiping", value);
     strip.classList.toggle("is-day-swiping", value);
     onActiveChange?.(value);
   };
-  const shiftStage = x => stage.style.setProperty("--swipe-x", `${x.toFixed(2)}px`);
-  const shiftSelection = progress => {
-    const index = Number(strip.dataset.selectedIndex) || 0;
-    selection.style.transform = `translate3d(${Math.max(0, Math.min(6, index + progress)) * 100}%, 0, 0)`;
+
+  const sanitize = node => {
+    node.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+    node.querySelectorAll("button, a, input, textarea, select").forEach(el => {
+      el.setAttribute("tabindex", "-1");
+    });
   };
-  const clearVisuals = () => {
-    clearTimeout(timer);
-    timer = null;
+
+  const dayPanel = (date, position, blocked = false) => {
+    const panel = document.createElement("div");
+    // Namespaced state: generic .is-current is used by live-lesson styles and
+    // made the whole carousel's centre panel inherit today's green colors.
+    panel.className = `sched-swipe-panel is-swipe-${position}`;
+    panel.setAttribute("aria-hidden", "true");
+    panel.inert = true;
+    if (blocked) {
+      panel.classList.add("is-blocked");
+      panel.innerHTML = '<div class="sched-easter-egg-wrap"><span class="sched-easter-egg-msg">привет=)</span></div>';
+    } else {
+      panel.innerHTML = renderDay(date);
+      sanitize(panel);
+    }
+    return panel;
+  };
+
+  const removeCarousel = () => {
+    carousel?.remove();
+    carousel = null;
+    carouselDate = null;
+    carouselWidth = 0;
+  };
+
+  const buildCarousel = date => {
+    removeCarousel();
+    const leftDate = addDays(date, -1);
+    const leftBlocked = leftDate < minDate();
+    const track = document.createElement("div");
+    track.className = "sched-swipe-carousel is-warmed";
+    track.setAttribute("aria-hidden", "true");
+    track.inert = true;
+    track.append(
+      dayPanel(leftDate, "left", leftBlocked),
+      dayPanel(date, "current"),
+      dayPanel(addDays(date, 1), "right"),
+    );
+    scene.appendChild(track);
+    carousel = track;
+    carouselDate = new Date(date);
+    carouselWidth = stage.offsetWidth || innerWidth;
+    track.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
+    return track;
+  };
+
+  const ensureCarousel = date => {
+    if (!carousel || !carousel.isConnected || !carouselDate ||
+        dateKey(carouselDate) !== dateKey(date)) {
+      return buildCarousel(date);
+    }
+    carouselWidth = stage.offsetWidth || innerWidth;
+    carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
+    return carousel;
+  };
+
+  const prewarm = () => {
+    if (warmHandle !== null) cancelIdle(warmHandle);
+    warmHandle = idle(() => {
+      warmHandle = null;
+      if (gesture || settling) return;
+      const date = new Date(getDate());
+      if (!carouselDate || dateKey(carouselDate) !== dateKey(date)) buildCarousel(date);
+    });
+  };
+
+  const paint = now => {
+    frameHandle = null;
+    const g = gesture;
+    if (!g || g.axis !== "x" || !carousel) return;
+    const previous = g.paintTime || now - 16.7;
+    const dt = Math.min(0.05, Math.max(0.001, (now - previous) / 1000));
+    g.paintTime = now;
+    const alpha = reduced() ? 1 : 1 - Math.exp(-60 * dt);
+    g.visual += (g.target - g.visual) * alpha;
+    if (Math.abs(g.target - g.visual) < 0.08) g.visual = g.target;
+
+    carousel.style.transform = `translate3d(${(-g.width + g.visual).toFixed(2)}px, 0, 0)`;
+    carousel.style.setProperty("--blocked-reveal", `${g.blocked ? Math.max(0, g.visual).toFixed(2) : 0}px`);
+    selection.style.transform = `translate3d(${selectionOffset(g.blocked ? 0 : -g.visual / g.width).toFixed(2)}%, 0, 0)`;
+
+    if (Math.abs(g.target - g.visual) >= 0.08) {
+      frameHandle = requestAnimationFrame(paint);
+    }
+  };
+
+  const requestPaint = () => {
+    if (frameHandle === null) frameHandle = requestAnimationFrame(paint);
+  };
+
+  const stopFrame = () => {
+    if (frameHandle !== null) cancelAnimationFrame(frameHandle);
+    frameHandle = null;
+  };
+
+  const resetVisuals = () => {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+    stopFrame();
     gesture = null;
     settling = null;
-    peek?.remove();
-    peek = null;
     scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
-    scene.style.removeProperty("--swipe-anim-dur");
-    stage.style.removeProperty("--swipe-x");
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
-    strip.style.removeProperty("--strip-swipe-duration");
     selection.style.removeProperty("transform");
+    if (carousel) {
+      carousel.classList.remove("is-active", "is-settling");
+      carousel.style.removeProperty("transition-duration");
+      carousel.style.removeProperty("--blocked-reveal");
+      carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
+    }
     setActive(false);
   };
+
   const complete = (allowCommit = true) => {
-    if (!gesture && !settling && !active && !peek) return;
+    if (!gesture && !settling && !active) return;
     const pending = settling;
     const target = allowCommit && pending?.target &&
-      getDate().getTime() === pending.date.getTime() ? pending.target : null;
-    clearVisuals();
+      dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
+    resetVisuals();
     if (target) onCommit(target);
     onFinish?.();
-  };
-  const ensurePeek = (direction, blocked) => {
-    if (peek?.dataset.direction === String(direction)) return peek;
-    peek?.remove();
-    peek = document.createElement("div");
-    peek.className = "sched-swipe-peek";
-    peek.dataset.direction = direction;
-    peek.setAttribute("aria-hidden", "true");
-    peek.inert = true;
-    if (blocked) {
-      peek.classList.add("is-easter-egg");
-      peek.innerHTML = '<div class="sched-easter-egg-wrap"><span class="sched-easter-egg-msg">привет=)</span></div>';
-    } else {
-      peek.innerHTML = renderDay(addDays(gesture.date, direction));
-      // The preview is inert and must not duplicate live clock / button IDs.
-      peek.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
-    }
-    scene.appendChild(peek);
-    return peek;
+    // The selected date may have changed synchronously in onCommit.
+    prewarm();
   };
 
   scene.addEventListener("touchstart", event => {
@@ -69,20 +173,35 @@ export function bindDaySwipe({
       complete(false);
       return;
     }
-    // Finish an earlier committed swipe before taking the next starting date.
     complete(true);
-    gesture = { x: touch.clientX, y: touch.clientY, shift: 0, axis: null, date: new Date(getDate()), blocked: false };
+    const date = new Date(getDate());
+    const track = ensureCarousel(date);
+    track.classList.remove("is-warmed", "is-settling");
+    track.classList.add("is-active");
+    gesture = {
+      x: touch.clientX,
+      y: touch.clientY,
+      date,
+      width: carouselWidth,
+      axis: null,
+      target: 0,
+      visual: 0,
+      paintTime: 0,
+      blocked: false,
+    };
   }, { passive: true });
 
   scene.addEventListener("touchmove", event => {
-    if (!gesture) return;
+    const g = gesture;
+    if (!g) return;
     if (!canStart() || event.touches.length !== 1) { complete(false); return; }
     const touch = event.touches[0];
-    const dx = touch.clientX - gesture.x, dy = touch.clientY - gesture.y;
-    if (!gesture.axis) {
+    const dx = touch.clientX - g.x;
+    const dy = touch.clientY - g.y;
+    if (!g.axis) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
-      gesture.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      if (gesture.axis === "x") {
+      g.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (g.axis === "x") {
         setActive(true);
         scene.classList.add("is-swiping");
         strip.classList.add("is-swipe-linked");
@@ -90,60 +209,73 @@ export function bindDaySwipe({
         selection.classList.remove("is-hop");
       }
     }
-    if (gesture.axis !== "x") return;
+    if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
-    const w = width(), direction = dx < 0 ? 1 : -1;
-    gesture.blocked = addDays(gesture.date, direction) < minDate();
-    const limited = Math.sign(dx) * Math.min(Math.abs(dx), w);
-    gesture.shift = gesture.blocked ? limited * 0.55 : limited;
-    const preview = ensurePeek(direction, gesture.blocked);
-    shiftStage(gesture.shift);
-    preview.style.transform = `translate3d(${direction * w + gesture.shift}px, 0, 0)`;
-    if (gesture.blocked) {
-      preview.style.setProperty("--easter-egg-width", `${Math.max(1, Math.abs(gesture.shift))}px`);
-      preview.style.setProperty("--easter-egg-opacity", String(Math.min(1, Math.max(0, (Math.abs(gesture.shift) - 20) / 64))));
-      preview.style.setProperty("--easter-egg-scale", "1");
-    }
-    shiftSelection(gesture.blocked ? 0 : -gesture.shift / w);
+
+    const direction = dx < 0 ? 1 : -1;
+    g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
+    const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
+    g.target = g.blocked ? limited * 0.42 : limited;
+    requestPaint();
   }, { passive: false });
 
   const end = allowCommit => {
-    if (!gesture) return;
-    if (gesture.axis !== "x") { complete(false); return; }
-    const g = gesture, w = width(), direction = g.shift < 0 ? 1 : -1;
-    const commit = allowCommit && !g.blocked && Math.abs(g.shift) >= Math.max(64, Math.min(110, w * 0.22));
-    const distance = commit ? w - Math.abs(g.shift) : Math.abs(g.shift);
-    const duration = reduced() ? 0 : Math.round(Math.min(320, Math.max(170, 140 + distance * 0.45)));
-    // Flush the last finger position before enabling the settle transition.
-    stage.getBoundingClientRect();
-    peek?.getBoundingClientRect();
-    scene.style.setProperty("--swipe-anim-dur", `${duration}ms`);
-    strip.style.setProperty("--strip-swipe-duration", `${duration}ms`);
+    const g = gesture;
+    if (!g) return;
+    if (g.axis !== "x") { complete(false); return; }
+    stopFrame();
+
+    const direction = g.target < 0 ? 1 : -1;
+    const commit = allowCommit && !g.blocked &&
+      Math.abs(g.target) >= Math.max(64, Math.min(110, g.width * 0.22));
+    const visible = g.visual;
+    const destination = commit
+      ? (direction > 0 ? -2 * g.width : 0)
+      : -g.width;
+    const currentTrackX = -g.width + visible;
+    const distance = Math.abs(destination - currentTrackX);
+    const duration = reduced() ? 0 : Math.round(Math.min(300, Math.max(160, 125 + distance * 0.38)));
+
+    carousel.style.transform = `translate3d(${currentTrackX.toFixed(2)}px, 0, 0)`;
+    carousel.getBoundingClientRect();
+    carousel.classList.add("is-settling");
+    carousel.style.setProperty("transition-duration", `${duration}ms`);
     scene.classList.remove("is-swiping");
     scene.classList.add(commit ? "is-swipe-commit" : "is-swipe-return");
     strip.classList.remove("is-swipe-linked");
     strip.classList.add("is-swipe-settling");
-    shiftStage(commit ? -direction * w : 0);
-    if (peek) {
-      if (!commit) peek.classList.add("is-returning");
-      peek.style.transform = `translate3d(${commit ? 0 : direction * w}px, 0, 0)`;
-    }
-    shiftSelection(commit ? direction : 0);
+    carousel.style.transform = `translate3d(${destination}px, 0, 0)`;
+    selection.style.transform = `translate3d(${selectionOffset(commit ? direction : 0).toFixed(2)}%, 0, 0)`;
+
     gesture = null;
     settling = { date: g.date, target: commit ? addDays(g.date, direction) : null };
     if (duration === 0) complete(true);
-    else timer = setTimeout(() => complete(true), duration + 34);
+    else settleTimer = setTimeout(() => complete(true), duration + 34);
   };
+
   scene.addEventListener("touchend", () => end(true), { passive: true });
   scene.addEventListener("touchcancel", () => end(false), { passive: true });
   document.addEventListener("pointerdown", event => {
     if (active && !scene.contains(event.target)) complete(false);
   }, true);
   window.addEventListener("blur", () => complete(false));
-  document.addEventListener("visibilitychange", () => { if (document.hidden) complete(false); });
-  window.addEventListener("resize", () => {
-    // iPhone browser chrome can change height in the middle of a gesture.
-    if (innerWidth !== viewportWidth) { viewportWidth = innerWidth; complete(false); }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) complete(false);
   });
-  return { cancel: () => { if (gesture || settling || active) complete(false); } };
+  window.addEventListener("resize", () => {
+    if (innerWidth !== viewportWidth) {
+      viewportWidth = innerWidth;
+      removeCarousel();
+      complete(false);
+      prewarm();
+    }
+  });
+
+  prewarm();
+  return {
+    cancel: () => {
+      if (gesture || settling || active) complete(false);
+      else removeCarousel();
+    },
+  };
 }

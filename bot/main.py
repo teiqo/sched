@@ -28,11 +28,18 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
-# Supports direct execution and importlib-based offline tests.
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-from authentication import Auth, AuthError
-from reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
+# Use package-relative imports under `python -m bot.main`, and local imports
+# under direct `python bot/main.py` execution. This avoids accidentally loading
+# an unrelated installed package named `reports`.
+if __package__:
+    from .authentication import Auth, AuthError
+    from .reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
+else:
+    bot_dir = str(Path(__file__).resolve().parent)
+    if not sys.path or sys.path[0] != bot_dir:
+        sys.path.insert(0, bot_dir)
+    from authentication import Auth, AuthError
+    from reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
 
 LOG = logging.getLogger("sched")
 GREETING = "<b>привет=)</b>"
@@ -127,6 +134,15 @@ class Store:
             pending INTEGER NOT NULL DEFAULT 1, group_name TEXT NOT NULL DEFAULT ''
           );
           CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, created REAL NOT NULL);
+          CREATE TABLE IF NOT EXISTS app_users (
+            id TEXT PRIMARY KEY, first_seen REAL NOT NULL, last_seen REAL NOT NULL,
+            name TEXT NOT NULL DEFAULT '', username TEXT NOT NULL DEFAULT '',
+            logins INTEGER NOT NULL DEFAULT 1
+          );
+          CREATE TABLE IF NOT EXISTS app_visitors (
+            id TEXT PRIMARY KEY, first_seen REAL NOT NULL, last_seen REAL NOT NULL,
+            authenticated_user TEXT NOT NULL DEFAULT ''
+          );
           CREATE TABLE IF NOT EXISTS outbox (
             event_id TEXT NOT NULL, chat_id TEXT NOT NULL, text TEXT NOT NULL,
             attempts INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'pending',
@@ -215,6 +231,80 @@ class Store:
                             (state, row["event_id"], row["chat_id"]))
             if state != "pending" and row["event_id"].startswith("telegram-auth:"):
                 self.db.execute("UPDATE outbox SET text='',payload='' WHERE event_id=? AND chat_id=?", (row["event_id"], row["chat_id"]))
+
+    def record_user(self, user, login=False):
+        if not isinstance(user, dict) or not str(user.get("id") or "").isdigit():
+            return
+        uid = str(user["id"])
+        name = " ".join(filter(None, [str(user.get("first_name") or "").strip(), str(user.get("last_name") or "").strip()]))[:240]
+        username = str(user.get("username") or "")[:80]
+        now = time.time()
+        with self.lock, self.db:
+            self.db.execute("""
+              INSERT INTO app_users(id,first_seen,last_seen,name,username,logins)
+              VALUES (?,?,?,?,?,1)
+              ON CONFLICT(id) DO UPDATE SET
+                last_seen=excluded.last_seen,
+                name=CASE WHEN excluded.name!='' THEN excluded.name ELSE app_users.name END,
+                username=CASE WHEN excluded.username!='' THEN excluded.username ELSE app_users.username END,
+                logins=app_users.logins + ?
+            """, (uid, now, now, name, username, int(bool(login))))
+
+    def record_visitor(self, visitor_id, authenticated_user=""):
+        """Count a browser without storing its raw installation identifier."""
+        if not isinstance(visitor_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{20,100}", visitor_id):
+            raise ValueError("invalid visitor id")
+        digest_id = hashlib.sha256(visitor_id.encode("utf-8")).hexdigest()
+        user_id = str(authenticated_user or "") if str(authenticated_user or "").isdigit() else ""
+        now = time.time()
+        with self.lock, self.db:
+            self.db.execute("""
+              INSERT INTO app_visitors(id,first_seen,last_seen,authenticated_user)
+              VALUES (?,?,?,?)
+              ON CONFLICT(id) DO UPDATE SET
+                last_seen=excluded.last_seen,
+                authenticated_user=CASE
+                  WHEN excluded.authenticated_user!='' THEN excluded.authenticated_user
+                  ELSE app_visitors.authenticated_user
+                END
+            """, (digest_id, now, now, user_id))
+        return True
+
+    def app_stats(self):
+        now = time.time()
+        with self.lock:
+            known = {r[0] for r in self.db.execute("SELECT id FROM app_users")}
+            known.update(r[0] for r in self.db.execute("SELECT id FROM chats WHERE started=1"))
+            authorized_week = self.db.execute("SELECT COUNT(*) FROM app_users WHERE last_seen>=?", (now-7*86400,)).fetchone()[0]
+            authorized_month = self.db.execute("SELECT COUNT(*) FROM app_users WHERE last_seen>=?", (now-30*86400,)).fetchone()[0]
+            anonymous = self.db.execute("SELECT COUNT(*) FROM app_visitors WHERE authenticated_user='' ").fetchone()[0]
+            anonymous_week = self.db.execute("SELECT COUNT(*) FROM app_visitors WHERE authenticated_user='' AND last_seen>=?", (now-7*86400,)).fetchone()[0]
+            anonymous_month = self.db.execute("SELECT COUNT(*) FROM app_visitors WHERE authenticated_user='' AND last_seen>=?", (now-30*86400,)).fetchone()[0]
+            bot_users = self.db.execute("SELECT COUNT(*) FROM chats WHERE started=1").fetchone()[0]
+            subscribers = self.db.execute("SELECT COUNT(*) FROM chats WHERE active=1 AND started=1").fetchone()[0]
+            groups = self.db.execute("SELECT COUNT(DISTINCT group_name) FROM chats WHERE group_name!=''").fetchone()[0]
+            deliveries = self.db.execute("""
+              SELECT COUNT(*) FROM outbox o JOIN events e ON e.id=o.event_id
+              WHERE o.state='sent' AND e.created>=?
+            """, (now-30*86400,)).fetchone()[0]
+            changes = self.db.execute("SELECT COUNT(*) FROM events WHERE id LIKE 'event:swap:%' AND created>=?", (now-30*86400,)).fetchone()[0]
+            reports = self.db.execute("SELECT COUNT(*) FROM events WHERE id LIKE 'report:%:summary' AND created>=?", (now-30*86400,)).fetchone()[0]
+        return {
+            "ok": True,
+            "generated_at": int(now * 1000),
+            "users": {
+                "total": len(known) + anonymous,
+                "authorized": len(known),
+                "anonymous": anonymous,
+                "active_7d": authorized_week + anonymous_week,
+                "active_30d": authorized_month + anonymous_month,
+                "anonymous_active_7d": anonymous_week,
+                "anonymous_active_30d": anonymous_month,
+                "bot_started": bot_users,
+            },
+            "telegram": {"subscribers": subscribers, "groups": groups, "deliveries_30d": deliveries},
+            "activity": {"change_events_30d": changes, "reports_30d": reports},
+        }
 
     def close(self):
         self.db.close()
@@ -307,7 +397,9 @@ class App:
             return "server"
         bearer = headers.get("Authorization", "")
         if bearer.startswith("Bearer ") and len(bearer) < 20000:
-            return self.auth.verify(bearer[7:])
+            session = self.auth.restore(bearer[7:])
+            self.store.record_user(session.get("user"))
+            return session["id"]
         return None
 
     def verify_client_auth(self, data, origin=""):
@@ -328,7 +420,8 @@ class App:
         eid = data.get("event_id")
         text = data.get("text")
         group = data.get("group", "")
-        if not isinstance(eid, str) or not 1 <= len(eid) <= 512 or not isinstance(text, str) or not text.strip() or len(text) > 3800 or not isinstance(group, str) or len(group) > 100:
+        message_format = data.get("format", "plain")
+        if not isinstance(eid, str) or not 1 <= len(eid) <= 512 or not isinstance(text, str) or not text.strip() or len(text) > 3800 or not isinstance(group, str) or len(group) > 100 or message_format not in ("plain", "html"):
             return 400, {"ok": False, "error": "Invalid event"}
         # Private notifications NEVER accept client-selected recipients or fall back to public broadcast.
         if kind in ("pending", "report"):
@@ -337,7 +430,8 @@ class App:
                 text = "[отчёт без подтверждённого входа]\n" + text
         else:
             targets = self.store.recipients(kind, group)
-        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets)
+        payload = {"parse_mode": "HTML"} if message_format == "html" else None
+        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets, payload=payload)
         self.wake()
         LOG.info("событие %s: %s; в очереди получателей %d", kind, "принято" if created else "дубликат", queued)
         return 202, {"ok": True, "accepted": created, "duplicate": not created, "queued": queued}
@@ -409,6 +503,7 @@ class App:
 
 
 REPORT_ROUTES = ("/reports", "/reports/list", "/reports/file", "/reports/delete")
+STATS_ROUTES = ("/stats", "/stats/visit")
 AUTH_ROUTES = ("/auth/start", "/auth/status", "/auth/cancel",
                "/auth/verify", "/auth/logout", "/auth/firebase")
 
@@ -501,7 +596,7 @@ def handler_for(app):
 
         def do_OPTIONS(self):
             origin = self.headers.get("Origin", "")
-            if self.route() not in ("/notify", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES):
+            if self.route() not in ("/notify", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES):
                 self.respond(404, {"ok": False})
                 return
             if origin and not self.is_origin_allowed(origin):
@@ -512,7 +607,7 @@ def handler_for(app):
 
         def do_POST(self):
             route = self.route()
-            if route not in ("/notify", "/telegram", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES):
+            if route not in ("/notify", "/telegram", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES):
                 self.respond(404, {"ok": False})
                 return
             if route == "/telegram":
@@ -571,7 +666,22 @@ def handler_for(app):
                     if not app.limit(rate_key, 120 if who else 10):
                         self.respond(429, {"ok": False, "error": "Too many requests"})
                         return
-                    if route in REPORT_ROUTES:
+                    if route == "/stats/visit":
+                        visitor_id = data.get("visitor_id")
+                        if not app.limit("visit:" + self.client_address[0], 30):
+                            status, result = 429, {"ok": False, "error": "Too many requests"}
+                        else:
+                            app.store.record_visitor(visitor_id, who if who not in (None, "server") else "")
+                            status, result = 200, {"ok": True}
+                    elif route == "/stats":
+                        # The UI exposes this aggregate-only view to owners/editors.
+                        # Any verified session may fetch it so Firebase-granted editors
+                        # (not only env admins) work without trusting a client role flag.
+                        if not who or who == "server":
+                            status, result = 403, {"ok": False, "error": "нужен подтверждённый вход."}
+                        else:
+                            status, result = 200, app.store.app_stats()
+                    elif route in REPORT_ROUTES:
                         if route == '/reports':
                             name = ''
                             if who and who != 'server':

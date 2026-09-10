@@ -220,48 +220,6 @@ body.is-dragging-pair {
   overflow-x: clip;
   max-width: 100%;
 }
-
-/* iOS Safari при долгом касании иногда сбрасывает transform у абсолютного
-   чипа внутри flex-доски. Жёстко удерживаем линию и чип в исходной геометрии. */
-:root body.is-dragging-pair #stage .agenda-break,
-:root #stage .sched-day-block.is-pair-dragging .agenda-break {
-  position: relative !important;
-  left: auto !important;
-  top: auto !important;
-  width: auto !important;
-  height: 0 !important;
-  transform: none !important;
-  border-top: 1px solid var(--sched-separator) !important;
-}
-:root body.is-dragging-pair #stage .agenda-break-chip,
-:root #stage .sched-day-block.is-pair-dragging .agenda-break-chip {
-  position: absolute !important;
-  left: 50% !important;
-  right: auto !important;
-  top: 0 !important;
-  bottom: auto !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  transform: translate3d(-50%, -50%, 0) !important;
-  transform-origin: center center !important;
-  margin: 0 !important;
-  font-size: 10px !important;
-  line-height: 14px !important;
-  white-space: nowrap !important;
-}
-
-/* Счётчик до следующей пары не должен наследовать маленький серый стиль
-   контейнера во время тача/перетаскивания. */
-:root body.is-dragging-pair #stage .live-lesson-card.is-next .live-card-timing.is-next-timing #live-left,
-:root #stage .sched-day-block.is-pair-dragging .live-lesson-card.is-next .live-card-timing.is-next-timing #live-left {
-  color: var(--palette-accent-1, var(--sched-blue)) !important;
-  -webkit-text-fill-color: var(--palette-accent-1, var(--sched-blue)) !important;
-  font-size: 17px !important;
-  font-weight: 750 !important;
-  line-height: 1.1 !important;
-  letter-spacing: -0.01em !important;
-  white-space: nowrap !important;
-}
 :root :is(.agenda-row, .live-lesson-card).is-drag-float {
   max-width: calc(100vw - 16px) !important;
 }

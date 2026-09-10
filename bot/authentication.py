@@ -217,6 +217,7 @@ class Auth:
                 return self.restore(row["result_token"])
             raise AuthError("attempt_used", "эта попытка входа уже использована", 401)
         result = self.create_session(user)
+        self.store.record_user(result.get("user"), login=True)
         self.store.db.execute(
             "UPDATE auth_attempts SET state='complete',result_token=?,completed_at=?,user_json=NULL,context_json='{}' WHERE id=?",
             (result["session_token"], time.time(), row["id"]),

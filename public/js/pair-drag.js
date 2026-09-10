@@ -19,7 +19,7 @@ export function pairOrder(slots, fromN, toN) {
 
 export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder, onActiveChange, onFinish }) {
   let pending = null, drag = null, timer = null, frame = null, suppressUntil = 0;
-  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduced = () => document.documentElement.hasAttribute('data-perf') || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clearPending = () => { clearTimeout(timer); timer = null; pending = null; };
   const scrollerFor = node => {
     for (let el = node.parentElement; el && el !== document.body; el = el.parentElement) {
@@ -62,18 +62,24 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
         { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
   };
+  const CLONE_EDGE = 8;
+  const cloneWidth = width => Math.min(width, Math.max(160, innerWidth - CLONE_EDGE * 2));
+  const clampLeft = (left, width) => {
+    const max = Math.max(CLONE_EDGE, innerWidth - width - CLONE_EDGE);
+    return Math.min(Math.max(left, CLONE_EDGE), max);
+  };
   const followPointer = () => {
     const d = drag;
     if (!d) return;
     d.clone.classList.remove('is-magnetized');
-    d.clone.style.left = Math.max(0, Math.min(innerWidth - d.clone.offsetWidth, d.x - d.grabX)) + 'px';
+    d.clone.style.left = clampLeft(d.x - d.grabX, d.clone.offsetWidth) + 'px';
     d.clone.style.top = d.y - d.grabY + 'px';
   };
   const centerCloneOnPlaceholder = () => {
     const d = drag, placeholder = d?.items.get(d.fromN);
     if (!placeholder?.isConnected) return;
     const targetRect = placeholder.getBoundingClientRect();
-    d.clone.style.left = targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2 + 'px';
+    d.clone.style.left = clampLeft(targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2, d.clone.offsetWidth) + 'px';
     d.clone.style.top = targetRect.top + (targetRect.height - d.clone.offsetHeight) / 2 + 'px';
   };
   const updateTarget = () => {
@@ -85,7 +91,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (!inside) {
       d.targetN = null;
       d.clone.classList.remove('is-magnetized');
-      announce('в пределах этого дня · Esc — отмена');
+      announce('в пределах этого дня');
       return false;
     }
     // Layout coordinates exclude FLIP transforms, so an animating neighbour cannot flicker the target.
@@ -106,7 +112,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       void d.clone.offsetWidth;
     }
     centerCloneOnPlaceholder();
-    announce(targetN === d.fromN ? 'исходное место · Esc — отмена' : `отпусти на ${targetN}-ю пару · Esc — отмена`);
+    announce(targetN === d.fromN ? 'исходное место' : `отпусти на ${targetN}-ю пару`);
     return true;
   };
   const animate = () => {
@@ -136,18 +142,28 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
     clone.setAttribute('aria-hidden', 'true'); clone.inert = true;
-    Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: rect.left + 'px', top: rect.top + 'px' });
+    const cloneW = cloneWidth(rect.width);
+    Object.assign(clone.style, { width: cloneW + 'px', height: rect.height + 'px', left: clampLeft(rect.left, cloneW) + 'px', top: rect.top + 'px' });
     document.body.appendChild(clone);
     const status = document.createElement('div');
-    status.className = 'sched-drag-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-    status.textContent = 'перетащи пару · Esc — отмена'; document.body.appendChild(status);
-    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading'));
+    status.className = 'sched-drag-status is-sr-only'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    status.textContent = 'перетащи пару'; document.body.appendChild(status);
+    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading')
+      && !el.classList.contains('sched-editor-toolbar'));
     const hidden = original.map(el => [el, el.hidden]);
     const board = document.createElement('div'); board.className = 'agenda-list sched-drag-board';
     const items = new Map();
     slots.forEach(slot => {
       const temp = document.createElement('div');
-      temp.innerHTML = renderRow({ ...slot, window: Boolean(slot.window || slot.cancelled) }, p.date);
+      /* A cancelled lesson is only a free target while dragging. Do not pass
+         its cancelled/swapped styling to the preview, otherwise it appears as
+         a random struck-through lesson at the bottom of the day. */
+      temp.innerHTML = renderRow({
+        ...slot,
+        window: Boolean(slot.window || slot.cancelled),
+        cancelled: false,
+        swapped: slot.cancelled ? false : slot.swapped,
+      }, p.date);
       const row = temp.firstElementChild;
       row.dataset.dragOrigin = slot.n; row.dataset.dropN = slot.n;
       row.removeAttribute('tabindex'); row.removeAttribute('role'); row.inert = true;
@@ -163,19 +179,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.body.classList.add('is-dragging-pair'); scope.classList.add('is-pair-dragging');
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
     scope.appendChild(board);
-    // Reveal windows above the source without moving the grabbed card under the finger.
-    const delta = items.get(p.n).getBoundingClientRect().top - rect.top;
-    scroller.scrollTop += delta;
-    const residual = items.get(p.n).getBoundingClientRect().top - rect.top;
-    if (residual < -1) board.style.marginTop = -residual + 'px';
-    if (residual > 1) {
-      const spacer = document.createElement('div');
-      spacer.className = 'sched-drag-scroll-space'; spacer.setAttribute('aria-hidden', 'true');
-      spacer.style.cssText = `height:${innerHeight + residual}px;min-height:${innerHeight + residual}px;flex:none;pointer-events:none`;
-      (scroller === document.scrollingElement ? document.body : scroller).appendChild(spacer);
-      drag.scrollSpacer = spacer;
-      scroller.scrollTop += items.get(p.n).getBoundingClientRect().top - rect.top;
-    }
+    /* Ничего не скроллим и не сдвигаем страницу: окна раскрываются на месте,
+       а сама карточка под пальцем остаётся точно там, где её взяли. */
     /* The drag board can be wider or shift after windows are revealed. Recenter
        the scaled card against the actual dashed source placeholder, not the old row. */
     centerCloneOnPlaceholder();
@@ -191,10 +196,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const target = d.targetN;
     drag = null;
     try { if (scene.hasPointerCapture(d.pointerId)) scene.releasePointerCapture(d.pointerId); } catch (_) {}
-    d.clone.remove(); d.status.remove(); d.board.remove(); d.scrollSpacer?.remove();
+    d.clone.remove(); d.status.remove(); d.board.remove();
     d.hidden.forEach(([el, hidden]) => { el.hidden = hidden; el.classList.remove('sched-drag-original'); });
     d.scope.classList.remove('is-pair-dragging'); document.body.classList.remove('is-dragging-pair');
-    d.scroller.scrollTop = d.originalScroll;
     d.scroller.style.scrollBehavior = d.oldScrollBehavior;
     suppressUntil = Date.now() + 450;
     onActiveChange(false);
@@ -228,6 +232,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   const onTouchEnd = e => { if ([...e.changedTouches].some(t => t.identifier === (drag || pending)?.pointerId)) { if (drag) e.preventDefault(); finish(true); } };
   const onTouchCancel = () => finish(false);
   const sourceFor = target => {
+    if (document.documentElement.dataset.editorMode !== 'true') return null;
     const row = target.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
     if (!row || row.classList.contains('is-cancelled')) return null;
     const handle = target.closest('.lesson-swap-btn[data-act="swap"]');
@@ -255,10 +260,20 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.addEventListener('touchcancel', onTouchCancel, true);
   }, { passive: true });
   scene.addEventListener('click', e => { if (Date.now() < suppressUntil) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  document.addEventListener('click', e => {
+    if (drag || pending || Date.now() < suppressUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
   scene.addEventListener('contextmenu', e => { if (drag || pending || e.target.closest('.lesson-swap-btn')) e.preventDefault(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && (drag || pending)) { e.preventDefault(); finish(false); } });
   window.addEventListener('blur', () => finish(false));
-  window.addEventListener('resize', () => finish(false));
+  let lastWidth = innerWidth;
+  window.addEventListener('resize', () => {
+    /* Клавиатура и адресная строка меняют только высоту — из-за этого
+       перенос срывался прямо во время удержания пары. */
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    finish(false);
+  });
   document.addEventListener('visibilitychange', () => { if (document.hidden) finish(false); });
   return { cancel: () => finish(false) };
 }
