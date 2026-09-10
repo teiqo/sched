@@ -143,10 +143,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
        обязана остаться прежней. Иначе на телефоне при зажатии день сжимается
        и всё ниже (перерывы, следующие пары) уезжает под пальцем. */
     const scopeRect = scope.getBoundingClientRect();
-    const realHeights = new Map();
-    scope.querySelectorAll('.agenda-row[data-row-n]').forEach(el => {
-      const h = el.getBoundingClientRect().height;
-      if (h) realHeights.set(Number(el.dataset.rowN), h);
+    const realRects = new Map();
+    scope.querySelectorAll('.agenda-row[data-row-n], .live-lesson-card[data-row-n]').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.height) realRects.set(Number(el.dataset.rowN), { top: r.top, height: r.height });
     });
     const clone = p.row.cloneNode(true);
     clone.classList.add('is-drag-float');
@@ -178,11 +178,21 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       row.dataset.dragOrigin = slot.n; row.dataset.dropN = slot.n;
       row.removeAttribute('tabindex'); row.removeAttribute('role'); row.inert = true;
       if (slot.window || slot.cancelled) row.classList.add('is-drag-ghost');
-      const realH = realHeights.get(slot.n);
-      if (realH) { row.style.height = realH + 'px'; row.style.minHeight = realH + 'px'; }
+      const real = realRects.get(slot.n);
+      if (real) { row.style.height = real.height + 'px'; row.style.minHeight = real.height + 'px'; }
       if (slot.n === p.n) { row.classList.add('is-drag-src'); row.style.minHeight = rect.height + 'px'; }
       board.appendChild(row); items.set(slot.n, row);
     });
+    /* Повторяем исходные отступы между парами (чипы перерывов занимают место),
+       чтобы во время удержания ни одна строка не сдвинулась ни на п��ксель. */
+    board.style.gap = '0px';
+    for (let i = 0; i < slots.length - 1; i += 1) {
+      const row = items.get(slots[i].n);
+      if (!row) continue;
+      const cur = realRects.get(slots[i].n), nxt = realRects.get(slots[i + 1].n);
+      const space = cur && nxt ? Math.max(0, nxt.top - (cur.top + cur.height)) : 0;
+      row.style.marginBottom = space + 'px';
+    }
     drag = { ...p, fromN: p.n, scope, slots, clone, status, board, items, hidden, scroller, originalScroll: scroller.scrollTop,
       scopeMinHeight: scope.style.minHeight,
       oldScrollBehavior: scroller.style.scrollBehavior, grabX: p.x - rect.left, grabY: p.y - rect.top,
@@ -193,11 +203,12 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
     scope.style.minHeight = scopeRect.height + 'px';
     scope.appendChild(board);
-    /* Добираем остаток зазором между карточками: чипы перерывов и зазоры доски
-       занимают разное место, а день должен остаться ровно той же высоты. */
-    const grown = scope.getBoundingClientRect().height - scopeRect.height;
-    if (grown > 0 && items.size > 1) {
-      board.style.gap = Math.max(0, 8 - grown / (items.size - 1)) + 'px';
+    /* Доска обязана начаться там же, где начинался список пар. */
+    const firstSlot = slots.find(slot => realRects.has(slot.n));
+    const firstItem = firstSlot ? items.get(firstSlot.n) : null;
+    if (firstItem) {
+      const shift = realRects.get(firstSlot.n).top - firstItem.getBoundingClientRect().top;
+      if (Math.abs(shift) > 0.5) board.style.marginTop = shift + 'px';
     }
     /* Ничего не скроллим и не сдвигаем страницу: окна раскрываются на месте,
        а сама карточка под пальцем остаётся точно там, где её взяли. */

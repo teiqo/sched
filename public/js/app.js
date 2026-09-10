@@ -779,7 +779,10 @@ function dayHtml(d, withLive, future) {
   let body;
   if (!count && (!state.windows || !rows.length)) {
     body = emptyDayHtml(d);
-  } else if (!today || !withLive || future) {
+  } else if (!today || !withLive || future || state.editorMode) {
+    /* В режиме редактора день всегда плоский список: живая карточка и свёрнутые
+       прошедшие пары при зажатии превращались в обычные строки, и всё содержимое
+       дня ездило под пальцем. Плоский список совпадает с доской перетаскивания. */
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}</div>` : "";
   } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
     const liveN = live.slot.n;
@@ -2338,7 +2341,7 @@ function futureDaysHtml() {
         'px" aria-hidden="true"></div>'
       : cachedFutureDay(d),
   );
-  /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
+  /* Обёртка нужна, чтобы будущие дни проявлялис�� каскадом,
      а не возникали резко вмест�� со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
@@ -4811,7 +4814,7 @@ async function ensureFbToken() {
 }
 async function sharedUrlWithAuth(url, forceFresh = false) {
   const target = new URL(url);
-  if (target.origin !== new URL(sharedSwapsUrl()).origin) throw new Error("неверный адре�� общей базы");
+  if (target.origin !== new URL(sharedSwapsUrl()).origin) throw new Error("неверный адре���� общей базы");
   if (forceFresh) resetFirebaseIdentity();
   const token = await ensureFbToken();
   if (token) target.searchParams.set("auth", token);
@@ -5337,7 +5340,7 @@ function notifyCloudEvent(path, body) {
   queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group }).catch(reportPushError);
 }
 
-/* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
+/* Единая точк�� записи: PUT с телом или DELETE (body === null). true = база приняла. */
 /* Статус последней ошибки облака: 401/403 = права/правила, -1 = сеть. */
 var lastCloudStatus = 0;
 var lastCloudMessage = "";
@@ -5682,7 +5685,7 @@ async function rejectPending(enc) {
 async function grantEditor(tgId, name) {
   const ok = await cloudWrite(CLOUD_PATHS.editors + "/" + tgId, name || "редактор");
   if (!ok) {
-    toast("не получилось выдать доступ");
+    toast("не получилось выдать дос��уп");
     return;
   }
   toast("редактор добавлен");
