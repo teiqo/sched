@@ -40,27 +40,13 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const d = drag;
     if (!d || d.previewN === targetN) return;
     d.previewN = targetN;
-    const before = new Map([...d.items.values()].map(row => [row, row.getBoundingClientRect().top]));
-    const order = pairOrder(d.slots, d.fromN, targetN);
-    const fragment = document.createDocumentFragment();
-    order.forEach((originN, i) => {
-      const row = d.items.get(originN), slot = d.slots[i];
+    /* Временная сетка неподвижна: не переставляем DOM-строки и не меняем
+       номера/время во время движения. Двигается только плавающая пара,
+       а целевой временной слот подсвечивается. */
+    d.items.forEach((row, n) => {
       row.getAnimations().forEach(a => a.cancel());
-      row.dataset.dropN = slot.n;
-      if (row.dataset.rowN) row.dataset.rowN = slot.n;
-      if (row.dataset.n) row.dataset.n = slot.n;
-      row.querySelector('.agenda-row-num').textContent = slot.n;
-      row.querySelector('.agenda-row-time time').innerHTML = `${slot.from}<span>${slot.to}</span>`;
-      row.classList.toggle('is-drop-target', originN === d.fromN && targetN !== d.fromN);
-      fragment.appendChild(row);
+      row.classList.toggle('is-drop-target', n === targetN && targetN !== d.fromN);
     });
-    d.board.appendChild(fragment);
-    for (const row of d.items.values()) {
-      const delta = before.get(row) - row.getBoundingClientRect().top;
-      // Only real neighbours move on hover. Windows and the source are static targets.
-      if (delta && !reduced() && !row.classList.contains('is-drag-ghost') && !row.classList.contains('is-drag-src')) row.animate([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }],
-        { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    }
   };
   const CLONE_EDGE = 8;
   const cloneWidth = width => Math.min(width, Math.max(160, innerWidth - CLONE_EDGE * 2));
@@ -76,7 +62,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     d.clone.style.top = d.y - d.grabY + 'px';
   };
   const centerCloneOnPlaceholder = () => {
-    const d = drag, placeholder = d?.items.get(d.fromN);
+    const d = drag, placeholder = d?.items.get(d.targetN ?? d.fromN);
     if (!placeholder?.isConnected) return;
     const targetRect = placeholder.getBoundingClientRect();
     d.clone.style.left = clampLeft(targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2, d.clone.offsetWidth) + 'px';
@@ -90,17 +76,21 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       d.y >= boardRect.top - 20 && d.y <= boardRect.bottom + 20;
     if (!inside) {
       d.targetN = null;
+      d.previewN = null;
+      d.items.forEach(row => row.classList.remove('is-drop-target'));
       d.clone.classList.remove('is-magnetized');
       announce('в пределах этого дня');
       return false;
     }
     // Layout coordinates exclude FLIP transforms, so an animating neighbour cannot flicker the target.
-    const row = [...d.board.children].find(row => {
+    const row = [...d.board.children].filter(row => row.dataset.dropN).find(row => {
       const top = boardRect.top + row.offsetTop;
       return d.y >= top - 4 && d.y <= top + row.offsetHeight + 4;
     });
     if (!row) {
       d.targetN = null;
+      d.previewN = null;
+      d.items.forEach(item => item.classList.remove('is-drop-target'));
       d.clone.classList.remove('is-magnetized');
       return false;
     }
@@ -134,8 +124,18 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const p = pending;
     clearPending();
     const scope = p.row.closest('.sched-day-block[data-day]');
-    if (!scope) return;
-    const slots = slotsForDate(p.date).slice().sort((a, b) => a.n - b.n);
+    const list = p.row.closest('.agenda-list');
+    /* Большая карточка «сейчас/далее» остаётся живой и редактируется тапом,
+       но не заменяется доской. Перетаскиваем только пары внутри того списка,
+       который пользователь действительно видит. */
+    if (!scope || !list) return;
+    const allSlots = slotsForDate(p.date).slice().sort((a, b) => a.n - b.n);
+    const realElements = new Map();
+    list.querySelectorAll('.agenda-row[data-row-n]').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height) realElements.set(Number(el.dataset.rowN), el);
+    });
+    const slots = allSlots.filter(slot => realElements.has(slot.n));
     if (!slots.some(slot => slot.n === p.n && !slot.window && !slot.cancelled)) return;
     const rect = p.row.getBoundingClientRect(), scroller = scrollerFor(scope);
     /* Геометрию снимаем до скрытия оригиналов: доска должна повторить высоты
@@ -144,14 +144,14 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
        и всё ниже (перерывы, следующие пары) уезжает под пальцем. */
     const scopeRect = scope.getBoundingClientRect();
     const realRects = new Map();
-    scope.querySelectorAll('.agenda-row[data-row-n], .live-lesson-card[data-row-n]').forEach(el => {
+    realElements.forEach((el, n) => {
       const r = el.getBoundingClientRect();
-      if (r.height) realRects.set(Number(el.dataset.rowN), { top: r.top, height: r.height });
+      realRects.set(n, { top: r.top, height: r.height });
     });
     /* Чипы перерывов переносим в доску такими же: раньше на зажатие они просто
        исчезали, и текст «перерыв · N мин» ломался. */
     const realBreaks = new Map();
-    scope.querySelectorAll('.agenda-row[data-row-n]').forEach(el => {
+    list.querySelectorAll('.agenda-row[data-row-n]').forEach(el => {
       const next = el.nextElementSibling;
       if (next && next.classList.contains('agenda-break')) realBreaks.set(Number(el.dataset.rowN), next);
     });
@@ -165,23 +165,25 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const status = document.createElement('div');
     status.className = 'sched-drag-status is-sr-only'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     status.textContent = 'перетащи пару'; document.body.appendChild(status);
-    const original = [...scope.children].filter(el => !el.classList.contains('sched-day-heading')
-      && !el.classList.contains('sched-editor-toolbar'));
-    const hidden = original.map(el => [el, el.hidden]);
+    const hidden = [[list, list.hidden]];
     const board = document.createElement('div'); board.className = 'agenda-list sched-drag-board';
     const items = new Map();
     slots.forEach(slot => {
+      const source = realElements.get(slot.n);
       const temp = document.createElement('div');
-      /* A cancelled lesson is only a free target while dragging. Do not pass
-         its cancelled/swapped styling to the preview, otherwise it appears as
-         a random struck-through lesson at the bottom of the day. */
-      temp.innerHTML = renderRow({
-        ...slot,
-        window: Boolean(slot.window || slot.cancelled),
-        cancelled: false,
-        swapped: slot.cancelled ? false : slot.swapped,
-      }, p.date);
-      const row = temp.firstElementChild;
+      if (!source) {
+        temp.innerHTML = renderRow({
+          ...slot,
+          window: Boolean(slot.window || slot.cancelled),
+          cancelled: false,
+          swapped: slot.cancelled ? false : slot.swapped,
+        }, p.date);
+      }
+      /* Клонируем именно видимую строку: время, переносы текста и метки
+         остаются теми же, что были за мгновение до удержания. */
+      const row = source ? source.cloneNode(true) : temp.firstElementChild;
+      row.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+      if (slot.cancelled) row.classList.remove('is-cancelled');
       row.dataset.dragOrigin = slot.n; row.dataset.dropN = slot.n;
       row.removeAttribute('tabindex'); row.removeAttribute('role'); row.inert = true;
       if (slot.window || slot.cancelled) row.classList.add('is-drag-ghost');
@@ -193,23 +195,33 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     /* Повторяем исходные отступы между парами (чипы перерывов занимают место),
        чтобы во время удержания ни одна строка не сдвинулась ни на пиксель. */
     board.style.gap = '0px';
+    const spacers = [];
     for (let i = 0; i < slots.length - 1; i += 1) {
       const row = items.get(slots[i].n);
-      if (!row) continue;
+      if (!row) { spacers.push(null); continue; }
+      row.style.marginBottom = '0px';
       const cur = realRects.get(slots[i].n), nxt = realRects.get(slots[i + 1].n);
       const space = cur && nxt ? Math.max(0, nxt.top - (cur.top + cur.height)) : 0;
       const brk = realBreaks.get(slots[i].n);
+      let spacer = null;
       if (brk && space > 2) {
-        const chip = brk.cloneNode(true);
-        chip.classList.add('is-drag-break');
-        chip.style.margin = ((space - 1) / 2) + 'px 0';
-        row.style.marginBottom = '0px';
-        board.insertBefore(chip, row.nextSibling);
-      } else {
-        row.style.marginBottom = space + 'px';
+        spacer = brk.cloneNode(true);
+        spacer.classList.add('is-drag-break');
+        spacer.style.margin = ((space - 1) / 2) + 'px 0';
+      } else if (space > 0) {
+        spacer = document.createElement('div');
+        spacer.className = 'sched-drag-gap';
+        spacer.style.height = space + 'px';
       }
+      spacers.push(spacer);
     }
-    drag = { ...p, fromN: p.n, scope, slots, clone, status, board, items, hidden, scroller, originalScroll: scroller.scrollTop,
+    const initial = document.createDocumentFragment();
+    slots.forEach((slot, i) => {
+      initial.appendChild(items.get(slot.n));
+      if (spacers[i]) initial.appendChild(spacers[i]);
+    });
+    board.replaceChildren(initial);
+    drag = { ...p, fromN: p.n, scope, list, slots, clone, status, board, items, spacers, hidden, scroller, originalScroll: scroller.scrollTop,
       scopeMinHeight: scope.style.minHeight,
       oldScrollBehavior: scroller.style.scrollBehavior, grabX: p.x - rect.left, grabY: p.y - rect.top,
       x: p.x, y: p.y, moved: false, previewN: p.n, targetN: null };
@@ -218,7 +230,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     document.body.classList.add('is-dragging-pair'); scope.classList.add('is-pair-dragging');
     hidden.forEach(([el]) => { el.hidden = true; el.classList.add('sched-drag-original'); });
     scope.style.minHeight = scopeRect.height + 'px';
-    scope.appendChild(board);
+    list.insertAdjacentElement('afterend', board);
     /* Доска обязана начаться там же, где начинался список пар. */
     const firstSlot = slots.find(slot => realRects.has(slot.n));
     const firstItem = firstSlot ? items.get(firstSlot.n) : null;
@@ -283,6 +295,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (document.documentElement.dataset.editorMode !== 'true') return null;
     const row = target.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
     if (!row || row.classList.contains('is-cancelled')) return null;
+    /* Большая живая карточка редактируется обычным тапом по кнопке. Не ставим
+       на неё таймер перетаскивания — сама карточка и отсчёт должны жить дальше. */
+    if (row.classList.contains('live-lesson-card')) return null;
     const handle = target.closest('.lesson-swap-btn[data-act="swap"]');
     if (!handle && target.closest('button, a, input, textarea, select')) return null;
     const button = row.querySelector('.lesson-swap-btn[data-act="swap"]');

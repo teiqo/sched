@@ -611,7 +611,7 @@ function rowHtml(slot, live, dIso) {
     const editorAttrs = state.editorMode
       ? ` data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить"`
       : "";
-    return `<div class="${cls.join(" ")}"${editorAttrs}>${time}<div class="agenda-row-content">
+    return `<div class="${cls.join(" ")}" data-row-n="${slot.n}"${editorAttrs}>${time}<div class="agenda-row-content">
       <strong>окно</strong>
     </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : ""}</div>`;
   }
@@ -779,10 +779,7 @@ function dayHtml(d, withLive, future) {
   let body;
   if (!count && (!state.windows || !rows.length)) {
     body = emptyDayHtml(d);
-  } else if (!today || !withLive || future || state.editorMode) {
-    /* В режиме редактора день всегда плоский список: живая карточка и свёрнутые
-       прошедшие пары при зажатии превращались в обычные строки, и всё содержимое
-       дня ездило под пальцем. Плоский список совпадает с доской перетаскивания. */
+  } else if (!today || !withLive || future) {
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}</div>` : "";
   } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
     const liveN = live.slot.n;
