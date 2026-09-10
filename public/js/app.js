@@ -691,15 +691,23 @@ function headingHtml(d, sub, primary = false) {
 function editorToolbarHtml(dIso) {
   if (!state.editorMode) return "";
   const role = myRole();
-  const primary = role === "owner" || role === "editor" ? "сохранить" : "предложить";
+  const canPublish = role === "owner" || role === "editor";
   const undoDisabled = !editorSession?.history.length ? " disabled" : "";
+  /* Обычный пользователь отправляет правки на проверку, поэтому кнопка
+     «предложить» появляется только когда черновик реально отличается от
+     текущего расписания: предлагать нечего, если день не трогали. */
+  const primaryHtml = canPublish
+    ? `<button type="button" class="is-primary" data-editor="save">сохранить</button>`
+    : editorChangedEntries().length
+      ? `<button type="button" class="is-primary" data-editor="save">предложить</button>`
+      : "";
   return `<div class="sched-editor-toolbar" role="toolbar" aria-label="редактор расписания">
     <div class="sched-editor-toolbar-copy"><strong>режим редактора</strong><span>видны все пары, окна, вакансии и самостоятельные</span></div>
     <div class="sched-editor-toolbar-actions">
       <button type="button" data-editor="undo"${undoDisabled}>${ICON_UNDO}<span>назад</span></button>
       <button type="button" data-editor="reset-day" data-date="${dIso}">${ICON_RESET}<span>исходный день</span></button>
       <button type="button" data-editor="cancel">отмена</button>
-      <button type="button" class="is-primary" data-editor="save">${primary}</button>
+      ${primaryHtml}
     </div>
   </div>`;
 }
@@ -2730,7 +2738,7 @@ function openProfile() {
             </span>
             <span class="sched-settings-copy">
               <strong>отменить все замены</strong>
-              <span>сбросить все созданные замены для группы</span>
+              <span>сброс��ть все созданные замены для группы</span>
             </span>
           </span>
         </button>
@@ -2938,7 +2946,7 @@ var basicsTourRouletteOriginalDate = null;
 var basicsTourLastTriggerTime = 0;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
-  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
+  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — ��еделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3430,7 +3438,7 @@ function bindExtra() {
       toggleNotifPref(sw.dataset.npref, sw);
       return;
     }
-    /* Действия заявок/редакторов внутри профиля — те же data-tg, что в шторке. */
+    /* Действия заявок/редакторов внутри профиля — ��������е же data-tg, что в шторке. */
     const tgEl = e.target.closest("[data-tg]");
     if (tgEl) {
       const tgAct = tgEl.dataset.tg;
@@ -3847,24 +3855,41 @@ async function saveEditorMode() {
     return;
   }
   const map = loadSwaps();
-  const entries = {};
   const updatedAt = Math.max(Date.now(), ...Object.values(map).map(entry => Number(entry?.updatedAt) + 1 || 0));
-  const operationId = crypto.randomUUID ? crypto.randomUUID() : updatedAt.toString(36) + Math.random().toString(36).slice(2);
+  /* Одна операция = один день. Иначе размер операции считался по всем дням
+     сразу, а проверка заявки собирала пары только одного дня — и заявка
+     навсегда оставалась «неполной». */
+  const byDay = new Map();
   changedKeys.forEach(key => {
-    const draft = editorSession.draft[key];
-    const entry = draft ? { ...draft, updatedAt } : { deleted: true, updatedAt };
-    if (changedKeys.length > 1) {
-      entry.operationId = operationId;
-      entry.operationSize = changedKeys.length;
-    }
-    map[key] = entry;
-    entries[key] = entry;
+    const day = (String(key).split("|")[1] || "").split(":")[0];
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(key);
+  });
+  const batches = [];
+  byDay.forEach(keys => {
+    const operationId = crypto.randomUUID ? crypto.randomUUID() : updatedAt.toString(36) + Math.random().toString(36).slice(2);
+    const entries = {};
+    keys.forEach(key => {
+      const draft = editorSession.draft[key];
+      const entry = draft ? { ...draft, updatedAt } : { deleted: true, updatedAt };
+      if (keys.length > 1) {
+        entry.operationId = operationId;
+        entry.operationSize = keys.length;
+      }
+      map[key] = entry;
+      entries[key] = entry;
+    });
+    batches.push(entries);
   });
   saveSwaps();
   const role = myRole();
   await closeEditorAnimated();
   if (sharedSwapsEnabled()) {
-    const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
+    let ok = true;
+    for (const entries of batches) {
+      const done = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
+      ok = done && ok;
+    }
     if (!ok) toast(cloudFailHint());
   } else {
     toast("изменения сохранены на этом устройстве");
@@ -4601,7 +4626,7 @@ function refreshSchedule(force) {
     .catch(() => false);
 }
 
-/* Пока на сервере пусто, проверяем каждые 5 минут, а не раз в час. */
+/* Пока на сервере пусто, проверяем каждые 5 ��инут, а не раз в час. */
 var scheduleRetryTimer = null;
 
 function planScheduleRetry() {
@@ -5295,7 +5320,7 @@ function cloudWrite(path, body, options = {}) {
 }
 function cloudFailHint() { return lastCloudMessage || "не отправилось — проверь ин��ернет"; }
 
-/* Приводим запись к виду, который пропускает .validate в правилах базы:
+/* Приводим запись к виду, который пропускает .validate в правила�� базы:
    updatedAt — число не из будущего, строки — строками и в пределах лимитов. */
 function sanitizeSwapPayload(entry) {
   const e = Object.assign({}, entry);
@@ -5383,7 +5408,7 @@ async function cloudWriteAnonymousPending(payloads) {
           lastCloudMessage = "";
           return true;
         }
-        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или войди через телеграм";
+        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или ��ойди через телеграм";
         return false;
       }
       lastCloudMessage = "не удалось отправить предложение (" + response.status + ")";
@@ -5505,20 +5530,26 @@ async function pullPending() {
   renderTgSheetBody();
 }
 
+/* Все заявки одного автора за один день — одна пачка: редактор принимает
+   или отклоняет день целиком, а не по одной паре. */
+function pendingBucket(enc) {
+  const entry = pendingMap[enc] || {};
+  return decodeSwapKey(enc).split(":").slice(0, -1).join(":") + "\u0000" + String(entry.by || "");
+}
 function pendingOperation(enc) {
   const entry = pendingMap[enc];
   if (!entry) return [];
-  const groupDate = decodeSwapKey(enc).split(":").slice(0, -1).join(":");
-  return entry.operationId ? Object.entries(pendingMap).filter(([key, value]) =>
-    value.operationId === entry.operationId && value.by === entry.by && decodeSwapKey(key).split(":").slice(0, -1).join(":") === groupDate) : [[enc, entry]];
+  const bucket = pendingBucket(enc);
+  const entries = Object.entries(pendingMap).filter(([key]) => pendingBucket(key) === bucket);
+  return entries.length ? entries : [[enc, entry]];
 }
 async function approvePending(enc) {
   if (myRole() !== "owner" && myRole() !== "editor") { toast("только редактор может подтверждать заявки"); return; }
   const entries = pendingOperation(enc);
   if (!entries.length) return;
-  if (entries[0][1].operationSize && entries.length !== entries[0][1].operationSize) {
-    toast("заявка на перенос неполная — попроси отправить перенос заново"); return;
-  }
+  /* Раньше здесь сравнивался operationSize (считался по всем дням сразу) со
+     числом заявок одного дня — полная заявка считалась неполной. Теперь
+     принимаем всё, что лежит в этом дне. */
   const updates = {};
   for (const [key, entry] of entries) {
     /* `key` is already the exact flat Firebase child key. Never decode it into
@@ -5652,7 +5683,7 @@ async function pullSharedSwaps() {
       lastCloudStatus = resp.status;
       lastCloudMessage = resp.status === 401
         ? "облако не приняло сессию — войди через телеграм заново"
-        : "нет доступа к общей базе — проверь опубликованные правила Firebase";
+        : "нет доступа к общей баз�� — проверь опубликованные правила Firebase";
       if (!pullSharedSwaps._warned) {
         /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
         pullSharedSwaps._warned = true;
@@ -5678,7 +5709,7 @@ async function pullSharedSwaps() {
       saveSwaps();
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
-    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
+    /* Не ушед��и�� записи дожимаем любой ролью: у автора предложения
        тоже есть право записи в weeqo-pending. */
     {
       const batches = new Map();
@@ -5688,7 +5719,7 @@ async function pullSharedSwaps() {
         if (!batches.has(id)) batches.set(id, {});
         batches.get(id)[key] = entry;
       }
-      for (const batch of batches.values()) publishSwapBatch(batch, "повторная отправка изменений");
+      for (const batch of batches.values()) publishSwapBatch(batch, "повторная отправка измен��ний");
     }
   } catch (e) {
     /* офлайн — повторим в следующий тик */
@@ -5801,22 +5832,44 @@ function closeTgSheet() {
   window.setTimeout(() => backdrop.remove(), 180);
 }
 
-function pendingRowHtml(enc, entry, role) {
-  const key = decodeSwapKey(enc);
+/* Одна строка — все заявки одного автора за один день. */
+function pendingRowHtml(encs, role) {
+  const list = (Array.isArray(encs) ? encs : [encs])
+    .map(item => [item, pendingMap[item]])
+    .filter(([, value]) => value);
+  if (!list.length) return "";
+  const enc = list[0][0];
+  const entry = list[0][1];
+  const keys = list.map(([item]) => decodeSwapKey(item));
+  const key = keys[0];
   const m = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
+  const nums = keys
+    .map(k => Number((k.match(/:(\d+)$/) || [])[1]) || 0)
+    .filter(Boolean)
+    .sort((a, b) => a - b);
   let when = key;
-  if (m) when = dateLabel(dateFromIso(m[1])) + " · " + m[2] + " пара";
+  if (m)
+    when =
+      dateLabel(dateFromIso(m[1])) +
+      " · " +
+      (nums.length > 1
+        ? nums.join(", ") + " " + plural(nums.length, "пара", "пары", "пар")
+        : m[2] + " пара");
   let what = "изменение";
-  if (entry.deleted) what = "сброс замены";
+  if (list.length > 1)
+    what = "изменения за день · " + list.length + " " + plural(list.length, "пара", "пары", "пар");
+  else if (entry.deleted) what = "сброс замены";
   else if (entry.cancelled) what = "отмена пары";
   else {
     const parts = [entry.subject, entry.teacher, entry.room].filter(Boolean);
     if (parts.length) what = parts.join(" · ");
   }
   const who = entry.byName || "без имени";
-  /* Та же карточка «до → после», что и в уведомлениях. */
-  const frag = m ? buildNotifFrag(key, entry) : null;
-  const segHtml = frag ? notifFragHtml({ frag }) : "";
+  /* Та же карточка «до → после», что и в уведомлениях, но сразу на все пары дня. */
+  const frags = list
+    .map(([item, value]) => buildNotifFrag(decodeSwapKey(item), value))
+    .filter(Boolean);
+  const segHtml = frags.length ? notifFragHtml({ frag: frags }) : "";
   let actions = "";
   if (role === "owner" || role === "editor") {
     actions =
@@ -5885,13 +5938,33 @@ function tgSheetBodyHtml(inline) {
       escapeHtml(String(tgSession.id)) +
       "</b></button></p>";
   if (role === "owner" || role === "editor") {
-    const keys = Object.keys(pendingMap).sort(
-      (a, b) => (pendingMap[b].updatedAt || 0) - (pendingMap[a].updatedAt || 0),
-    );
-    html += '<div class="sched-tg-section"><span>заявки (' + keys.length + ")</span>";
-    if (!keys.length) html += '<p class="sched-replace-hint">пока пусто</p>';
-    keys.forEach((enc) => {
-      html += pendingRowHtml(enc, pendingMap[enc], role);
+    /* Заявки за один день от одного автора — одна карточка. */
+    const total = Object.keys(pendingMap).length;
+    const buckets = new Map();
+    Object.keys(pendingMap).forEach((enc) => {
+      const bucket = pendingBucket(enc);
+      if (!buckets.has(bucket)) buckets.set(bucket, []);
+      buckets.get(bucket).push(enc);
+    });
+    const lastAt = (encs) =>
+      Math.max(...encs.map((enc) => (pendingMap[enc] && pendingMap[enc].updatedAt) || 0));
+    const groups = [...buckets.values()]
+      .map((encs) =>
+        encs.slice().sort((a, b) => {
+          const na = Number((decodeSwapKey(a).match(/:(\d+)$/) || [])[1]) || 0;
+          const nb = Number((decodeSwapKey(b).match(/:(\d+)$/) || [])[1]) || 0;
+          return na - nb;
+        }),
+      )
+      .sort((a, b) => lastAt(b) - lastAt(a));
+    html +=
+      '<div class="sched-tg-section"><span>заявки (' +
+      groups.length +
+      (total > groups.length ? " · " + total + " " + plural(total, "пара", "пары", "пар") : "") +
+      ")</span>";
+    if (!groups.length) html += '<p class="sched-replace-hint">пока пусто</p>';
+    groups.forEach((encs) => {
+      html += pendingRowHtml(encs, role);
     });
     html += "</div>";
   }
@@ -6172,6 +6245,75 @@ function describeSwapForNotif(key, entry) {
   return what;
 }
 
+/* Состояние дня после наложения замен. По нему понятно, реально ли день
+   стал другим: правка «туда и обратно» не должна будить уведомление.
+   Для чужой группы базовое расписание недоступно — воз��ращаем null
+   и такую запись не фильтруем. */
+function daySwapSignature(group, dIso, map) {
+  if (group && group !== (state.group || DEFAULT_GROUP)) return null;
+  var base = [];
+  try {
+    base = slotsForBase(dateFromIso(dIso)) || [];
+  } catch (e) {
+    base = [];
+  }
+  if (!base.length) return null;
+  var prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+  return base
+    .map(function (slot) {
+      var sw = map ? map[prefix + slot.n] : null;
+      var subject = slot.subject || "";
+      var teacher = slot.teacher || "";
+      var room = slot.room || "";
+      var self = Boolean(slot.self);
+      var window_ = Boolean(slot.window || slot.empty);
+      var cancelled = false;
+      if (sw && !sw.deleted) {
+        if (sw.makeWindow) {
+          subject = ""; teacher = ""; room = ""; self = false; window_ = true;
+        } else if (sw.cancelled) {
+          cancelled = true; window_ = false;
+        } else {
+          if (sw.subject) { subject = sw.subject; window_ = false; }
+          if (sw.self !== undefined) self = Boolean(sw.self);
+          if (sw.teacher !== undefined) teacher = sw.teacher;
+          if (sw.room !== undefined) room = sw.room;
+        }
+      }
+      return slot.n + ":" + [subject, teacher, room, self ? 1 : 0, window_ ? 1 : 0, cancelled ? 1 : 0].join("|");
+    })
+    .join(";");
+}
+
+/* День изменился относительно утверждённого расписания? */
+function dayReallyChanged(dIso, list, approved) {
+  var group = (list[0] && String(list[0].key).split("|")[0]) || "";
+  var before = daySwapSignature(group, dIso, approved);
+  if (before === null) return true;
+  var after = Object.assign({}, approved);
+  list.forEach(function (item) { after[item.key] = item.entry; });
+  return daySwapSignature(group, dIso, after) !== before;
+}
+
+/* Одно уведомление на день: все изменённые пары внутри одной карточки. */
+function pushDayNotif(list, kind, prefixText) {
+  var frags = list.map(function (item) { return buildNotifFrag(item.key, item.entry); }).filter(Boolean);
+  if (!frags.length) return;
+  var tones = {};
+  list.forEach(function (item) {
+    var t = item.entry.deleted ? "reset" : item.entry.cancelled ? "cancel" : item.entry.moved ? "move" : "swap";
+    tones[t] = true;
+  });
+  var toneKeys = Object.keys(tones);
+  var tone = kind === "pending"
+    ? (toneKeys.length === 1 && toneKeys[0] === "cancel" ? "cancel" : "pending")
+    : toneKeys.length === 1 ? toneKeys[0] : "swap";
+  var text = list.length === 1
+    ? (prefixText || "") + describeSwapForNotif(list[0].key, list[0].entry)
+    : (prefixText || "") + "изменения за день · " + list.length + " " + plural(list.length, "пара", "пары", "пар");
+  pushNotif(text, kind, tone, frags.length === 1 ? frags[0] : frags);
+}
+
 /* Свежие записи из облака -> лента. Первый прогон только запоминает состояние. */
 function notifyAboutRemoteSwaps(remote) {
   if (!remote || typeof remote !== "object") return;
@@ -6190,6 +6332,7 @@ function notifyAboutRemoteSwaps(remote) {
   var myId = tgSession ? String(tgSession.id) : null;
   var gprefix = (state.group || DEFAULT_GROUP) + "|";
   var changed = false;
+  var byDay = {};
   for (var key in remote) {
     var entry = remote[key];
     if (!entry || typeof entry !== "object") continue;
@@ -6199,15 +6342,19 @@ function notifyAboutRemoteSwaps(remote) {
     if (t <= prev) continue;
     seen[key] = t;
     changed = true;
-    if (!firstRun && key.indexOf(gprefix) === 0 && (!myId || String(entry.by || "") !== myId)) {
-      pushNotif(
-        describeSwapForNotif(key, entry),
-        "swaps",
-        entry.deleted ? "reset" : entry.cancelled ? "cancel" : entry.moved ? "move" : "swap",
-        buildNotifFrag(key, entry),
-      );
-    }
+    if (firstRun || key.indexOf(gprefix) !== 0) continue;
+    if (myId && String(entry.by || "") === myId) continue;
+    var dm = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
+    if (!dm) continue;
+    (byDay[dm[1]] = byDay[dm[1]] || []).push({ key: key, entry: entry });
   }
+  /* Одно уведомление на день и только если день действительно стал другим. */
+  var approvedSwaps = loadSwaps();
+  Object.keys(byDay).forEach(function (dIso) {
+    var list = byDay[dIso];
+    if (!dayReallyChanged(dIso, list, approvedSwaps)) return;
+    pushDayNotif(list, "swaps", "");
+  });
   if (changed) {
     try {
       localStorage.setItem(NOTIF_SEEN_SWAPS_KEY, JSON.stringify(seen));
@@ -6236,16 +6383,24 @@ function notifyAboutPending() {
     nowMap[enc] = (pendingMap[enc] && pendingMap[enc].updatedAt) || 0;
   });
   if (!firstRun) {
+    /* Заявки одного автора за один день — одно уведомление, и только
+       когда предложенный день отличается от утверждённого. */
+    var approvedSwaps = loadSwaps();
+    var pendingByDay = {};
     Object.keys(nowMap).forEach(function (enc) {
-      if (!(enc in seen)) {
-        var pEntry = pendingMap[enc] || {};
-        pushNotif(
-          "заявка · " + describeSwapForNotif(decodeSwapKey(enc), pEntry),
-          "pending",
-          pEntry.cancelled ? "cancel" : "pending",
-          buildNotifFrag(decodeSwapKey(enc), pEntry),
-        );
-      }
+      if (enc in seen) return;
+      var pEntry = pendingMap[enc] || {};
+      var pKey = decodeSwapKey(enc);
+      var dm = pKey.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
+      if (!dm) return;
+      var bucket = dm[1] + "\u0000" + (pEntry.by || "");
+      (pendingByDay[bucket] = pendingByDay[bucket] || []).push({ key: pKey, entry: pEntry });
+    });
+    Object.keys(pendingByDay).forEach(function (bucket) {
+      var list = pendingByDay[bucket];
+      var dIso = bucket.split("\u0000")[0];
+      if (!dayReallyChanged(dIso, list, approvedSwaps)) return;
+      pushDayNotif(list, "pending", "заявка · ");
     });
   }
   try {
@@ -6334,7 +6489,7 @@ var NOTIF_ICONS = {
 };
 
 /* Структурированный фрагмент дня для карточки уведомления/заявки.
-   У отмены/сброса в облаке нет полей пары — берём её из базового расписания. */
+   У отмены/сброса в облаке нет полей пары — берём её и�� базового расписания. */
 function buildNotifFrag(key, entry) {
   const m = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
   if (!m) return null;
@@ -6411,23 +6566,31 @@ function notifLessonHtml(f, lesson, cancelled) {
     "</span></span>"
   );
 }
-function notifFragHtml(n) {
-  const f = n && n.frag;
-  if (!f || !f.d || !f.n) return "";
-  const d = dateFromIso(f.d);
-  if (!d || Number.isNaN(d.getTime())) return "";
+/* Одна пара внутри карточки: либо «до → после», либо просто состояние. */
+function notifFragLessonHtml(f) {
   const ordinarySwap = !f.cancelled && !f.deleted && !f.moved && f.before && f.after;
   const single = f.cancelled && f.before ? f.before : f.after || f;
+  return ordinarySwap
+    ? '<span class="sched-notif-frag-change">' +
+      notifLessonHtml(f, f.before, false) +
+      '<span class="sched-notif-frag-arrow" aria-hidden="true">↓</span>' +
+      notifLessonHtml(f, f.after, false) +
+      "</span>"
+    : notifLessonHtml(f, single, !!f.cancelled);
+}
+
+/* frag может быть одной парой (старые записи) или списком пар одного дня. */
+function notifFragHtml(n) {
+  const value = n && n.frag;
+  const list = (Array.isArray(value) ? value : [value]).filter(f => f && f.d && f.n);
+  if (!list.length) return "";
+  const d = dateFromIso(list[0].d);
+  if (!d || Number.isNaN(d.getTime())) return "";
+  const sorted = list.slice().sort((a, b) => Number(a.n) - Number(b.n));
   return (
     '<span class="sched-notif-frag">' +
     '<span class="sched-notif-frag-day">' + escapeHtml(dateLabel(d)) + "</span>" +
-    (ordinarySwap
-      ? '<span class="sched-notif-frag-change">' +
-        notifLessonHtml(f, f.before, false) +
-        '<span class="sched-notif-frag-arrow" aria-hidden="true">↓</span>' +
-        notifLessonHtml(f, f.after, false) +
-        "</span>"
-      : notifLessonHtml(f, single, !!f.cancelled)) +
+    sorted.map(notifFragLessonHtml).join("") +
     "</span>"
   );
 }
@@ -6442,6 +6605,8 @@ function closeBellSheet() {
 }
 
 function notifTitle(n, tone) {
+  /* Сгруппированный день: заголовок уже описывает пачку изменений. */
+  if (Array.isArray(n && n.frag) && n.frag.length > 1) return (n && n.text) || "изменения расписания";
   if (tone === "swap") return "замена";
   if (tone === "cancel") return "отмена пары";
   if (tone === "pending") return "предложено на проверку";

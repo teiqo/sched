@@ -49,3 +49,12 @@
   top: 0;
   transform: translate3d(-50%, -50%, 0);
 }
+
+/* Уведомление и заявка за один день собирают несколько пар в одну карточку:
+   разделяем пары тонкой линией, как внутри блока «до → после». */
+:root .sched-notif-frag > .sched-notif-frag-lesson + .sched-notif-frag-lesson,
+:root .sched-notif-frag > .sched-notif-frag-lesson + .sched-notif-frag-change,
+:root .sched-notif-frag > .sched-notif-frag-change + .sched-notif-frag-lesson,
+:root .sched-notif-frag > .sched-notif-frag-change + .sched-notif-frag-change {
+  border-top: 1px solid color-mix(in srgb, var(--sched-separator) 72%, transparent);
+}
