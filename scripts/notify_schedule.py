@@ -26,8 +26,8 @@ def main():
     data=json.loads((Path(__file__).resolve().parents[1]/"public/data/schedule.json").read_text())
     stamp=data.get("updatedAt")
     if not stamp: return 0
-    payload={"type":"schedule", "format":"html", "event_id":"schedule:"+str(stamp),
-             "text":"📅 <b>расписание обновлено</b>\n\nна сайте опубликована новая версия базового расписания.", "group":""}
+    payload={"type":"schedule", "event_id":"schedule:"+str(stamp),
+             "text":"📅 sched: обновилось базовое расписание на сайте", "group":""}
     req=Request(endpoint,data=json.dumps(payload).encode(),headers={"Content-Type":"application/json","X-Sched-Token":secret})
     try:
         with urlopen(req, timeout=25) as response:

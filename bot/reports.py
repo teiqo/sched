@@ -84,11 +84,12 @@ class Reports:
                  data.get('group',''),author,author_name,file['name'] if file else None,file['mime'] if file else None,
                  file['bytes'] if file else None,fingerprint))
             esc = lambda value: html.escape(str(value), quote=False)
-            text = '<b>🐞 отчёт № ' + esc(rid[:8]) + '</b>'
-            text += '\n<b>автор:</b> ' + esc((author_name + ' · ' + author) if author else 'без подтверждённого входа')
-            text += '\n\n<b>что произошло</b>\n' + esc(data['message'][:2200])
-            if data.get('steps'): text += '\n\n<b>как повторить</b>\n' + esc(data['steps'][:500])
-            if data.get('expected'): text += '\n\n<b>ожидалось</b>\n' + esc(data['expected'][:300])
+            text = '<b>🐞 Отчёт № ' + esc(rid[:8]) + '</b>'
+            text += '\n<b>Группа:</b> ' + esc(data.get('group') or 'не выбрано')
+            text += '\n<b>Автор:</b> ' + esc((author_name + ' · ' + author) if author else 'без подтверждённого входа')
+            text += '\n\n<b>Что произошло</b>\n' + esc(data['message'][:2200])
+            if data.get('steps'): text += '\n\n<b>Как повторить</b>\n' + esc(data['steps'][:500])
+            if data.get('expected'): text += '\n\n<b>Ожидалось</b>\n' + esc(data['expected'][:300])
             parts = [('summary', 'sendMessage', text[:3800])]
             if data.get('diagnostics') or len(data['message']) > 2200 or data.get('steps') or data.get('expected'):
                 parts.append(('diagnostics', 'sendDocument', 'полный отчёт и диагностика · № ' + rid[:8]))

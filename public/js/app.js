@@ -91,24 +91,10 @@ const systemTheme = () =>
     ? "light"
     : "dark";
 
-function isLearningModeActive() {
-  if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return true;
-  if (typeof state !== "undefined" && !state.onboarded) return true;
-  if (typeof document !== "undefined") {
-    if (document.body && document.body.classList.contains("is-tour-active")) return true;
-    if (document.getElementById("basics-tour") !== null) return true;
-    const ob = document.getElementById("onboarding");
-    if (ob && !ob.hidden && ob.innerHTML.trim() !== "") return true;
-  }
-  return false;
-}
-
 /* Режим производительности: data-perf на <html>, по CSS остаются только
-   лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются.
-   В режиме обучения (онбординг и тур) полностью игнорируется, чтобы анимации не ломались. */
+   лёгкие переходы дней остаются, тяжёлые blur/эффекты выключаются. */
 function applyPerfMode() {
-  const perfActive = Boolean(state.perfMode && !isLearningModeActive());
-  if (perfActive) document.documentElement.setAttribute("data-perf", "1");
+  if (state.perfMode) document.documentElement.setAttribute("data-perf", "1");
   else document.documentElement.removeAttribute("data-perf");
   const sw = $("#perf-switch");
   if (sw) sw.setAttribute("aria-pressed", state.perfMode ? "true" : "false");
@@ -127,7 +113,8 @@ var state = {
   windows: false,
   showVacancies: false,
   showSelfStudy: true,
-  editorMode: false,
+  /* null = автоматический режим: кнопки видны только владельцу и редакторам. */
+  showSwapButtons: null,
   parityMode: "auto",
   settingsOpen: false,
   nowOverride: null,
@@ -271,7 +258,7 @@ function dateLabel(d) {
 function relLabel(d) {
   const today = startOfDay(currentDate());
   const diff = Math.round((d - today) / 86400000);
-  if (diff === 0) return `сегодня, ${dayEntry(d).name}`;
+  if (diff === 0) return "сегодня";
   if (diff === 1) return "завтра";
   if (diff === -1) return "вчера";
   return null;
@@ -385,21 +372,11 @@ function slotsForBase(d) {
 
 function lessonsFor(d) {
   /* Отменённая пара просто исчезает из списка (и из «сейчас/далее»). */
-  const preferences = state.editorMode
-    ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
-    : state;
-  return slotsFor(d).filter((s) => !s.window && isSlotVisible(s, preferences));
+  return slotsFor(d).filter((s) => !s.window && isSlotVisible(s, state));
 }
 
 function visibleSlotsFor(d) {
-  const preferences = state.editorMode
-    ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
-    : state;
-  return slotsFor(d)
-    .map((slot) => slot.cancelled
-      ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
-      : slot)
-    .filter((s) => isSlotVisible(s, preferences));
+  return slotsFor(d).filter((s) => isSlotVisible(s, state));
 }
 
 function mins(hhmm) {
@@ -449,28 +426,7 @@ function liveState(d) {
     }
   }
   const next = list.find((s) => mins(s.from) > cur);
-  if (next) {
-    /* Если до этого уже была пара — сейчас идёт перерыв, а не ожидание первой пары. */
-    const prev = [...list].reverse().find((s) => mins(s.to) <= cur);
-    if (prev) {
-      const from = mins(prev.to);
-      const to = mins(next.from);
-      const total = to - from;
-      return {
-        kind: "break",
-        slot: next,
-        prev,
-        from: prev.to,
-        to: next.from,
-        total,
-        left: to - cur,
-        passed: cur - from,
-        progress: total > 0 ? (cur - from) / total : 1,
-        now,
-      };
-    }
-    return { kind: "next", slot: next, left: mins(next.from) - cur, progress: 0, now };
-  }
+  if (next) return { kind: "next", slot: next, left: mins(next.from) - cur, progress: 0, now };
   return { kind: "done", slot: list[list.length - 1], left: 0, progress: 1, now };
 }
 
@@ -514,39 +470,8 @@ function changeLabel(slot) {
   return slot.moved ? "перенос" : isRoomOnlySwap(slot) ? "другая аудитория" : "замена";
 }
 
-/* Перерыв показывается такой же большой плашкой, как идущая пара,
-   только с отсчётом до следующей пары. */
-function breakCardHtml(live, dIso) {
-  const s = live.slot;
-  const title = live.total >= 30 ? "большой перерыв" : "перерыв";
-  const dateStr = dIso || iso(live.now || state.selected || currentDate());
-  const swapBtn = swapButtonHtml(dateStr, s.n);
-  const room = s.room
-    ? ` · <span class="lesson-room">ауд. ${escapeHtml(s.room)}</span>`
-    : "";
-  const body = `
-    <div class="live-card-status">
-      <span><i></i>сейчас · перерыв ${bellDuration(Math.max(0, Math.round(live.total)))}</span>
-      <div class="live-card-status-right">
-        <time id="live-clock">${clockText(live.now)}</time>
-        ${swapBtn}
-      </div>
-    </div>
-    <h3>${title}</h3>
-    <p class="lesson-meta"><span class="lesson-type-accent">дальше · ${s.n} пара</span> ${escapeHtml(s.subject)}${room}</p>
-    <div class="live-card-progress"><i id="live-progress" style="transform:scaleX(${live.progress.toFixed(3)})"></i></div>
-    <div class="live-card-timing"><span class="live-card-range">${live.from}–${live.to}<small id="live-passed">прошло ${fmtLeft(live.passed)}</small></span><span id="live-left">осталось ${fmtLeft(live.left)}</span></div>`;
-  return `<article class="live-lesson-card is-current is-break" data-row-n="${s.n}">
-    <div class="live-card-glass">
-      <div class="live-card-particles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      ${body}
-    </div>
-  </article>`;
-}
-
 function liveCardHtml(live, dIso) {
   if (!live || live.kind === "done") return "";
-  if (live.kind === "break") return breakCardHtml(live, dIso);
   const s = live.slot;
   const current = live.kind === "current";
   const dateStr = dIso || iso(live.now || state.selected || currentDate());
@@ -608,12 +533,9 @@ function rowHtml(slot, live, dIso) {
 
   if (slot.window) {
     cls.push("is-window-row");
-    const editorAttrs = state.editorMode
-      ? ` data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить"`
-      : "";
-    return `<div class="${cls.join(" ")}" data-row-n="${slot.n}"${editorAttrs}>${time}<div class="agenda-row-content">
+    return `<div class="${cls.join(" ")}" data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить">${time}<div class="agenda-row-content">
       <strong>окно</strong>
-    </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : ""}</div>`;
+    </div><span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span></div>`;
   }
 
   const mark = isCurrent
@@ -673,7 +595,7 @@ function emptyDayHtml(d) {
 function headingHtml(d, sub, primary = false) {
   const today = sameDay(d, startOfDay(currentDate()));
   const title = today
-    ? `<span class="sched-day-rel">сегодня, </span><span class="sched-day-weekday">${escapeHtml(dayEntry(d).name)}</span>`
+    ? "сегодня"
     : `<span class="sched-day-weekday">${escapeHtml(dayEntry(d).name)}, </span><span class="sched-day-date">${d.getDate()} ${MONTHS[d.getMonth()]}</span>`;
   const rel = today ? "" : relLabel(d);
   return `<div class="sched-day-heading t-stagger is-shown${primary && !today ? " has-today-action" : ""}">
@@ -681,23 +603,7 @@ function headingHtml(d, sub, primary = false) {
       <h2 class="t-stagger-line t-stagger-line--1">${title}</h2>
       <span class="t-stagger-line t-stagger-line--2">${sub}${rel ? ` · ${rel}` : ""}</span>
     </div>
-    <div class="sched-day-actions">${state.editorMode ? dayRevertHtml(iso(d)) : ""}</div>
-  </div>`;
-}
-
-function editorToolbarHtml(dIso) {
-  if (!state.editorMode) return "";
-  const role = myRole();
-  const primary = role === "owner" || role === "editor" ? "сохранить" : "предложить";
-  const undoDisabled = !editorSession?.history.length ? " disabled" : "";
-  return `<div class="sched-editor-toolbar" role="toolbar" aria-label="редактор расписания">
-    <div class="sched-editor-toolbar-copy"><strong>режим редактора</strong><span>видны все пары, окна, вакансии и самостоятельные</span></div>
-    <div class="sched-editor-toolbar-actions">
-      <button type="button" data-editor="undo"${undoDisabled}>${ICON_UNDO}<span>назад</span></button>
-      <button type="button" data-editor="reset-day" data-date="${dIso}">${ICON_RESET}<span>исходный день</span></button>
-      <button type="button" data-editor="cancel">отмена</button>
-      <button type="button" class="is-primary" data-editor="save">${primary}</button>
-    </div>
+    <div class="sched-day-actions">${dayRevertHtml(iso(d))}</div>
   </div>`;
 }
 
@@ -768,7 +674,7 @@ function dayHtml(d, withLive, future) {
   const dIso = iso(d);
   const all = visibleSlotsFor(d);
   const lessons = all.filter((s) => !s.window);
-  const rows = state.editorMode || state.windows ? all : lessons;
+  const rows = state.windows ? all : lessons;
   const live = withLive ? liveState(d) : null;
   const count = lessons.length;
   const today = sameDay(d, startOfDay(currentDate()));
@@ -781,7 +687,7 @@ function dayHtml(d, withLive, future) {
     body = emptyDayHtml(d);
   } else if (!today || !withLive || future) {
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}</div>` : "";
-  } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
+  } else if (live && (live.kind === "current" || live.kind === "next")) {
     const liveN = live.slot.n;
     const earlier = rows.filter((s) => s.n < liveN);
     const later = rows.filter((s) => s.n > liveN);
@@ -797,7 +703,7 @@ function dayHtml(d, withLive, future) {
     body = `${earlierHtml}${liveHost}`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${withLive && !future ? editorToolbarHtml(dIso) : ""}${body}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}</div>`;
 }
 
 function weekHtml() {
@@ -808,7 +714,7 @@ function weekHtml() {
     const d = addDays(ws, i);
     const all = visibleSlotsFor(d);
     const lessons = all.filter((s) => !s.window);
-    const rows = state.editorMode || state.windows ? all : lessons;
+    const rows = state.windows ? all : lessons;
     days.push(`<div class="sched-day-block" data-day="${iso(d)}">
       <div class="sched-day-heading">
         <div class="sched-day-heading-copy">
@@ -820,7 +726,7 @@ function weekHtml() {
           }</span>
         </div>
         ${sameDay(d, startOfDay(currentDate())) ? '<span class="sched-week-badge">сегодня</span>' : ""}
-        <div class="sched-day-actions"></div>
+        <div class="sched-day-actions">${dayRevertHtml(iso(d))}</div>
       </div>
       ${
         lessons.length || (state.windows && rows.length)
@@ -962,12 +868,9 @@ function setScene(html, direction) {
   }
 
   const scene = $("#scene");
-  const isLearning = isLearningModeActive();
-  const perfActive = Boolean(state.perfMode && !isLearning);
   const reduced =
-    perfActive ||
-    (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
-    Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    Boolean(scene && scene.classList.contains("is-motion-lite"));
 
   if (!direction || reduced) {
     old.getAnimations().forEach((a) => a.cancel());
@@ -979,6 +882,15 @@ function setScene(html, direction) {
     if (old._schedHtml !== html) {
       old._schedHtml = html;
       old.innerHTML = html;
+      /* Мягкое проявление вместо резкой подмены (акцент+, «вся неделя», окна):
+         градиенты не «щёлкают», а коротко доезжают по прозрачности. */
+      if (!reduced && !state.perfMode) {
+        try {
+          old.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, easing: "ease-out" });
+        } catch (err) {
+          /* ignore */
+        }
+      }
     }
     old.inert = false;
     old.removeAttribute("aria-hidden");
@@ -1163,14 +1075,12 @@ function renderTab() {
     strip.style.display = "none";
     auxView.hidden = false;
     auxView.innerHTML = bellsHtml();
-    $("#editor-btn")?.classList.add("is-hidden-tab");
   } else {
     state.tab = "schedule";
     scheduleView.style.display = "";
     strip.style.display = "";
     auxView.hidden = true;
     auxView.innerHTML = "";
-    $("#editor-btn")?.classList.remove("is-hidden-tab");
   }
   applyFlags();
 }
@@ -1195,18 +1105,6 @@ function render(direction) {
   window.requestAnimationFrame(checkCompactHeading);
 }
 if (typeof window !== "undefined") window.render = render;
-
-var passiveRefreshTimer = null;
-function renderPassive() {
-  const root = document.documentElement;
-  root.classList.add("is-passive-refresh");
-  window.clearTimeout(passiveRefreshTimer);
-  render();
-  passiveRefreshTimer = window.setTimeout(() => {
-    root.classList.remove("is-passive-refresh");
-    passiveRefreshTimer = null;
-  }, 120);
-}
 
 function liveSignature() {
   const live = liveState(state.selected);
@@ -1236,13 +1134,13 @@ function tick() {
   const clock = $("#live-clock");
   const left = $("#live-left");
   const bar = $("#live-progress");
-  if (clock && (live.kind === "current" || live.kind === "break")) clock.textContent = clockText(live.now);
+  if (clock && live.kind === "current") clock.textContent = clockText(live.now);
   if (left) {
     left.textContent =
-      live.kind === "next" ? `через ${fmtLeft(live.left)}` : `осталось ${fmtLeft(live.left)}`;
+      live.kind === "current" ? `осталось ${fmtLeft(live.left)}` : `через ${fmtLeft(live.left)}`;
   }
   const passed = $("#live-passed");
-  if (passed && (live.kind === "current" || live.kind === "break")) passed.textContent = `прошло ${fmtLeft(live.passed)}`;
+  if (passed && live.kind === "current") passed.textContent = `прошло ${fmtLeft(live.passed)}`;
   if (bar) bar.style.transform = `scaleX(${live.progress.toFixed(3)})`;
 }
 
@@ -1308,12 +1206,7 @@ function applyTheme() {
     });
   }
   const accentRow = $("#accent-row");
-  const isAccent = state.palette === "accent" || state.palette === "accent-plus";
-  if (accentRow) {
-    accentRow.removeAttribute("hidden");
-    accentRow.classList.toggle("is-visible", isAccent);
-    accentRow.inert = !isAccent;
-  }
+  if (accentRow) accentRow.hidden = state.palette !== "accent" && state.palette !== "accent-plus";
   const accentInput = $("#accent-color");
   if (accentInput && accentInput.value.toLowerCase() !== state.accent.toLowerCase()) {
     accentInput.value = state.accent;
@@ -1352,6 +1245,7 @@ function save() {
         windows: state.windows,
         showVacancies: state.showVacancies,
         showSelfStudy: state.showSelfStudy,
+        showSwapButtons: state.showSwapButtons,
         parityMode: state.parityMode,
         tab: state.tab,
         light: state.light,
@@ -1382,6 +1276,7 @@ function load() {
     if (typeof data.windows === "boolean") state.windows = data.windows;
     if (typeof data.showVacancies === "boolean") state.showVacancies = data.showVacancies;
     if (typeof data.showSelfStudy === "boolean") state.showSelfStudy = data.showSelfStudy;
+    if (typeof data.showSwapButtons === "boolean") state.showSwapButtons = data.showSwapButtons;
     if (["auto", "even", "odd"].includes(data.parityMode)) state.parityMode = data.parityMode;
     if (["schedule", "bells"].includes(data.tab)) state.tab = data.tab;
     if (typeof data.light === "boolean") state.light = data.light;
@@ -1722,7 +1617,6 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    if (basicsTourStep === 1) return;
     /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
@@ -1767,8 +1661,7 @@ function bindStrip() {
     dragClick = false;
 
     const tapDist = Math.abs(pressedPosition - position);
-    const isLearning = isLearningModeActive();
-    const reducedMotion = (!isLearning && motionQuery.matches) || (state.perfMode && !isLearning);
+    const reducedMotion = motionQuery.matches;
 
     scrub = {
       pointerId: e.pointerId,
@@ -1955,11 +1848,6 @@ function bindStrip() {
       dragClick = false;
       return;
     }
-    if (basicsTourStep === 1) {
-      const [y, m, d] = btn.dataset.date.split("-").map(Number);
-      triggerTourRoulette(new Date(y, m - 1, d));
-      return;
-    }
     const [y, m, d] = btn.dataset.date.split("-").map(Number);
     const newDate = new Date(y, m - 1, d);
     const dir = newDate > state.selected ? "forward" : newDate < state.selected ? "backward" : null;
@@ -2089,14 +1977,10 @@ function bindEvents() {
       render();
     });
   });
-  $("#editor-btn")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    /* Пока закрытие дорисовывает анимацию, повторный мобильный click не должен
-       снова включить редактор. */
-    if (editorClosing) return;
-    if (state.editorMode) cancelEditorMode();
-    else startEditorMode();
+  $("#swap-buttons-switch")?.addEventListener("click", () => {
+    state.showSwapButtons = !effectiveShowSwapButtons();
+    save();
+    applyFlags();
   });
 
   $("#settings-trigger").addEventListener("click", (e) => {
@@ -2126,11 +2010,6 @@ function bindEvents() {
   document.addEventListener("click", (e) => {
     const row = e.target.closest(".sched-settings-row");
     if (!row || e.target.closest("button, a, input, select, label")) return;
-    /* Строки настроек остаются в DOM и при закрытой панели — без этой
-       проверки случайный клик (например, после перетаскивания пары) открывал
-       системное окно выбора цвета поверх расписания. */
-    if (!state.settingsOpen || !row.closest("#settings")) return;
-    if (document.body.classList.contains("is-dragging-pair")) return;
     const sw = row.querySelector(".sched-setting-switch");
     if (sw) {
       sw.click();
@@ -2144,10 +2023,6 @@ function bindEvents() {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (basicsTourStep >= 0) {
-        finishBasicsTour();
-        return;
-      }
       const rep = document.getElementById("report-backdrop");
       if (rep) {
         closeReportSheet();
@@ -2185,15 +2060,6 @@ function bindEvents() {
 
   /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
   const scene = $("#scene");
-  let motionLiteTimer = null;
-  const holdMotionLite = (ms = 420) => {
-    scene.classList.add("is-motion-lite");
-    window.clearTimeout(motionLiteTimer);
-    motionLiteTimer = window.setTimeout(() => {
-      scene.classList.remove("is-motion-lite");
-      motionLiteTimer = null;
-    }, ms);
-  };
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
@@ -2202,15 +2068,17 @@ function bindEvents() {
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
       // The neighbour has already slid into place: do not play a second entrance.
-      holdMotionLite();
+      scene.classList.add("is-motion-lite");
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
+      scene.classList.remove("is-motion-lite");
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
         daySwipeRenderPending = false;
-        holdMotionLite();
+        scene.classList.add("is-motion-lite");
         render();
+        scene.classList.remove("is-motion-lite");
       }
     },
   });
@@ -2230,12 +2098,10 @@ function bindEvents() {
   window.addEventListener("resize", () => {
     vh(false);
     checkCompactHeading();
-    if (basicsTourStep >= 0) renderBasicsTour();
   });
   window.addEventListener("orientationchange", () => {
     vh(true);
     checkCompactHeading();
-    if (basicsTourStep >= 0) renderBasicsTour();
   });
   vh(true);
   checkCompactHeading();
@@ -2282,10 +2148,15 @@ function applyQuery() {
 
 /* ---------- оформление: флаги ---------- */
 
+function effectiveShowSwapButtons() {
+  if (typeof state.showSwapButtons === "boolean") return state.showSwapButtons;
+  const role = myRole();
+  return role === "owner" || role === "editor";
+}
+
 function applyFlags() {
   const root = document.documentElement;
-  root.dataset.editorMode = state.editorMode ? "true" : "false";
-  root.dataset.showSwapButtons = state.editorMode ? "true" : "false";
+  root.dataset.showSwapButtons = effectiveShowSwapButtons() ? "true" : "false";
   if (state.light) root.dataset.schedScheduleView = "light";
   else root.removeAttribute("data-sched-schedule-view");
   const ls = $("#light-switch");
@@ -2294,12 +2165,7 @@ function applyFlags() {
   if (ss) ss.setAttribute("aria-pressed", state.scope === "week" ? "true" : "false");
   $("#vacancies-switch")?.setAttribute("aria-pressed", String(state.showVacancies));
   $("#self-study-switch")?.setAttribute("aria-pressed", String(state.showSelfStudy));
-  const editorButton = $("#editor-btn");
-  if (editorButton) {
-    editorButton.setAttribute("aria-pressed", String(state.editorMode));
-    editorButton.classList.toggle("is-active", state.editorMode);
-    editorButton.title = state.editorMode ? "выйти из редактора" : "режим редактора";
-  }
+  $("#swap-buttons-switch")?.setAttribute("aria-pressed", String(effectiveShowSwapButtons()));
   const li = $("#light-hint");
   if (li) li.textContent = state.light ? "плоские и компактные пары" : "обычные карточки";
   const sh = $("#scope-hint");
@@ -2365,7 +2231,7 @@ function cachedFutureDay(d) {
     state.showSelfStudy,
     state.parityMode,
     iso(startOfDay(currentDate())),
-    JSON.stringify(activeSwapMap()),
+    JSON.stringify(loadSwaps()),
   ].join("|");
   if (context !== futureMarkupKey) {
     futureMarkupKey = context;
@@ -2533,158 +2399,11 @@ function openNotifsSheet() {
   });
 }
 
-var profileView = "profile";
-var appStatsCache = null;
-var appStatsLoading = false;
-var appStatsError = "";
-var STATS_VISITOR_KEY = "sched:visitor:v1";
-var STATS_VISIT_SENT_KEY = "sched:visitor-sent:v1";
-
-function statsVisitorId() {
-  try {
-    let id = localStorage.getItem(STATS_VISITOR_KEY) || "";
-    if (!/^[A-Za-z0-9_-]{20,100}$/.test(id)) {
-      id = crypto.randomUUID
-        ? crypto.randomUUID().replace(/-/g, "")
-        : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-      localStorage.setItem(STATS_VISITOR_KEY, id);
-    }
-    return id;
-  } catch (_) {
-    return "";
-  }
-}
-
-function trackStatsVisit(force = false) {
-  if (LOCAL_PREVIEW || !window.SCHED_NOTIFY_URL) return;
-  const visitorId = statsVisitorId();
-  if (!visitorId) return;
-  const authenticated = Boolean(tgSessionVerified && tgSession?.session_token);
-  try {
-    const sent = JSON.parse(localStorage.getItem(STATS_VISIT_SENT_KEY) || "null");
-    if (!force && sent && sent.authenticated === authenticated && Date.now() - Number(sent.at || 0) < 6 * 60 * 60 * 1000) return;
-  } catch (_) {}
-  botRequest("stats/visit", { visitor_id: visitorId }, authenticated ? tgSession.session_token : "", { timeout: 5000 })
-    .then(() => {
-      try { localStorage.setItem(STATS_VISIT_SENT_KEY, JSON.stringify({ at: Date.now(), authenticated })); } catch (_) {}
-    })
-    .catch(() => {});
-}
-
-function compactNumber(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat("ru-RU").format(n);
-}
-function localApplicationStats() {
-  const entries = Object.entries(loadSwaps()).filter(([, value]) => value && typeof value === "object" && !value.deleted);
-  return {
-    activeChanges: entries.length,
-    replaced: entries.filter(([, value]) => !value.cancelled && !value.moved && !value.makeWindow).length,
-    moved: entries.filter(([, value]) => value.moved).length,
-    cancelled: entries.filter(([, value]) => value.cancelled).length,
-    windows: entries.filter(([, value]) => value.makeWindow).length,
-    groups: new Set(entries.map(([key]) => key.split("|")[0]).filter(Boolean)).size,
-    pending: Object.keys(pendingMap).length,
-  };
-}
-function statCard(value, label, tone = "") {
-  return `<article class="sched-stat-card${tone ? " is-" + tone : ""}">
-    <strong>${compactNumber(value)}</strong><span>${label}</span>
-  </article>`;
-}
-function statRow(label, value) {
-  return `<div class="sched-stat-row"><span>${label}</span><strong>${compactNumber(value)}</strong></div>`;
-}
-function statsPanelHtml() {
-  const local = localApplicationStats();
-  const server = appStatsCache || {};
-  const users = server.users || {};
-  const telegram = server.telegram || {};
-  const activity = server.activity || {};
-  const status = appStatsLoading
-    ? '<span class="sched-stats-status">обновляем…</span>'
-    : appStatsError
-      ? `<button class="sched-stats-status is-error" type="button" data-act="refresh-stats">повторить</button>`
-      : '<button class="sched-stats-status" type="button" data-act="refresh-stats">обновить</button>';
-  return `<section class="sched-stats" id="profile-stats-panel" aria-label="статистика приложения">
-    <div class="sched-stats-head">
-      <div><span>живые данные</span><h2>статистика приложения</h2></div>${status}
-    </div>
-    ${appStatsError ? `<p class="sched-stats-error">${escapeHtml(appStatsError)}</p>` : ""}
-    <div class="sched-stats-grid">
-      ${statCard(users.total, "всего пользователей", "primary")}
-      ${statCard(users.anonymous ?? 0, "без авторизации", "accent")}
-      ${statCard(users.authorized ?? users.total, "авторизованы")}
-      ${statCard(users.active_7d, "активны за 7 дней", "positive")}
-    </div>
-    <div class="sched-stats-section">
-      <h3>сейчас</h3>
-      <div class="sched-stats-list">
-        ${statRow("подписаны на telegram", telegram.subscribers)}
-        ${statRow("активны за 30 дней", users.active_30d)}
-        ${statRow("без авторизации за 7 дней", users.anonymous_active_7d ?? 0)}
-        ${statRow("заявок на проверке", local.pending)}
-        ${statRow("групп с изменениями", local.groups)}
-      </div>
-    </div>
-    <div class="sched-stats-section">
-      <h3>изменения</h3>
-      <div class="sched-stats-list">
-        ${statRow("активных изменений", local.activeChanges)}
-        ${statRow("заменено пар", local.replaced)}
-        ${statRow("перенесено пар", local.moved)}
-        ${statRow("отменено пар", local.cancelled)}
-        ${statRow("создано окон", local.windows)}
-        ${statRow("операций за 30 дней", activity.change_events_30d)}
-      </div>
-    </div>
-    <div class="sched-stats-section">
-      <h3>telegram за 30 дней</h3>
-      <div class="sched-stats-list">
-        ${statRow("доставлено уведомлений", telegram.deliveries_30d)}
-        ${statRow("пользователей запускали бота", users.bot_started)}
-        ${statRow("групп у подписчиков", telegram.groups)}
-        ${statRow("получено отчётов", activity.reports_30d)}
-      </div>
-    </div>
-    <p class="sched-stats-note">пользователи без авторизации считаются по уникальной установке браузера. сырой идентификатор не сохраняется; после входа этот браузер больше не входит в анонимный счётчик.</p>
-  </section>`;
-}
-function profileTabsHtml(canReview) {
-  if (!canReview) return "";
-  return `<div class="sched-profile-tabs sched-profile-main-tabs" role="tablist" aria-label="раздел профиля">
-    <button type="button" role="tab" data-act="profile-tab" data-tab="profile" aria-selected="${profileView === "profile"}" class="${profileView === "profile" ? "is-active" : ""}">профиль</button>
-    <button type="button" role="tab" data-act="profile-tab" data-tab="stats" aria-selected="${profileView === "stats"}" class="${profileView === "stats" ? "is-active" : ""}">статистика</button>
-  </div>`;
-}
-async function loadApplicationStats(force = false) {
-  if (appStatsLoading || LOCAL_PREVIEW || !tgSessionVerified) return;
-  if (appStatsCache && !force && Date.now() - Number(appStatsCache.generated_at || 0) < 60000) return;
-  const role = myRole();
-  if (role !== "owner" && role !== "editor") return;
-  appStatsLoading = true;
-  appStatsError = "";
-  const current = document.getElementById("profile-stats-panel");
-  if (current) current.outerHTML = statsPanelHtml();
-  try {
-    appStatsCache = await botRequest("stats", {}, await ensurePushSession());
-  } catch (error) {
-    appStatsError = error?.message || "не удалось загрузить статистику";
-    recordError("app-stats", appStatsError);
-  } finally {
-    appStatsLoading = false;
-    const panel = document.getElementById("profile-stats-panel");
-    if (panel) panel.outerHTML = statsPanelHtml();
-  }
-}
-
 function openProfile() {
   const backdrop = $("#profile-backdrop");
   const count = lessonCount(state.group);
   const role = myRole();
   const canReview = role === "owner" || role === "editor";
-  if (!canReview && profileView === "stats") profileView = "profile";
   const pendingCount = Object.keys(pendingMap).length;
 
   /* После входа — карточка-«герой» с аватаркой, именем и бейджем роли. */
@@ -2763,52 +2482,33 @@ function openProfile() {
         </div>
         ${""}
       </div>
-      <div class="sched-profile-group">
-        <button class="sched-settings-row" type="button" data-act="repeat-tutorial-profile">
-          <span class="sched-settings-row-main">
-            <span class="sched-settings-icon is-onboarding">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M17 3h4v4"/></svg>
-            </span>
-            <span class="sched-settings-copy">
-              <strong>повторить обучение</strong>
-              <span>редактор, рулетка и настройки</span>
-            </span>
-          </span>
-          ${ICON_CHEVRON}
-        </button>
-      </div>
       ${authStatusHtml()}
       ${accountBlock}
       ${ownerActionsBlock}`;
 
-  const tabs = profileTabsHtml(canReview);
-  const profileBody = profileView === "stats" && canReview
-    ? `<div class="sched-profile-content is-stats-view">${statsPanelHtml()}</div>`
-    : `${heroBlock}
-      <div class="sched-profile-identity">
-        <div>
-          <h2>${state.group ? groupName() : "группа не выбрана"}</h2>
-          <p>${state.group ? `${count} ${plural(count, "пара", "пары", "пар")} в неделю` : "выбери группу ниже"}</p>
-        </div>
-      </div>
-      <div class="sched-profile-content">${content}</div>`;
-
-  backdrop.innerHTML = `<div class="sched-profile${profileView === "stats" ? " is-stats-view" : ""}" role="dialog" aria-modal="true" aria-label="профиль">
+  backdrop.innerHTML = `<div class="sched-profile" role="dialog" aria-modal="true" aria-label="профиль">
     <div class="sched-profile-header">
       <button type="button" data-act="back">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
         назад
       </button>
-      <h1>${profileView === "stats" ? "статистика" : "профиль"}</h1>
+      <h1>профиль</h1>
       <span></span>
     </div>
-    ${tabs}
-    ${profileBody}
+    ${heroBlock}
+    <div class="sched-profile-identity">
+      <div>
+        <h2>${state.group ? groupName() : "группа не выбрана"}</h2>
+        <p>${state.group ? `${count} ${plural(count, "пара", "пары", "пар")} в неделю` : "выбери группу ниже"}</p>
+      </div>
+    </div>
+    <div class="sched-profile-content">
+      ${content}
+    </div>
   </div>`;
   backdrop.hidden = false;
   state.profileOpen = true;
   updateSubscriptionUi();
-  if (profileView === "stats" && canReview) loadApplicationStats();
   if (!LOCAL_PREVIEW && !tgSession) prepareTelegramLogin();
 }
 
@@ -2817,7 +2517,6 @@ function closeProfile() {
   backdrop.hidden = true;
   backdrop.innerHTML = "";
   state.profileOpen = false;
-  profileView = "profile";
   closeTgMemo();
   closeNotifsSheet();
   closeTgSheet();
@@ -2826,7 +2525,7 @@ function closeProfile() {
 /* ---------- онбординг ---------- */
 
 function onboardingHtml() {
-  const total = 3;
+  const total = 2;
   const offset = `-${state.onboardingStep * (100 / total)}%`;
   const dots = [];
   for (let i = 0; i < total; i += 1) {
@@ -2838,7 +2537,7 @@ function onboardingHtml() {
   }
   const draft = state.draftGroup;
   const count = lessonCount(draft);
-  return `<div class="sched-onboarding-top is-progress-only">
+  return `<div class="sched-onboarding-top">
     <div class="sched-onboarding-progress">${dots.join("")}</div>
   </div>
   <div class="sched-onboarding-slides" style="--onboarding-count:${total};--onboarding-slide-width:${
@@ -2873,28 +2572,7 @@ function onboardingHtml() {
           </label>
         </div>
       </div>
-      <button class="sched-onboarding-action" type="button" data-act="next-telegram">${draft ? "подтвердить группу" : "продолжить без группы"}</button>
-    </div>
-    <div class="sched-onboarding-slide is-telegram-link" aria-hidden="${state.onboardingStep === 2 ? "false" : "true"}">
-      <div class="sched-onboarding-copy is-centered">
-        <button class="sched-onboarding-back" type="button" data-act="back">${ICON_CHEVRON}<span>назад</span></button>
-        <div class="sched-onboarding-telegram-mark">${ICON_BELL}</div>
-        <span class="sched-onboarding-kicker">необязательно</span>
-        <h1>привязать telegram?</h1>
-        <p>это не обязательно, но ты можешь настроить, чтобы тебе приходили уведомления прямо в мессенджер.</p>
-        <div class="sched-onboarding-tg-example" aria-label="пример уведомления в telegram">
-          <span>пример уведомления</span>
-          <div class="sched-onboarding-tg-notification">
-            <i class="sched-onboarding-tg-avatar has-photo"><img src="assets/icons/tg-bot-avatar.jpg" alt="" width="42" height="42" loading="lazy" decoding="async" /></i>
-            <div><div class="sched-onboarding-tg-head"><strong>sched</strong><time>9:06</time></div>
-            <p>🔄 11 сентября заменили 4 пару<br><b>комп. графика · аудитория 307</b></p></div>
-          </div>
-        </div>
-        <div data-login-panel>${tgSession ? `<strong class="sched-onboarding-linked">telegram уже привязан</strong>` : authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW)}</div>
-      </div>
-      <div class="sched-onboarding-finish-actions">
-        <button class="sched-onboarding-action" type="button" data-act="finish-tour">продолжить</button>
-      </div>
+      <button class="sched-onboarding-action" type="button" data-act="finish">${draft ? "подтвердить группу" : "продолжить без группы"}</button>
     </div>
   </div>`;
 }
@@ -2903,7 +2581,6 @@ function renderOnboarding() {
   const host = $("#onboarding");
   /* Тему не форсируем: первый запуск следует системной (или выбранной ранее). */
   applyTheme();
-  applyPerfMode();
   host.innerHTML = onboardingHtml();
   host.hidden = false;
 }
@@ -2916,461 +2593,10 @@ function closeOnboarding() {
     host.classList.remove("is-closing");
     host.innerHTML = "";
     playBrandIntro(); /* главный экран появился — теперь интро лого */
-    applyPerfMode();
   }, 320);
   state.onboarded = true;
   save();
   applyTheme();
-  applyPerfMode();
-}
-
-var basicsTourStep = -1;
-var basicsTourOpenedEditor = false;
-var basicsTourEditorTimers = [];
-var basicsTourRouletteAnimation = null;
-var basicsTourRouletteFrame = null;
-var basicsTourRouletteTimer = null;
-var basicsTourRouletteOriginalDate = null;
-var basicsTourLastTriggerTime = 0;
-const BASICS_TOUR = [
-  { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
-  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
-  { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
-];
-
-function stopBasicsTourRoulette(options = {}) {
-  if (basicsTourRouletteTimer !== null) {
-    clearTimeout(basicsTourRouletteTimer);
-    basicsTourRouletteTimer = null;
-  }
-  basicsTourRouletteAnimation?.cancel();
-  basicsTourRouletteAnimation = null;
-  if (basicsTourRouletteFrame !== null) cancelAnimationFrame(basicsTourRouletteFrame);
-  basicsTourRouletteFrame = null;
-  document.body.classList.remove("is-tour-roulette-active");
-  const strip = document.getElementById("strip");
-  const selection = document.getElementById("selection");
-  const stage = document.getElementById("stage");
-  strip?.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
-  strip?.querySelectorAll("[data-under-selection]").forEach(button => button.removeAttribute("data-under-selection"));
-  selection?.style.removeProperty("will-change");
-  selection?.style.removeProperty("transform");
-  stage?.style.removeProperty("min-height");
-  if (sceneTimer !== null) {
-    clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  if (sceneOutTimer !== null) {
-    clearTimeout(sceneOutTimer);
-    sceneOutTimer = null;
-  }
-  if (stage) {
-    stage.querySelectorAll(".sched-active-day-scene.is-leaving").forEach(scene => scene.remove());
-  }
-  if (!options.keepDate && basicsTourRouletteOriginalDate && !sameDay(state.selected, basicsTourRouletteOriginalDate)) {
-    selectDate(basicsTourRouletteOriginalDate, null, { silent: true, preview: true, animated: false });
-  }
-  basicsTourRouletteOriginalDate = null;
-}
-
-function startBasicsTourRoulette(options = {}) {
-  const initialDelay = typeof options.delay === "number" ? options.delay : 650;
-  stopBasicsTourRoulette({ keepDate: Boolean(options.keepDate) });
-
-  if (state.editorMode && !editorChangedEntries().length) {
-    finishEditorMode();
-    basicsTourOpenedEditor = false;
-  }
-
-  const strip = document.getElementById("strip");
-  const selection = document.getElementById("selection");
-  const stage = document.getElementById("stage");
-  if (!strip || !selection) return;
-
-  if (stage && stage.offsetHeight) {
-    stage.style.minHeight = `${stage.offsetHeight}px`;
-  }
-  document.body.classList.add("is-tour-roulette-active");
-
-  const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
-  const originalDate = new Date(state.selected);
-  const originalWeek = weekStart(originalDate);
-  basicsTourRouletteOriginalDate = originalDate;
-
-  const today = startOfDay(currentDate());
-  const todayIndex = Math.max(0, Math.min(6, Math.round((today - originalWeek) / 86400000)));
-
-  // Рулетка дней должна доходить до сегодняшнего дня:
-  let targetIndex;
-  if (current !== todayIndex) {
-    targetIndex = todayIndex;
-  } else {
-    // Если уже на сегодняшнем дне — идём к началу недели (понедельник 0) и возвращаемся в сегодня.
-    // Если сегодня понедельник (0) — идём к пятнице (4) и возвращаемся в сегодня.
-    targetIndex = todayIndex === 0 ? 4 : 0;
-  }
-  const distance = Math.max(1, Math.abs(targetIndex - current));
-
-  // Предварительное мягкое нажатие перед движением
-  const pressDelay = Math.max(0, initialDelay - 200);
-  basicsTourRouletteTimer = window.setTimeout(() => {
-    if (basicsTourStep !== 1 || !selection.isConnected) return;
-    strip.classList.add("is-tour-demo", "is-pressing");
-    const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-    buttons.forEach((btn, i) => btn.toggleAttribute("data-under-selection", i === current));
-
-    basicsTourRouletteTimer = window.setTimeout(() => {
-      basicsTourRouletteTimer = null;
-      if (basicsTourStep !== 1 || !selection.isConnected) return;
-
-      strip.classList.add("is-scrubbing");
-      selection.style.willChange = "transform";
-
-      const reducedMotion = false;
-      const duration = Math.max(2200, 1850 + distance * 110);
-      const startedAt = performance.now();
-      let lastIndex = current;
-      let lastUnderIndex = current;
-
-      // Момент разворота (44% времени на путь туда, 56% на возвращение с длинным замедлением)
-      const turnPoint = 0.44;
-
-      const paintFingerSwipe = now => {
-        if (!selection.isConnected || basicsTourStep !== 1) return;
-        const progress = Math.min(1, (now - startedAt) / duration);
-
-        let factor;
-        if (reducedMotion) {
-          factor = Math.sin(progress * Math.PI);
-        } else if (progress <= turnPoint) {
-          // Путь туда: плавный разгон (smootherstep) и мягкий выход в точку разворота с нулевой скоростью
-          const u = progress / turnPoint;
-          factor = u * u * u * (u * (u * 6 - 15) + 10);
-        } else {
-          // Путь обратно: плавный набор скорости от разворота и длительное шелковистое замедление
-          const v = (progress - turnPoint) / (1 - turnPoint);
-          const w = 1 - Math.pow(1 - v, 2.2);
-          const retEase = w * w * (3 - 2 * w);
-          factor = 1 - retEase;
-        }
-
-        const position = current + (targetIndex - current) * factor;
-        selection.style.transform = `translate3d(${(position * 100).toFixed(3)}%,0,0)`;
-
-        const nearestIndex = Math.max(0, Math.min(6, Math.round(position)));
-
-        // Оптимизация без layout thrashing: обновляем подсветку только при смене дня
-        if (nearestIndex !== lastUnderIndex) {
-          if (lastUnderIndex >= 0 && buttons[lastUnderIndex]) {
-            buttons[lastUnderIndex].removeAttribute("data-under-selection");
-          }
-          if (buttons[nearestIndex]) {
-            buttons[nearestIndex].setAttribute("data-under-selection", "true");
-          }
-          lastUnderIndex = nearestIndex;
-        }
-
-        // Обновляем превью расписания с полноценной анимацией появления пар
-        if (nearestIndex !== lastIndex) {
-          const dir = nearestIndex > lastIndex ? "forward" : "backward";
-          lastIndex = nearestIndex;
-          selectDate(addDays(originalWeek, nearestIndex), dir, {
-            silent: true,
-            preview: true,
-            animated: true,
-          });
-        }
-
-        if (progress < 1) {
-          basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
-          return;
-        }
-
-        basicsTourRouletteFrame = null;
-
-        // Фиксируем выбранный день в дате и UI
-        strip.dataset.selectedIndex = String(current);
-        if (selection) {
-          selection.classList.add("is-week-reset");
-          selection.style.removeProperty("will-change");
-          selection.style.removeProperty("transform");
-          window.requestAnimationFrame(() => {
-            selection.classList.remove("is-week-reset");
-          });
-        }
-
-        // Завершаем скрабинг: выделение плавно опускается в полоску под датой
-        strip.classList.remove("is-tour-demo", "is-pressing", "is-scrubbing");
-        buttons.forEach(button => {
-          button.removeAttribute("data-under-selection");
-          button.classList.toggle("is-selected", button.dataset.date === iso(originalDate));
-        });
-
-        // Убираем ушедшие сцены, оставляя только текущую, без резкого сброса анимаций
-        const stageEl = document.getElementById("stage");
-        if (stageEl) {
-          stageEl.querySelectorAll(".sched-active-day-scene.is-leaving").forEach(scene => scene.remove());
-        }
-
-        // Высоту stage и активный статус держим заблокированными до завершения анимации полоски (380ms),
-        // чтобы пары внизу не вздрагивали
-        window.setTimeout(() => {
-          if (basicsTourStep === 1) {
-            stage?.style.removeProperty("min-height");
-            document.body.classList.remove("is-tour-roulette-active");
-          }
-        }, 380);
-
-        basicsTourRouletteOriginalDate = null;
-      };
-
-      basicsTourRouletteFrame = requestAnimationFrame(paintFingerSwipe);
-    }, Math.max(1, initialDelay - pressDelay));
-  }, pressDelay);
-}
-
-function isTourRouletteRunning() {
-  return basicsTourRouletteFrame !== null || basicsTourRouletteTimer !== null;
-}
-
-function triggerTourRoulette(clickedDate) {
-  if (basicsTourStep !== 1) return;
-  const now = performance.now();
-  if (now - basicsTourLastTriggerTime < 500) return;
-  if (isTourRouletteRunning()) return;
-  basicsTourLastTriggerTime = now;
-  stopBasicsTourRoulette({ keepDate: true });
-  if (clickedDate) {
-    const dir = clickedDate > state.selected ? "forward" : clickedDate < state.selected ? "backward" : null;
-    selectDate(clickedDate, dir, { silent: true, preview: true, animated: true });
-  }
-  startBasicsTourRoulette({ delay: 180, keepDate: true });
-}
-
-function stopBasicsTourEditorDemo() {
-  while (basicsTourEditorTimers.length) {
-    clearTimeout(basicsTourEditorTimers.pop());
-  }
-  const btn = document.getElementById("editor-btn");
-  btn?.classList.remove("is-tour-pressed");
-  if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) {
-    finishEditorMode();
-    basicsTourOpenedEditor = false;
-  }
-}
-
-function startBasicsTourEditorDemo() {
-  stopBasicsTourEditorDemo();
-  if (basicsTourStep !== 0) return;
-
-  const scheduleTimer = (fn, delay) => {
-    const t = window.setTimeout(() => {
-      const idx = basicsTourEditorTimers.indexOf(t);
-      if (idx !== -1) basicsTourEditorTimers.splice(idx, 1);
-      fn();
-    }, delay);
-    basicsTourEditorTimers.push(t);
-    return t;
-  };
-
-  // 1. Пауза, чтобы сориентироваться, затем визуальное нажатие на карандаш (~550ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.add("is-tour-pressed");
-  }, 550);
-
-  // 2. Отпускание и плавное вылезание панели редактора (+160ms = 710ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.remove("is-tour-pressed");
-    if (!state.editorMode) {
-      startEditorMode();
-      basicsTourOpenedEditor = true;
-    }
-  }, 710);
-
-  /* 3. Дальше панель остаётся открытой: редактор закроется только когда
-     пользователь нажмёт «дальше» (или «пропустить»), а не сам по таймеру. */
-}
-
-function finishBasicsTour() {
-  stopBasicsTourEditorDemo();
-  stopBasicsTourRoulette();
-  document.getElementById("basics-tour")?.remove();
-  basicsTourStep = -1;
-  document.body.classList.remove("is-tour-active", "is-tour-roulette-active");
-  applyPerfMode();
-  if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) finishEditorMode();
-  basicsTourOpenedEditor = false;
-}
-
-function renderBasicsTour() {
-  stopBasicsTourRoulette();
-  if (basicsTourStep !== 0 && state.editorMode && !editorChangedEntries().length) {
-    finishEditorMode();
-    basicsTourOpenedEditor = false;
-  }
-  const step = BASICS_TOUR[basicsTourStep];
-  const target = step && document.querySelector(step.selector);
-  if (!step || !target) { finishBasicsTour(); return; }
-  let host = document.getElementById("basics-tour");
-  if (!host) {
-    host = document.createElement("div");
-    host.id = "basics-tour";
-    host.className = "sched-tour";
-    host.setAttribute("role", "dialog");
-    host.setAttribute("aria-modal", "true");
-    host.setAttribute("aria-label", "обучение");
-    document.body.appendChild(host);
-  }
-  const visualTarget = basicsTourStep === 2 && target.classList.contains("is-avatar")
-    ? target.querySelector(".sched-trigger-avatar") || target
-    : target;
-  const rect = visualTarget.getBoundingClientRect();
-  const pad = basicsTourStep === 1 ? 0 : basicsTourStep === 2 ? 3 : 4;
-  const left = basicsTourStep === 1 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-  const top = basicsTourStep === 1 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-  const width = basicsTourStep === 1
-    ? Math.min(innerWidth - left, rect.width)
-    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
-  const height = rect.height + pad * 2;
-  const copyWidth = Math.min(340, innerWidth - 24);
-  const below = top + height + 14;
-
-  let copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
-  if (basicsTourStep === 0) {
-    const strip = document.getElementById("strip");
-    const stripRect = strip?.getBoundingClientRect();
-    const copyTopStep0 = stripRect ? Math.round(stripRect.bottom + 105) : 225;
-    if (copyTopStep0 + 175 < innerHeight) {
-      copyTop = copyTopStep0;
-    }
-  }
-  const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === 1 ? 20 : 12;
-
-  let spotlight = host.querySelector(".sched-tour-spotlight");
-  let copy = host.querySelector(".sched-tour-copy");
-  const isFirstRender = !spotlight || !copy;
-
-  if (isFirstRender) {
-    host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${left}px;top:${top}px;width:${width}px;height:${height}px;border-radius:${spotRadius}px"><svg aria-hidden="true"><rect pathLength="100" /></svg></div>
-    <div class="sched-tour-copy" style="left:${copyLeft}px;top:${copyTop}px;width:${copyWidth}px">
-      <div class="sched-tour-copy-inner">
-        <span class="sched-tour-step-counter">шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span>
-        <strong class="sched-tour-title">${step.title}</strong>
-        <small class="sched-tour-text">${step.text}</small>
-      </div>
-      <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
-    </div>`;
-    spotlight = host.querySelector(".sched-tour-spotlight");
-    copy = host.querySelector(".sched-tour-copy");
-    requestAnimationFrame(() => {
-      host.classList.add("is-ready");
-    });
-  } else {
-    const stepCounter = copy.querySelector(".sched-tour-step-counter");
-    if (stepCounter) stepCounter.textContent = `шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}`;
-    const stepTitle = copy.querySelector(".sched-tour-title");
-    if (stepTitle) stepTitle.innerHTML = step.title;
-    const stepText = copy.querySelector(".sched-tour-text");
-    if (stepText) stepText.innerHTML = step.text;
-    const nextBtn = copy.querySelector('[data-tour="next"]');
-    if (nextBtn) nextBtn.textContent = basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше";
-
-    const inner = copy.querySelector(".sched-tour-copy-inner");
-    if (inner) {
-      inner.classList.remove("is-flowing");
-      void inner.offsetWidth;
-      inner.classList.add("is-flowing");
-    }
-
-    spotlight.style.setProperty("--tour-radius", `${spotRadius}px`);
-    spotlight.style.borderRadius = `${spotRadius}px`;
-    spotlight.style.left = `${left}px`;
-    spotlight.style.top = `${top}px`;
-    spotlight.style.width = `${width}px`;
-    spotlight.style.height = `${height}px`;
-
-    copy.style.left = `${copyLeft}px`;
-    copy.style.top = `${copyTop}px`;
-    copy.style.width = `${copyWidth}px`;
-  }
-
-  host.onclick = event => {
-    const action = event.target.closest("[data-tour]")?.dataset.tour;
-    if (action === "skip") { finishBasicsTour(); return; }
-    if (action === "next") {
-      stopBasicsTourEditorDemo();
-      if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
-        closeEditorAnimated();
-        basicsTourOpenedEditor = false;
-      }
-      basicsTourStep += 1;
-      if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
-      else renderBasicsTour();
-      return;
-    }
-    if (basicsTourStep === 0) {
-      if (event.target.closest(".sched-tour-copy")) return;
-      const btn = document.getElementById("editor-btn");
-      if (btn) {
-        const r = btn.getBoundingClientRect();
-        if (
-          event.clientX >= r.left &&
-          event.clientX <= r.right &&
-          event.clientY >= r.top &&
-          event.clientY <= r.bottom
-        ) {
-          startBasicsTourEditorDemo();
-        }
-      }
-      return;
-    }
-    if (basicsTourStep === 1) {
-      if (event.target.closest(".sched-tour-copy")) return;
-      const strip = document.getElementById("strip");
-      if (strip) {
-        const buttons = [...strip.querySelectorAll("button[data-date-index]")];
-        const clickedBtn = buttons.find(btn => {
-          const r = btn.getBoundingClientRect();
-          return (
-            event.clientX >= r.left &&
-            event.clientX <= r.right &&
-            event.clientY >= r.top &&
-            event.clientY <= r.bottom
-          );
-        });
-        if (clickedBtn && clickedBtn.dataset.date) {
-          const [y, m, d] = clickedBtn.dataset.date.split("-").map(Number);
-          triggerTourRoulette(new Date(y, m - 1, d));
-        }
-      }
-      return;
-    }
-  };
-
-  if (basicsTourStep === 0) {
-    startBasicsTourEditorDemo();
-  } else if (basicsTourStep === 1) {
-    startBasicsTourRoulette({ delay: 650 });
-  }
-}
-
-function startBasicsTour() {
-  closeSettings();
-  closeProfile();
-  stopBasicsTourEditorDemo();
-  if (state.editorMode && !editorChangedEntries().length) {
-    finishEditorMode();
-  }
-  basicsTourOpenedEditor = false;
-  basicsTourStep = 0;
-  document.body.classList.add("is-tour-active");
-  applyPerfMode();
-  renderBasicsTour();
 }
 
 /* ---------- события разделов ---------- */
@@ -3391,16 +2617,6 @@ function bindExtra() {
 
   $("#scene").addEventListener("click", event => {
     if (event.target.closest('[data-act="choose-group"]')) { openProfile(); return; }
-    const editorAction = event.target.closest("[data-editor]");
-    if (editorAction) {
-      event.preventDefault();
-      const action = editorAction.dataset.editor;
-      if (action === "undo") undoEditorAction();
-      else if (action === "reset-day") resetEditorDay(editorAction.dataset.date);
-      else if (action === "cancel") cancelEditorMode();
-      else if (action === "save") saveEditorMode();
-      return;
-    }
     const button = event.target.closest('[data-act="reset-day"]');
     if (button) { event.preventDefault(); resetDaySwaps(button.dataset.date); }
   });
@@ -3450,24 +2666,6 @@ function bindExtra() {
     }
     const act = e.target.closest("[data-act]");
     if (!act) return;
-    if (act.dataset.act === "profile-tab") {
-      const next = act.dataset.tab;
-      if ((next === "profile" || next === "stats") && next !== profileView) {
-        profileView = next;
-        openProfile();
-      }
-      return;
-    }
-    if (act.dataset.act === "refresh-stats") {
-      loadApplicationStats(true);
-      return;
-    }
-    if (act.dataset.act === "repeat-tutorial-profile") {
-      closeProfile();
-      closeSettings();
-      startBasicsTour();
-      return;
-    }
     if (act.dataset.act === "back") {
       closeProfile();
       openSettings();
@@ -3535,28 +2733,10 @@ function bindExtra() {
       renderOnboarding();
       return;
     }
-    if (kind === "next-telegram") {
-      state.group = state.draftGroup;
-      state.onboardingStep = 2;
-      save();
-      render();
-      renderOnboarding();
-      prepareTelegramLogin();
-      return;
-    }
-    if (kind === "skip-onboarding") {
+    if (kind === "finish") {
       state.group = state.draftGroup;
       closeOnboarding();
       render();
-      return;
-    }
-    if (kind === "finish-tour" || kind === "finish-no-telegram") {
-      state.group = state.draftGroup;
-      document.body.classList.add("is-tour-active");
-      applyPerfMode();
-      closeOnboarding();
-      render();
-      window.setTimeout(startBasicsTour, 340);
       return;
     }
   });
@@ -3642,27 +2822,17 @@ function init() {
   }
 
   tickTimer = window.setInterval(tick, 1000);
-  window.setTimeout(() => trackStatsVisit(), 1000);
 
   if (!LOCAL_PREVIEW && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
     /* Новая версия должна заменить уже открытую старую страницу, иначе в памяти
        остаются прежние строки и анимации даже после обновления файлов на GitHub. */
     const hadController = Boolean(navigator.serviceWorker.controller);
     let swReloading = false;
-    let swReloadPending = false;
-    const applyWorkerUpdateOffscreen = () => {
-      if (!swReloadPending || swReloading || !document.hidden) return;
-      swReloading = true;
-      location.reload();
-    };
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (!hadController || swReloading) return;
-      /* Не перезагружаем страницу перед глазами. Если вкладка сейчас видна,
-         ждём её скрытия и применяем обновление в фоне. */
-      swReloadPending = true;
-      applyWorkerUpdateOffscreen();
+      swReloading = true;
+      location.reload();
     });
-    document.addEventListener("visibilitychange", applyWorkerUpdateOffscreen);
     navigator.serviceWorker
       .register("sw.js", { updateViaCache: "none" })
       .then((registration) => {
@@ -3677,252 +2847,7 @@ function init() {
 
 /* var намеренно: эти значения нужны раннему рендеру до конца модуля */
 var SWAP_KEY = "sched:swaps:v1";
-/* Утверждённые замены храним отдельно от локальной карты: в SWAP_KEY лежат
-   и свои ещё не проверенные правки, а «исходный день» должен считаться от
-   официального расписания плюс утверждённые замены. */
-var APPROVED_KEY = "sched:swaps-approved:v1";
 var swapMap = null;
-var approvedMap = null;
-var editorSession = null;
-var ICON_UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 6 6"/></svg>';
-var ICON_RESET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v6h6"/><path d="M5.5 15a7 7 0 1 0 1.1-7.8L4 10"/></svg>';
-
-function cloneSwapMap(map) {
-  return JSON.parse(JSON.stringify(map || {}));
-}
-
-function activeSwapMap() {
-  return state.editorMode && editorSession ? editorSession.draft : loadSwaps();
-}
-
-function playEditorToolbarOpen() {
-  const toolbar = document.querySelector("#scene .sched-editor-toolbar");
-  if (!toolbar || editorReducedMotion()) return;
-  toolbar.classList.add("is-opening");
-  window.setTimeout(() => toolbar.classList.remove("is-opening"), 420);
-}
-
-function startEditorMode() {
-  if (state.editorMode || editorClosing) return;
-  closeSettings();
-  closeSwapSheet();
-  const baseline = cloneSwapMap(loadSwaps());
-  editorSession = { baseline, draft: cloneSwapMap(baseline), history: [] };
-  state.editorMode = true;
-  completedOpen = false;
-  applyFlags();
-  render();
-  playEditorToolbarOpen();
-}
-
-function finishEditorMode() {
-  state.editorMode = false;
-  editorSession = null;
-  closeSwapSheet();
-  closeMoveSheet();
-  applyFlags();
-  render();
-}
-
-/* Закрытие редактора: панель и окна уезжают плавно, а оставшиеся пары
-   доезжают на новые места (FLIP), а не прыгают одним кадром. */
-const EDITOR_CLOSE_MS = 340;
-const EDITOR_SETTLE_MS = 420;
-let editorClosing = false;
-
-function editorReducedMotion() {
-  return (
-    document.documentElement.hasAttribute("data-perf") ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
-function lessonRowTops() {
-  const map = new Map();
-  document.querySelectorAll("#scene [data-day] .agenda-row[data-row-n]").forEach(row => {
-    const day = row.closest("[data-day]")?.dataset.day;
-    if (day) map.set(day + "|" + row.dataset.rowN, row.getBoundingClientRect().top);
-  });
-  return map;
-}
-
-function settleLessonRows(before) {
-  if (!before || !before.size || editorReducedMotion()) return;
-  document.querySelectorAll("#scene [data-day] .agenda-row[data-row-n]").forEach(row => {
-    const day = row.closest("[data-day]")?.dataset.day;
-    if (!day) return;
-    const was = before.get(day + "|" + row.dataset.rowN);
-    if (was === undefined) return;
-    const delta = was - row.getBoundingClientRect().top;
-    if (Math.abs(delta) < 1 || Math.abs(delta) > 700) return;
-    row.animate(
-      [{ transform: `translate3d(0, ${delta}px, 0)` }, { transform: "translate3d(0, 0, 0)" }],
-      { duration: EDITOR_SETTLE_MS, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
-    );
-  });
-}
-
-function playEditorClose(done) {
-  const scene = document.getElementById("scene");
-  const toolbar = scene?.querySelector(".sched-editor-toolbar");
-  const rows = scene ? [...scene.querySelectorAll(".agenda-row.is-window-row")] : [];
-  if (editorReducedMotion() || (!toolbar && !rows.length)) {
-    done(null);
-    return;
-  }
-  toolbar?.classList.add("is-closing");
-  /* Каскад снизу вверх: нижние окна сворачиваются раньше, и день
-     собирается одной волной. */
-  rows.forEach((row, i) => {
-    row.style.setProperty("--sched-window-leave-height", row.offsetHeight + "px");
-    row.style.setProperty("--sched-window-leave-delay", Math.min((rows.length - 1 - i) * 22, 88) + "ms");
-    row.classList.add("is-window-leaving");
-  });
-  window.setTimeout(() => done(lessonRowTops()), EDITOR_CLOSE_MS);
-}
-
-function closeEditorAnimated() {
-  if (editorClosing) return Promise.resolve();
-  if (!state.editorMode) {
-    finishEditorMode();
-    return Promise.resolve();
-  }
-  editorClosing = true;
-  document.body.classList.add("is-editor-closing");
-
-  /* Критично для телефона: логически выключаем редактор сразу в том же click,
-     не ждём 340 мс анимации. Иначе следующий тап по паре видел старый
-     editorMode=true и снова запускал редактирование/перетаскивание. */
-  state.editorMode = false;
-  editorSession = null;
-  closeSwapSheet();
-  closeMoveSheet();
-  applyFlags();
-
-  return new Promise(resolve => {
-    playEditorClose(before => {
-      editorClosing = false;
-      document.body.classList.remove("is-editor-closing");
-      finishEditorMode();
-      if (before) window.requestAnimationFrame(() => settleLessonRows(before));
-      resolve();
-    });
-  });
-}
-
-function cancelEditorMode(options = {}) {
-  if (!state.editorMode || editorClosing) return;
-  const changed = editorChangedEntries().length > 0;
-  if (changed && !confirm("выйти из редактора и отменить несохранённые изменения?")) return;
-  if (options.immediate) {
-    finishEditorMode();
-    return;
-  }
-  closeEditorAnimated();
-}
-
-function editorChangedEntries() {
-  if (!editorSession) return [];
-  const keys = new Set([...Object.keys(editorSession.baseline), ...Object.keys(editorSession.draft)]);
-  return [...keys].filter(key => JSON.stringify(editorSession.baseline[key] || null) !== JSON.stringify(editorSession.draft[key] || null));
-}
-
-function undoEditorAction() {
-  if (!state.editorMode || !editorSession?.history.length) return;
-  editorSession.draft = editorSession.history.pop();
-  render();
-}
-
-function editorDayPrefix(dIso) {
-  return (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-}
-
-function publishedSwapMap() {
-  /* Без общей базы (локальное превью / отключённое облако) утверждённых
-     замен не существует — исходный день равен официальному расписанию. */
-  return sharedSwapsEnabled() ? loadApprovedSwaps() : {};
-}
-
-function editorDayKeys(dIso) {
-  const prefix = editorDayPrefix(dIso);
-  return [...new Set([
-    ...Object.keys(publishedSwapMap()).filter(key => key.startsWith(prefix)),
-    ...Object.keys(editorSession?.draft || {}).filter(key => key.startsWith(prefix)),
-  ])];
-}
-
-function publishedSwap(key) {
-  const entry = publishedSwapMap()[key];
-  return entry && !entry.deleted ? entry : null;
-}
-
-function draftSwap(key) {
-  const entry = editorSession?.draft?.[key];
-  return entry && !entry.deleted ? entry : null;
-}
-
-/* День отличается от «официальное расписание + утверждённые замены»? */
-function dayDiffersFromPublished(dIso) {
-  if (!dIso) return false;
-  if (!state.editorMode || !editorSession) return hasDaySwaps(dIso);
-  return editorDayKeys(dIso).some(key =>
-    JSON.stringify(publishedSwap(key)) !== JSON.stringify(draftSwap(key))
-  );
-}
-
-function restoreEditorSwap(key) {
-  const confirmed = publishedSwap(key);
-  if (confirmed) editorSession.draft[key] = cloneSwapMap(confirmed);
-  else delete editorSession.draft[key];
-}
-
-function resetEditorDay(dIso) {
-  if (!state.editorMode || !editorSession || !dIso) return;
-  /* «Исходный день» = официальное расписание + текущие опубликованные замены,
-     а не снимок черновика на входе в редактор. */
-  const dayKeys = editorDayKeys(dIso);
-  if (!dayDiffersFromPublished(dIso)) {
-    toast("этот день и так исходный");
-    return;
-  }
-  editorSession.history.push(cloneSwapMap(editorSession.draft));
-  dayKeys.forEach(restoreEditorSwap);
-  render();
-  toast("день возвращён к исходному расписанию");
-}
-
-async function saveEditorMode() {
-  if (!state.editorMode || !editorSession) return;
-  const changedKeys = editorChangedEntries();
-  if (!changedKeys.length) {
-    toast("изменений нет");
-    await closeEditorAnimated();
-    return;
-  }
-  const map = loadSwaps();
-  const entries = {};
-  const updatedAt = Math.max(Date.now(), ...Object.values(map).map(entry => Number(entry?.updatedAt) + 1 || 0));
-  const operationId = crypto.randomUUID ? crypto.randomUUID() : updatedAt.toString(36) + Math.random().toString(36).slice(2);
-  changedKeys.forEach(key => {
-    const draft = editorSession.draft[key];
-    const entry = draft ? { ...draft, updatedAt } : { deleted: true, updatedAt };
-    if (changedKeys.length > 1) {
-      entry.operationId = operationId;
-      entry.operationSize = changedKeys.length;
-    }
-    map[key] = entry;
-    entries[key] = entry;
-  });
-  saveSwaps();
-  const role = myRole();
-  await closeEditorAnimated();
-  if (sharedSwapsEnabled()) {
-    const ok = await publishSwapBatch(entries, role === "user" ? "предложены изменения расписания" : "сохранены изменения расписания");
-    if (!ok) toast(cloudFailHint());
-  } else {
-    toast("изменения сохранены на этом устройстве");
-  }
-}
 
 function loadSwaps() {
   if (swapMap) return swapMap;
@@ -3956,57 +2881,6 @@ function saveSwaps() {
   }
 }
 
-/* Замены, подтверждённые в общей базе (weeqo-swaps): только они входят
-   в «исходный день». Собственные черновики и заявки сюда не попадают. */
-function loadApprovedSwaps() {
-  if (approvedMap) return approvedMap;
-  approvedMap = {};
-  try {
-    const raw = localStorage.getItem(APPROVED_KEY);
-    if (raw) {
-      const data = JSON.parse(raw);
-      if (data && typeof data === "object") approvedMap = data;
-    }
-  } catch (e) {
-    /* приватный режим */
-  }
-  return approvedMap;
-}
-
-function saveApprovedSwaps() {
-  try {
-    localStorage.setItem(APPROVED_KEY, JSON.stringify(loadApprovedSwaps()));
-  } catch (e) {
-    /* приватный режим */
-  }
-}
-
-/* Полная замена снимка из облака: что убрали в weeqo-swaps, то больше не утверждено. */
-function setApprovedSwaps(remote) {
-  approvedMap = {};
-  for (const key in remote) {
-    const entry = remote[key];
-    if (entry && typeof entry === "object") approvedMap[key] = entry;
-  }
-  pruneSwapMap(approvedMap);
-  saveApprovedSwaps();
-}
-
-/* Свои же записи становятся утверждёнными только после успешной записи в weeqo-swaps. */
-function mergeApprovedSwaps(entries) {
-  const map = loadApprovedSwaps();
-  let changed = false;
-  for (const key in entries) {
-    const entry = entries[key];
-    if (!entry || typeof entry !== "object") continue;
-    if (JSON.stringify(map[key]) === JSON.stringify(entry)) continue;
-    map[key] = cloneSwapMap(entry);
-    changed = true;
-  }
-  if (changed) saveApprovedSwaps();
-  return changed;
-}
-
 function swapKey(dIso, n) {
   return (state.group || DEFAULT_GROUP) + "|" + dIso + ":" + n;
 }
@@ -4021,17 +2895,6 @@ function setSwap(dIso, n, value) { return applyDayChanges(dIso, { [n]: value });
 function applyDayChanges(dIso, changes, label = "замена") {
   const keys = Object.keys(changes).filter(n => Number.isInteger(Number(n)) && Number(n) >= 1 && Number(n) <= 6);
   if (!keys.length) return false;
-  if (state.editorMode && editorSession) {
-    editorSession.history.push(cloneSwapMap(editorSession.draft));
-    const updatedAt = Date.now();
-    keys.forEach(n => {
-      const key = swapKey(dIso, Number(n));
-      const value = changes[n];
-      if (value === null) delete editorSession.draft[key];
-      else editorSession.draft[key] = { ...value, updatedAt };
-    });
-    return true;
-  }
   const map = loadSwaps();
   const updatedAt = Math.max(Date.now(), ...Object.values(map).map(entry => Number(entry?.updatedAt) + 1 || 0));
   const operationId = crypto.randomUUID ? crypto.randomUUID() : updatedAt.toString(36) + Math.random().toString(36).slice(2);
@@ -4045,12 +2908,7 @@ function applyDayChanges(dIso, changes, label = "замена") {
     map[key] = entry; entries[key] = entry;
   }
   saveSwaps();
-  if (Object.keys(entries).length) {
-    const expectedCloudWrite = sharedSwapsEnabled() && myRole() !== "anon";
-    publishSwapBatch(entries, label)
-      .then(ok => { if (expectedCloudWrite && !ok) toast(cloudFailHint()); })
-      .catch(error => { if (expectedCloudWrite) toast(error?.message || cloudFailHint()); });
-  }
+  if (Object.keys(entries).length) publishSwapBatch(entries, label);
   return true;
 }
 
@@ -4101,8 +2959,7 @@ function movePairToEdge(dIso, fromN, after) {
 }
 
 function dayRevertHtml(dIso) {
-  const action = state.editorMode ? "data-editor=\"reset-day\"" : "data-act=\"reset-day\"";
-  return `<button class="sched-day-revert" type="button" ${action} data-date="${dIso}" ${dayDiffersFromPublished(dIso) ? "" : "hidden"}
+  return `<button class="sched-day-revert" type="button" data-act="reset-day" data-date="${dIso}" ${hasDaySwaps(dIso) ? "" : "hidden"}
       aria-label="вернуть исходные пары: ${escapeHtml(dateLabel(dateFromIso(dIso)))}" title="вернуть исходное расписание только этого дня">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4-5 5 5 5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
       <span class="sched-day-revert-label">вернуть</span>
@@ -4162,7 +3019,7 @@ function openMoveSheet(dIso, n) {
 function slotsFor(d) {
   const list = slotsForBase(d);
   if (!list.length) return list;
-  const map = activeSwapMap();
+  const map = loadSwaps();
   const dIso = iso(d);
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   let hasAny = false;
@@ -4218,7 +3075,7 @@ function slotsFor(d) {
 
 function hasDaySwaps(dIso) {
   if (!dIso) return false;
-  const map = activeSwapMap();
+  const map = loadSwaps();
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   for (const key in map) {
     if (key.indexOf(prefix) === 0 && map[key] && !map[key].deleted) {
@@ -4232,7 +3089,7 @@ async function resetDaySwaps(dIso) {
   if (!dIso) return;
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   const changes = {};
-  for (const [key, value] of Object.entries(activeSwapMap())) {
+  for (const [key, value] of Object.entries(loadSwaps())) {
     if (key.startsWith(prefix) && value && !value.deleted) changes[Number(key.slice(prefix.length))] = null;
   }
   if (!applyDayChanges(dIso, changes, "возвращено исходное расписание дня")) return;
@@ -4258,7 +3115,7 @@ async function resetAllSwaps() {
 
 function updateDayRevertBtn() {
   document.querySelectorAll('.sched-day-block[data-day] .sched-day-revert').forEach(button => {
-    button.hidden = !dayDiffersFromPublished(button.dataset.date);
+    button.hidden = !hasDaySwaps(button.dataset.date);
   });
 }
 
@@ -4266,7 +3123,7 @@ var ICON_SWAP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></svg>';
 
 function swapButtonHtml(dIso, n, isWindow) {
-  if (!dIso || !state.editorMode) return "";
+  if (!dIso) return "";
   const title = isWindow ? "добавить или изменить пару" : "изменить или перенести пару — нажми или потяни";
   return (
     '<button class="lesson-swap-btn" type="button" data-act="swap" data-date="' +
@@ -4404,8 +3261,7 @@ function openSwapSheet(dIso, n) {
     '<button class="is-primary" type="button" data-swap="save">' +
     swapPrimaryLabel() +
     "</button>" +
-    /* В окне отменять нечего — пары там нет. */
-    (isWindowSlot ? "" : '<button type="button" data-swap="cancel-lesson">отменить пару</button>') +
+    '<button type="button" data-swap="cancel-lesson">отменить пару</button>' +
     '<button type="button" data-swap="reset">вернуть как было</button>' +
     '<button type="button" data-swap="close">закрыть</button>' +
     "</div>" +
@@ -4481,18 +3337,12 @@ function openSwapSheet(dIso, n) {
       return;
     }
     if (act === "reset") {
-      const key = swapKey(dIso, n);
-      const confirmed = state.editorMode && editorSession ? publishedSwap(key) : null;
-      setSwap(dIso, n, confirmed ? cloneSwapMap(confirmed) : null);
+      setSwap(dIso, n, null);
 
       commit();
       return;
     }
     if (act === "cancel-lesson") {
-      if (isWindowSlot) {
-        toast("в окне нет пары — отменять нечего");
-        return;
-      }
       setSwap(dIso, n, { cancelled: true });
 
       commit();
@@ -4563,7 +3413,7 @@ var swapDragSuppressUntil = 0;
        результата открывалась бы шторка редактирования. */
     if (Date.now() < swapDragSuppressUntil) return;
     const btn = e.target.closest('[data-act="swap"]');
-    if (!btn || !state.editorMode) return;
+    if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
     openSwapSheet(btn.dataset.date, Number(btn.dataset.n));
@@ -4571,7 +3421,7 @@ var swapDragSuppressUntil = 0;
   scene.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       const btn = e.target.closest('[data-act="swap"]');
-      if (btn && state.editorMode) {
+      if (btn) {
         e.preventDefault();
         e.stopPropagation();
         openSwapSheet(btn.dataset.date, Number(btn.dataset.n));
@@ -4583,16 +3433,7 @@ var swapDragSuppressUntil = 0;
 /* Shared movement controller for all lesson card types. */
 bindPairDrag({
   scene: document.getElementById("scene"),
-  /* Те же строки, что и на экране: иначе в режиме редактора превью переноса
-     собиралось из другого набора пар и места путались. */
-  slotsForDate: date => visibleSlotsFor(dateFromIso(date)),
-  /* Метки «сейчас/далее» рисуем и в превью переноса: без них текст пары
-     пересобирался на зажатие и «телепортировался». */
-  renderRow: (slot, date) => {
-    const d = dateFromIso(date);
-    const live = sameDay(d, startOfDay(currentDate())) ? liveState(d) : null;
-    return rowHtml(slot, live, date);
-  },
+  slotsForDate: date => slotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
   onSwap: movePair, onReorder: (date, from, to) => movePairRelative(date, from, to, to > from),
   onActiveChange: active => {
     pairDragActive = active;
@@ -4631,7 +3472,7 @@ function previewAnimated() {
 function migrateSwaps(data) {
   const out = {};
   Object.keys(data).forEach((key) => {
-    out[key.indexOf("|") === -1 ? "тм-303/б|" + key : key] = data[key];
+    out[key.indexOf("|") === -1 ? "\u0442\u043c-303/\u0431|" + key : key] = data[key];
   });
   return out;
 }
@@ -4656,7 +3497,11 @@ function scheduleStamp(payload) {
   if (Number.isNaN(when.getTime())) return;
   const hh = String(when.getHours()).padStart(2, "0");
   const mm = String(when.getMinutes()).padStart(2, "0");
-  el.textContent = "расписание обновлено в " + hh + ":" + mm;
+  el.textContent =
+    "\u0440\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u0432 " +
+    hh +
+    ":" +
+    mm;
 }
 
 function applySchedulePayload(payload) {
@@ -4670,7 +3515,8 @@ function applySchedulePayload(payload) {
       save();
     }
     scheduleStamp(payload);
-    renderPassive();
+    render();
+    renderStrip();
     return true;
   });
 }
@@ -4812,7 +3658,7 @@ async function ensureFbToken() {
   if (fbAuth.pending) return fbAuth.pending;
   const holder = fbAuth;
   const promise = (async () => {
-    const signed = await botRequest("auth/firebase", {}, sessionToken, { retries: 0 });
+    const signed = await botRequest("auth/firebase", {}, sessionToken);
     if (!signed.custom_token) throw new BotApiError("обнови папку bot: сервер не выдал firebase-токен", 503, "firebase_not_configured");
     const fresh = await fbAuthPost("https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken", { token: signed.custom_token, returnSecureToken: true });
     if (epoch !== tgAuthEpoch || tgSession?.id !== identity) throw new BotApiError("аккаунт изменился — действие отменено", 409, "cancelled");
@@ -4840,26 +3686,16 @@ async function sharedUrlWithAuth(url, forceFresh = false) {
   if (token) target.searchParams.set("auth", token);
   return target.href;
 }
-/* Запись всегда идёт в cloudRoot() + "/" + CLOUD_PATHS.swaps, поэтому чтение обязано
-   брать тот же узел. Любой путь из конфига (корень, /weeqo-swaps.json или
-   старый узел вроде /swaps.json) сводим к корню базы. Иначе замена
-   успешно записывалась (в телеграм даже приходило уведомление), а сайт
-   читал другой узел и ничего не показывал. */
-function sharedSwapsRoot() {
-  if (LOCAL_PREVIEW || !SHARED_SWAPS_URL) return null;
+function sharedSwapsUrl() {
+  if (LOCAL_PREVIEW || !SHARED_SWAPS_URL) return "";
   try {
     const url = new URL(SHARED_SWAPS_URL);
-    if (url.protocol !== "https:" || url.username || url.password) return null;
-    url.hash = "";
-    url.pathname = url.pathname.replace(/\/[^/]*\.json$/, "").replace(/\/+$/, "");
-    return url;
-  } catch (_) { return null; }
-}
-
-function sharedSwapsUrl() {
-  const root = sharedSwapsRoot();
-  if (!root) return "";
-  return cloudRoot() + "/" + CLOUD_PATHS.swaps + ".json" + (root.search || "");
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    if (/\.(firebaseio\.com|firebasedatabase\.app)$/.test(url.hostname) && !url.pathname.endsWith(".json")) {
+      url.pathname = url.pathname.replace(/\/$/, "") + "/" + CLOUD_PATHS.swaps + ".json";
+    }
+    return url.href;
+  } catch (_) { return ""; }
 }
 
 function sharedSwapsEnabled() {
@@ -4920,11 +3756,7 @@ var telegramLogin = new TelegramLogin({
   onSession: result => applyTgSession(result), onChange: () => renderLoginPanels(),
 });
 function renderLoginPanels() {
-  document.querySelectorAll('[data-login-panel]').forEach(el => {
-    el.innerHTML = tgSession
-      ? '<strong class="sched-onboarding-linked">telegram уже привязан</strong>'
-      : authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW);
-  });
+  document.querySelectorAll('[data-login-panel]').forEach(el => { el.innerHTML = authButtonHtml(telegramLogin?.snapshot, LOCAL_PREVIEW); });
 }
 document.addEventListener('click', event => {
   const action = event.target.closest('[data-auth-action]');
@@ -4986,25 +3818,7 @@ function refreshAuthUi() {
   applyFlags();
   updateTgButton();
   renderTgSheetBody();
-  if (state.profileOpen) {
-    const backdrop = $("#profile-backdrop");
-    const content = backdrop?.querySelector(".sched-profile-content");
-    const scrollTop = content?.scrollTop || 0;
-    const notifsOpen = backdrop?.querySelector("#profile-notifs-toggle")?.getAttribute("aria-expanded") === "true";
-    backdrop?.classList.add("is-refreshing");
-    openProfile();
-    const freshContent = backdrop?.querySelector(".sched-profile-content");
-    if (freshContent) freshContent.scrollTop = scrollTop;
-    if (notifsOpen) {
-      const toggle = backdrop?.querySelector("#profile-notifs-toggle");
-      const panel = backdrop?.querySelector("#profile-notifs-panel");
-      toggle?.setAttribute("aria-expanded", "true");
-      panel?.classList.add("is-open");
-      panel?.setAttribute("aria-hidden", "false");
-      if (panel) panel.inert = false;
-    }
-    requestAnimationFrame(() => requestAnimationFrame(() => backdrop?.classList.remove("is-refreshing")));
-  }
+  if (state.profileOpen) openProfile();
 }
 
 function resetFirebaseIdentity() {
@@ -5038,7 +3852,6 @@ async function ensurePushSession(force = false) {
   }
   if (!force && tgAuthError && Date.now() < tgAuthRetryAt) throw tgAuthError;
   const epoch = tgAuthEpoch, previous = tgSession, token = previous.session_token;
-  const previousAuthState = tgAuthState;
   tgAuthState = "checking";
   const promise = (async () => {
     try {
@@ -5053,14 +3866,7 @@ async function ensurePushSession(force = false) {
       tgAuthError = null;
       tgAuthState = "ready";
       saveTgSession();
-      trackStatsVisit(true);
-      const profileChanged = previousAuthState !== "ready" ||
-        previous.role !== session.role ||
-        previous.username !== session.username ||
-        previous.photo_url !== session.photo_url ||
-        tgDisplayName(previous) !== tgDisplayName(session);
-      if (profileChanged) refreshAuthUi();
-      else { applyFlags(); updateTgButton(); }
+      refreshAuthUi();
       return session.session_token;
     } catch (error) {
       if (epoch === tgAuthEpoch) {
@@ -5151,7 +3957,6 @@ function applyTgSession(result, epoch = tgAuthEpoch) {
   tgRoles = { owner: null, editors: {}, boundTg: session.id };
   saveTgSession();
   refreshAuthUi();
-  trackStatsVisit(true);
   toast("привет, " + tgDisplayName(session) + "!");
   refreshTgSubscription();
   tgSyncRoles().then(() => pullSharedSwaps()).catch(() => {});
@@ -5175,14 +3980,13 @@ function myRole() {
 }
 
 function swapPrimaryLabel() {
-  if (state.editorMode) return "применить";
   const role = myRole();
-  return role === "owner" || role === "editor" ? "опубликовать" : "предложить";
+  return role === "owner" || role === "editor" ? "опубликовать" : role === "user" ? "предложить" : "сохранить у себя";
 }
 
 function swapAccessHint() {
   if (!sharedSwapsEnabled()) return "";
-  if (myRole() === "anon") return '<p class="sched-replace-hint">предложение сохранится у тебя и отправится редакторам без входа. telegram можно привязать позже.</p>';
+  if (myRole() === "anon") return '<p class="sched-replace-hint">сохранится на этом устройстве. для общих замен войди через телеграм в профиле.</p>';
   if (myRole() === "user") return '<p class="sched-replace-hint">у тебя применится сразу, у остальных — после проверки владельцем.</p>';
   return "";
 }
@@ -5205,7 +4009,7 @@ async function tgSyncRoles() {
       await ensurePushSession();
       if (!sharedSwapsEnabled()) return;
       await tgRegister();
-      const response = await cloudFetch(cloudRoot() + "/" + CLOUD_PATHS.editors + ".json", { cache: "no-store" });
+      const response = await fetch(await sharedUrlWithAuth(cloudRoot() + "/" + CLOUD_PATHS.editors + ".json"), { cache: "no-store" });
       if (epoch !== tgAuthEpoch) return;
       tgRoles.owner = tgSession.role === "owner" ? tgSession.id : null;
       if (response.ok) tgRoles.editors = await response.json() || {};
@@ -5243,24 +4047,7 @@ document.addEventListener("click", event => {
 
 /* Корень базы без имени файла: из ".../sched-swaps.json" делаем "...". */
 function cloudRoot() {
-  const root = sharedSwapsRoot();
-  /* Без завершающего слеша: иначе путь соберётся с "//" и Firebase уйдёт в другой узел. */
-  return root ? (root.origin + root.pathname).replace(/\/+$/, "") : "";
-}
-
-/* Reads use the same verified Firebase identity as writes. This matters when
-   production rules do not allow anonymous reads. A rejected/expired ID token
-   is refreshed once; callers still receive the final response and can show a
-   useful setup/login error instead of creating a request storm. */
-async function cloudFetch(url, options = {}) {
-  const canAuthenticate = firebaseAuthEnabled() && Boolean(tgSession?.session_token);
-  let response = null;
-  for (let attempt = 0; attempt < (canAuthenticate ? 2 : 1); attempt += 1) {
-    const target = canAuthenticate ? await sharedUrlWithAuth(url, attempt > 0) : url;
-    response = await fetch(target, options);
-    if (response.status !== 401 || attempt > 0) break;
-  }
-  return response;
+  return sharedSwapsUrl().replace(/\/[^/]*\.json.*$/, "");
 }
 
 /* В ключах замен есть "/" (группы вида "тм-303/б") и могут быть точки —
@@ -5275,9 +4062,7 @@ function encodeSwapKey(key) {
 }
 function decodeSwapKey(enc) {
   try {
-    /* Суффикс "*xxxx" добавляется анонимным предложениям, чтобы не
-       перезаписывать чужой узел; на слот он не влияет. */
-    return decodeURIComponent(String(enc).replace(/\*[A-Za-z0-9]+$/, "")).replace(/~/g, "/");
+    return decodeURIComponent(enc).replace(/~/g, "/");
   } catch (e) {
     return enc;
   }
@@ -5311,68 +4096,69 @@ function reportPushError(error) {
   pushWarningAt = Date.now();
   console.warn("sched: уведомление не отправлено:", error.message);
 }
-function botHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-function botDate(dIso) {
-  try {
-    const d = dateFromIso(dIso);
-    return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
-  } catch (_) { return dIso || "неизвестная дата"; }
-}
-function botLesson(slot) {
-  const value = slot || {};
-  if (value.makeWindow || value.window || value.empty) return "окно";
-  const subject = botHtml(value.subject || "пара без названия");
-  const meta = [value.teacher, value.room].filter(Boolean).map(botHtml).join(" · ");
-  return meta ? `${subject}\n<blockquote>${meta}</blockquote>` : subject;
-}
 function notifyCloudEvent(path, body) {
   if (LOCAL_PREVIEW || !body || !window.SCHED_NOTIFY_URL) return;
   const section = String(path).split("/")[0];
-  const type = section === CLOUD_PATHS.swaps ? "swap" : section === CLOUD_PATHS.pending ? "pending" : null;
-  if (!type) return;
+  const type =
+    section === CLOUD_PATHS.swaps
+      ? "swap"
+      : section === CLOUD_PATHS.pending
+        ? "pending"
+        : section === CLOUD_PATHS.reports
+          ? "report"
+          : null;
+  if (!type || type === "report") return; // Reports have one explicit send path.
   const key = decodeSwapKey(String(path).slice(section.length + 1));
   const stamp = body.updatedAt || body.createdAt || 0;
-  const parts = key.split("|");
-  const group = parts[0] || ""; // Только маршрутизация, в сообщение не выводится.
-  const when = (parts[1] || "").split(":");
-  const dIso = when[0] || "";
-  const n = Number(when[1]) || 0;
-  let original = null;
-  try { original = slotsForBase(dateFromIso(dIso)).find(slot => slot.n === n) || null; } catch (_) {}
-
-  let verb;
-  if (type === "pending") {
-    verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
-  } else if (body.makeWindow) verb = "сделали окном";
-  else if (body.deleted) verb = "вернули";
-  else if (body.cancelled) verb = "отменили";
-  else if (body.moved) verb = "перенесли";
-  else verb = "заменили";
-
-  const shown = body.cancelled || body.deleted ? original : body;
-  let text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>`;
-  if (shown) text += `\n\n${botLesson(shown)}`;
-  queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group }).catch(reportPushError);
+  let group = type === "report" ? body.group || "" : key.split("|")[0];
+  let text;
+  if (type === "report") {
+    text = "🐞 отчёт · " + group + "\n" + String(body.message || "").slice(0, 2500);
+    if (body.hasFile) text += "\n📎 вложение доступно в отчётах на сайте";
+  } else {
+    const rest = key.split("|")[1] || "";
+    const when = rest.split(":");
+    const dIso = when[0] || "";
+    const n = Number(when[1]) || 0;
+    const what =
+      type === "pending"
+        ? "🕐 заявка на проверку"
+        : body.makeWindow
+          ? "🪟 окно после переноса"
+          : body.deleted
+            ? "↩️ сброс замены"
+            : body.cancelled
+              ? "🔕 отмена пары"
+              : body.moved ? "↪️ перенос" : "🔔 замена";
+    let original = null;
+    try { original = slotsForBase(dateFromIso(dIso)).find((slot) => slot.n === n) || null; } catch (e) {}
+    const lessonLine = (slot) => {
+      const value = slot || {};
+      const details = value.makeWindow || value.window || value.empty
+        ? ["окно"]
+        : [value.subject, value.teacher, value.room].filter(Boolean);
+      return [dIso, n ? n + " пара" : "", ...details].filter(Boolean).join(" · ");
+    };
+    text = what;
+    if (!body.cancelled && !body.deleted && !body.moved && !body.makeWindow && original) {
+      text += "\n" + lessonLine(original) + "\n↓\n" + lessonLine(body);
+    } else {
+      const shown = body.cancelled || body.deleted ? original : body;
+      if (shown) text += "\n" + lessonLine(shown);
+    }
+  }
+  queueBotEvent({ type, event_id: path + ":" + stamp, text, group }).catch(reportPushError);
 }
 
 /* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
 /* Статус последней ошибки облака: 401/403 = права/правила, -1 = сеть. */
 var lastCloudStatus = 0;
 var lastCloudMessage = "";
-var cloudWriteRetryAt = 0;
 var cloudMutationChain = Promise.resolve();
 function cloudWrite(path, body, options = {}) {
   const identity = tgSession?.id;
   const task = cloudMutationChain.then(async () => {
     if (LOCAL_PREVIEW) return false;
-    /* A denied Firebase write used to make every pending edit request a fresh
-       bot/Firebase token, quickly causing a 429 storm and repeated UI refreshes. */
-    if (Date.now() < cloudWriteRetryAt) return false;
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
     try {
       if (!identity || tgSession?.id !== identity) throw new BotApiError("для общих правок войди через телеграм", 401, "login_required");
@@ -5396,22 +4182,15 @@ function cloudWrite(path, body, options = {}) {
       }
       lastCloudStatus = response?.status || -1;
       if (!response?.ok) {
-        if ([401, 403, 429].includes(response?.status)) cloudWriteRetryAt = Date.now() + 60000;
         lastCloudMessage = response?.status === 401
           ? "firebase не принял обновлённые права — опубликуй config/firebase.rules.json и проверь, что Web API key относится к этой базе"
           : "база отклонила запись — проверь config/firebase.rules.json и серверный ключ firebase";
         return false;
       }
-      cloudWriteRetryAt = 0;
       lastCloudStatus = 0; lastCloudMessage = "";
       if (options.notify !== false) notifyCloudEvent(path, body);
       return true;
-    } catch (error) {
-      lastCloudStatus = error.status || -1;
-      if ([401, 403, 429].includes(lastCloudStatus)) cloudWriteRetryAt = Date.now() + 60000;
-      lastCloudMessage = error.message;
-      return false;
-    }
+    } catch (error) { lastCloudStatus = error.status || -1; lastCloudMessage = error.message; return false; }
     finally { clearTimeout(timer); }
   });
   cloudMutationChain = task.catch(() => {});
@@ -5435,122 +4214,21 @@ function sanitizeSwapPayload(entry) {
   return e;
 }
 
-async function anonymousProposalIdentity() {
-  const raw = statsVisitorId();
-  if (!raw) return "";
-  try {
-    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-    return "anon:" + [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, "0")).join("");
-  } catch (_) {
-    let seed = 2166136261;
-    for (const char of raw) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619) >>> 0;
-    return "anon:" + Array.from({ length: 8 }, (_, index) => ((seed ^ Math.imul(index + 1, 2654435761)) >>> 0).toString(16).padStart(8, "0")).join("");
-  }
-}
-
-async function cloudWriteAnonymousPendingPerKey(payloads, signal) {
-  const keys = Object.keys(payloads || {});
-  if (!keys.length) return false;
-  const putKey = async (nodeKey, body) => {
-    const response = await fetch(
-      cloudRoot() + "/" + CLOUD_PATHS.pending + "/" + nodeKey + ".json",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        credentials: "omit",
-        referrerPolicy: "no-referrer",
-        signal,
-      },
-    );
-    if (!response.ok) lastCloudStatus = response.status;
-    return response.ok;
-  };
-  let sent = 0;
-  for (const key of keys) {
-    try {
-      if (await putKey(key, payloads[key])) { sent += 1; continue; }
-      /* Правила разрешают анониму только создание узла: если по этой паре
-         заявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
-         видят его как ту же пару (суффикс срезается при раскодировке). */
-      if (lastCloudStatus === 401 || lastCloudStatus === 403) {
-        const suffix = "*" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
-        if (await putKey(key + suffix, payloads[key])) { sent += 1; continue; }
-      }
-    } catch (_) {
-      lastCloudStatus = -1;
-    }
-  }
-  return sent === keys.length;
-}
-
-async function cloudWriteAnonymousPending(payloads) {
-  if (!sharedSwapsEnabled() || LOCAL_PREVIEW) return false;
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch(cloudRoot() + "/" + CLOUD_PATHS.pending + ".json", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payloads),
-      credentials: "omit",
-      referrerPolicy: "no-referrer",
-      signal: controller.signal,
-    });
-    lastCloudStatus = response.status;
-    if (!response.ok) {
-      /* Многопутевой PATCH в корень weeqo-pending база проверяет по правилам
-         родителя, а разрешение для анонимных описано на $key. Дожимаем каждый ключ отдельно. */
-      if (response.status === 401 || response.status === 403) {
-        const perKey = await cloudWriteAnonymousPendingPerKey(payloads, controller.signal);
-        if (perKey) {
-          lastCloudStatus = 0;
-          lastCloudMessage = "";
-          return true;
-        }
-        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или войди через телеграм";
-        return false;
-      }
-      lastCloudMessage = "не удалось отправить предложение (" + response.status + ")";
-      return false;
-    }
-    lastCloudStatus = 0;
-    lastCloudMessage = "";
-    return true;
-  } catch (error) {
-    lastCloudStatus = -1;
-    lastCloudMessage = "не отправилось — проверь интернет";
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /* One atomic Firebase PATCH for a move/reset. No half-move and one bot event. */
 async function publishSwapBatch(entries, label = "изменены пары") {
   if (!sharedSwapsEnabled()) return false;
   const role = myRole();
-  const anonymous = role === "anon";
+  if (role === "anon") return false;
   const section = role === "owner" || role === "editor" ? CLOUD_PATHS.swaps : CLOUD_PATHS.pending;
-  const identity = anonymous ? await anonymousProposalIdentity() : tgSession?.id;
+  const identity = tgSession?.id;
   if (!identity) return false;
   const payloads = {};
   Object.entries(entries).forEach(([key, entry]) => {
-    /* Keep the encoded Firebase key in the JSON PATCH body. Decoding it here
-       reintroduced forbidden characters such as "." and made the whole batch fail. */
-    payloads[encodeSwapKey(key)] = sanitizeSwapPayload({
-      ...entry,
-      by: identity,
-      byName: anonymous ? "без авторизации" : tgDisplayName(tgSession),
-      ...(anonymous ? { anonymous: true } : {}),
-    });
+    payloads[decodeURIComponent(encodeSwapKey(key))] = sanitizeSwapPayload({ ...entry, by: identity, byName: tgDisplayName(tgSession) });
   });
-  if (!anonymous) {
-    await waitTgRoles();
-    if (tgSession?.id !== identity || !tgSessionVerified && !LOCAL_PREVIEW) return false;
-  }
-  const ok = anonymous
-    ? await cloudWriteAnonymousPending(payloads)
-    : await cloudWrite(section, payloads, { method: "PATCH", notify: false });
+  await waitTgRoles();
+  if (tgSession?.id !== identity || !tgSessionVerified && !LOCAL_PREVIEW) return false;
+  const ok = await cloudWrite(section, payloads, { method: "PATCH", notify: false });
   const map = loadSwaps();
   for (const [key, entry] of Object.entries(entries)) {
     if (map[key] !== entry) continue; // A late response must never replace a newer edit.
@@ -5558,66 +4236,21 @@ async function publishSwapBatch(entries, label = "изменены пары") {
     else entry.pendingSync = true;
   }
   saveSwaps();
-  /* В weeqo-swaps пишет только редактор/владелец — такая запись сразу утверждена. */
-  if (ok && section === CLOUD_PATHS.swaps) {
-    mergeApprovedSwaps(entries);
-    /* Свои правки лента раньше пропускала: notifyAboutRemoteSwaps игнорирует
-       записи с твоим by, чтобы не дублировать чужие. Добавляем локально. */
-    const own = Object.entries(entries);
-    const [firstKey, firstEntry] = own[0];
-    if (own.length === 1) {
-      pushNotif(
-        describeSwapForNotif(firstKey, firstEntry),
-        "swaps",
-        firstEntry.deleted ? "reset" : firstEntry.cancelled ? "cancel" : firstEntry.moved ? "move" : "swap",
-        buildNotifFrag(firstKey, firstEntry),
-      );
-    } else {
-      pushNotif(
-        "опубликовано изменений: " + own.length,
-        "swaps",
-        "swap",
-        buildNotifFrag(firstKey, firstEntry),
-      );
-    }
-  }
-  if (ok && !anonymous) {
+  if (ok) {
     const list = Object.entries(entries);
     if (list.length === 1) {
       const [key, entry] = list[0];
-      notifyCloudEvent(section + "/" + encodeSwapKey(key), {
-        ...entry, by: identity, byName: tgDisplayName(tgSession),
-      });
+      notifyCloudEvent(section + "/" + encodeSwapKey(key), { ...entry, by: identity });
     } else {
       const [key, entry] = list[0];
       const group = key.split("|")[0], date = (key.split("|")[1] || "").split(":")[0];
-      const pending = section === CLOUD_PATHS.pending;
-      const rows = list.map(([k, value]) => {
-        const n = Number(k.split(":").at(-1)) || 0;
-        const stateLabel = value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value);
-        return `<b>${n} пара</b>\n${stateLabel}`;
-      }).join("\n\n");
-      const action = pending ? "предложили перенести пары" : "перенесли пары";
-      const text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
-      queueBotEvent({ type: pending ? "pending" : "swap", format: "html", group,
-        event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text,
+      queueBotEvent({ type: section === CLOUD_PATHS.pending ? "pending" : "swap", group,
+        event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt),
+        text: `${section === CLOUD_PATHS.pending ? "🕐 заявка" : "🔔 расписание"} · ${group} · ${date}\n${label}\n` +
+          list.map(([k, value]) => `${k.split(":").at(-1)} пара: ${value.deleted ? "исходное расписание" : value.makeWindow ? "окно" : value.cancelled ? "отменена" : [value.subject, value.teacher, value.room].filter(Boolean).join(" · ")}`).join("\n"),
       }).catch(reportPushError);
     }
-  }
-  if (section === CLOUD_PATHS.pending) {
-    const count = Object.keys(entries).length;
-    const word = plural(count, "пару", "пары", "пар");
-    const author = anonymous ? "без авторизации" : tgDisplayName(tgSession);
-    if (ok) {
-      toast("предложено " + count + " " + word + " — ждём проверку редакторов");
-      pushNotif(
-        "ты предложил " + count + " " + word + " · на проверке у редакторов (" + author + ")",
-        "pending",
-        "pending",
-      );
-    } else {
-      toast("предложение не ушло — повторю сам");
-    }
+    if (section === CLOUD_PATHS.pending) toast("изменения отправлены на проверку одним действием");
   }
   return ok;
 }
@@ -5631,18 +4264,14 @@ function publishSwapKey(key) {
 
 async function pullPending() {
   try {
-    const resp = await cloudFetch(
-      cloudRoot() + ("/" + CLOUD_PATHS.pending + ".json"),
-      { headers: { Accept: "application/json" }, cache: "no-store" },
+    const resp = await fetch(
+      await sharedUrlWithAuth(cloudRoot() + ("/" + CLOUD_PATHS.pending + ".json")),
+      {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      },
     );
-    if (!resp.ok) {
-      lastCloudStatus = resp.status;
-      lastCloudMessage = resp.status === 401
-        ? "сессия облака истекла — войди через телеграм заново"
-        : "не удалось загрузить заявки (" + resp.status + ")";
-      return;
-    }
-    const data = await resp.json();
+    const data = resp.ok ? await resp.json() : null;
     pendingMap = data && typeof data === "object" ? data : {};
     notifyAboutPending();
   } catch (e) {
@@ -5660,7 +4289,7 @@ function pendingOperation(enc) {
     value.operationId === entry.operationId && value.by === entry.by && decodeSwapKey(key).split(":").slice(0, -1).join(":") === groupDate) : [[enc, entry]];
 }
 async function approvePending(enc) {
-  if (myRole() !== "owner" && myRole() !== "editor") { toast("только редактор может подтверждать заявки"); return; }
+  if (myRole() !== "owner") { toast("только владелец может подтверждать заявки"); return; }
   const entries = pendingOperation(enc);
   if (!entries.length) return;
   if (entries[0][1].operationSize && entries.length !== entries[0][1].operationSize) {
@@ -5668,35 +4297,23 @@ async function approvePending(enc) {
   }
   const updates = {};
   for (const [key, entry] of entries) {
-    /* `key` is already the exact flat Firebase child key. Never decode it into
-       a slash/dot before using it as a multi-location update path. */
-    updates[CLOUD_PATHS.swaps + "/" + key] = sanitizeSwapPayload(entry);
-    updates[CLOUD_PATHS.pending + "/" + key] = null;
+    const literal = decodeURIComponent(key);
+    updates[CLOUD_PATHS.swaps + "/" + literal] = sanitizeSwapPayload(entry);
+    updates[CLOUD_PATHS.pending + "/" + literal] = null;
   }
   if (!await cloudWrite("", updates, { method: "PATCH", notify: false })) { toast(cloudFailHint()); return; }
   const map = loadSwaps();
-  const approved = {};
-  for (const [key, entry] of entries) { delete pendingMap[key]; map[decodeSwapKey(key)] = { ...entry }; approved[decodeSwapKey(key)] = { ...entry }; }
-  saveSwaps();
-  mergeApprovedSwaps(approved); updateTgButton(); renderTgSheetBody(); render();
+  for (const [key, entry] of entries) { delete pendingMap[key]; map[decodeSwapKey(key)] = { ...entry }; }
+  saveSwaps(); updateTgButton(); renderTgSheetBody(); render();
   const [key, entry] = entries[0];
-  const decoded = decodeSwapKey(key), group = decoded.split("|")[0];
-  const date = (decoded.split("|")[1] || "").split(":")[0];
-  const rows = entries.map(([k, value]) => {
-    const when = decodeSwapKey(k).split("|")[1] || "";
-    const n = Number(when.split(":")[1]) || 0;
-    return `<b>${n} пара</b>\n${value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value)}`;
-  }).join("\n\n");
-  queueBotEvent({ type: "swap", format: "html", group,
-    event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
-    text: `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`,
-  }).catch(reportPushError);
+  queueBotEvent({ type: "swap", group: decodeSwapKey(key).split("|")[0], event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
+    text: "🔔 опубликованы изменения расписания · " + decodeSwapKey(key).split("|")[0] + "\n" + entries.map(([k, value]) => decodeSwapKey(k).split("|")[1] + " · " + (value.subject || (value.makeWindow ? "окно" : "восстановление / отмена"))).join("\n") }).catch(reportPushError);
   toast("изменения опубликованы");
 }
 async function rejectPending(enc) {
-  if (myRole() !== "owner" && myRole() !== "editor") { toast("только редактор может отклонять заявки"); return; }
+  if (myRole() !== "owner") { toast("только владелец может отклонять заявки"); return; }
   const entries = pendingOperation(enc);
-  const updates = Object.fromEntries(entries.map(([key]) => [key, null]));
+  const updates = Object.fromEntries(entries.map(([key]) => [decodeURIComponent(key), null]));
   if (!entries.length || !await cloudWrite(CLOUD_PATHS.pending, updates, { method: "PATCH", notify: false })) return;
   entries.forEach(([key]) => { delete pendingMap[key]; });
   updateTgButton(); renderTgSheetBody();
@@ -5793,27 +4410,18 @@ async function pullSharedSwaps() {
   /* Пока открыт редактор замены, сеть не дёргаем, чтобы не потерять ввод. */
   if (pairDragActive || document.getElementById("swap-backdrop") || document.getElementById("move-backdrop")) return;
   try {
-    const resp = await cloudFetch(url, {
+    const resp = await fetch(url, {
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (resp.status === 401 || resp.status === 403) {
-      lastCloudStatus = resp.status;
-      lastCloudMessage = resp.status === 401
-        ? "облако не приняло сессию — войди через телеграм заново"
-        : "нет доступа к общей базе — проверь опубликованные правила Firebase";
-      if (!pullSharedSwaps._warned) {
-        /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
-        pullSharedSwaps._warned = true;
-        console.warn(
-          "sched: облако отклоняет чтение (" +
-            resp.status +
-            ") — опубликуй config/firebase.rules.json и войди через телеграм заново",
-        );
-      }
-    } else if (resp.ok) {
-      lastCloudStatus = 0;
-      lastCloudMessage = "";
+    if ((resp.status === 401 || resp.status === 403) && !pullSharedSwaps._warned) {
+      /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
+      pullSharedSwaps._warned = true;
+      console.warn(
+        "sched: облако отклоняет чтение (" +
+          resp.status +
+          ") — опубликуй правила из firebase-rules.json в firebase Console и включи Anonymous-вход",
+      );
     }
     let remote = {};
     if (resp.ok) {
@@ -5821,16 +4429,14 @@ async function pullSharedSwaps() {
       if (data && typeof data === "object") remote = decodeSwapEntries(data);
     }
     notifyAboutRemoteSwaps(remote);
-    if (resp.ok) setApprovedSwaps(remote);
     const map = loadSwaps();
     const changedLocal = mergeSwapMaps(map, remote) || pruneSwapMap(map);
     if (changedLocal) {
       saveSwaps();
-      if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
+      if (!scrub && !document.getElementById("swap-backdrop")) render();
     }
-    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
-       тоже есть право записи в weeqo-pending. */
-    {
+    /* Редакторы дожимают записи, не ушедшие из-за офлайна. */
+    if (myRole() === "owner" || myRole() === "editor") {
       const batches = new Map();
       for (const [key, entry] of Object.entries(map)) {
         if (!entry?.pendingSync) continue;
@@ -5964,11 +4570,24 @@ function pendingRowHtml(enc, entry, role) {
     if (parts.length) what = parts.join(" · ");
   }
   const who = entry.byName || "без имени";
-  /* Та же карточка «до → после», что и в уведомлениях. */
+  /* Сегмент пары без времени: предмет, преподаватель · кабинет, «N пара · 1 ч 35 мин». */
   const frag = m ? buildNotifFrag(key, entry) : null;
-  const segHtml = frag ? notifFragHtml({ frag }) : "";
+  const dur = frag ? lessonDurationLabel(frag.d, frag.n) : "";
+  const segHtml = frag
+    ? '<div class="sched-pending-segment">' +
+      "<strong>" +
+      escapeHtml(frag.subject || frag.n + " пара") +
+      "</strong>" +
+      ([frag.teacher, frag.room].filter(Boolean).length
+        ? "<span>" + escapeHtml([frag.teacher, frag.room].filter(Boolean).join(" · ")) + "</span>"
+        : "") +
+      "<small>" +
+      escapeHtml(frag.n + " пара" + (dur ? " · " + dur : "")) +
+      "</small>" +
+      "</div>"
+    : "";
   let actions = "";
-  if (role === "owner" || role === "editor") {
+  if (role === "owner") {
     actions =
       '<button class="is-primary" type="button" data-tg="approve" data-key="' +
       escapeHtml(enc) +
@@ -5977,7 +4596,6 @@ function pendingRowHtml(enc, entry, role) {
       escapeHtml(enc) +
       '">отклонить</button>';
     if (
-      role === "owner" &&
       entry.by &&
       entry.by !== String(tgRoles.owner) &&
       !tgRoles.editors[entry.by]
@@ -5990,7 +4608,7 @@ function pendingRowHtml(enc, entry, role) {
         '">+ редактор</button>';
     }
   } else {
-    actions = '<span class="sched-pending-readonly-label">на проверке у редакторов</span>';
+    actions = '<span class="sched-pending-readonly-label">на проверке у владельца</span>';
   }
   return (
     '<div class="sched-tg-row"><div class="sched-tg-row-text"><strong>' +
@@ -6404,41 +5022,8 @@ function notifyAboutPending() {
 }
 
 /* Уведомляем только при изменении самих пар, а не checkedAt/updatedAt. */
-function normalizeScheduleGroups(groups) {
-  /* Парсер может отдать те же пары в другом порядке, с пустыми полями
-     или другим регистром — такое обновление не должно будить уведомление. */
-  const text = value => String(value == null ? "" : value).trim().replace(/\s+/g, " ").toLowerCase();
-  const extras = value => {
-    if (!value || typeof value !== "object") return "";
-    return Object.keys(value)
-      .filter(k => value[k] !== null && value[k] !== undefined && value[k] !== "" && value[k] !== false)
-      .sort()
-      .map(k => k + "=" + text(value[k]))
-      .join(",");
-  };
-  return (Array.isArray(groups) ? groups : [])
-    .map(group => {
-      const days = group && typeof group.days === "object" && group.days ? group.days : {};
-      const normDays = Object.keys(days)
-        .sort()
-        .map(dayId => {
-          const items = (Array.isArray(days[dayId]) ? days[dayId] : [])
-            .map(item => {
-              const list = Array.isArray(item) ? item : [];
-              return [Number(list[0]) || 0, text(list[1]), text(list[2]), text(list[3]), extras(list[4])].join("|");
-            })
-            .filter(line => line.split("|").slice(1, 4).some(Boolean))
-            .sort();
-          return dayId + ">" + items.join(";");
-        })
-        .join("/");
-      return text(group && group.id) + "#" + normDays;
-    })
-    .sort()
-    .join("\n");
-}
 function scheduleContentStamp(groups) {
-  const raw = normalizeScheduleGroups(groups);
+  const raw = JSON.stringify(Array.isArray(groups) ? groups : []);
   let hash = 2166136261;
   for (let i = 0; i < raw.length; i += 1) {
     hash ^= raw.charCodeAt(i);
@@ -6594,7 +5179,6 @@ function closeBellSheet() {
 function notifTitle(n, tone) {
   if (tone === "swap") return "замена";
   if (tone === "cancel") return "отмена пары";
-  if (tone === "pending") return "предложено на проверку";
   return (n && n.text) || "";
 }
 
