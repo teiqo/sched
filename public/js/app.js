@@ -1966,7 +1966,7 @@ function bindStrip() {
     selectDate(newDate, dir);
   });
 
-  /* колесо мыши: шаг без задержки и без очереди — анимация перехватывается на лету */
+  /* колесо мыши: шаг без ��адержки и без очереди — анимация перехватывается на лету */
   const WHEEL_STEP = 24;
   let wheelAcc = 0;
   let wheelFrame = null;
@@ -2643,7 +2643,7 @@ function statsPanelHtml() {
         ${statRow("получено отчётов", activity.reports_30d)}
       </div>
     </div>
-    <p class="sched-stats-note">пользователи без авторизации считаются по уникальной установке браузера. сырой идентификатор не сохраняется; после входа этот браузер больше не входит в анонимный счётчик.</p>
+    <p class="sched-stats-note">пользователи без авторизации считаются по уникальной установке браузера. сырой идентификатор не сохраняется; после входа этот браузер больше не вход��т в анонимный счётчик.</p>
   </section>`;
 }
 function profileTabsHtml(canReview) {
@@ -3672,7 +3672,12 @@ function init() {
 
 /* var намеренно: эти значения нужны раннему рендеру до конца модуля */
 var SWAP_KEY = "sched:swaps:v1";
+/* Утверждённые замены храним отдельно от локальной карты: в SWAP_KEY лежат
+   и свои ещё не проверенные правки, а «исходный день» должен считаться от
+   официального расписания плюс утверждённые замены. */
+var APPROVED_KEY = "sched:swaps-approved:v1";
 var swapMap = null;
+var approvedMap = null;
 var editorSession = null;
 var ICON_UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 6 6"/></svg>';
 var ICON_RESET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v6h6"/><path d="M5.5 15a7 7 0 1 0 1.1-7.8L4 10"/></svg>';
@@ -3817,7 +3822,9 @@ function editorDayPrefix(dIso) {
 }
 
 function publishedSwapMap() {
-  return loadSwaps();
+  /* Без общей базы (локальное превью / отключённое облако) утверждённых
+     замен не существует — исходный день равен официальному расписанию. */
+  return sharedSwapsEnabled() ? loadApprovedSwaps() : {};
 }
 
 function editorDayKeys(dIso) {
@@ -3931,6 +3938,57 @@ function saveSwaps() {
   } catch (e) {
     /* приватный режим */
   }
+}
+
+/* Замены, подтверждённые в общей базе (weeqo-swaps): только они входят
+   в «исходный день». Собственные черновики и заявки сюда не попадают. */
+function loadApprovedSwaps() {
+  if (approvedMap) return approvedMap;
+  approvedMap = {};
+  try {
+    const raw = localStorage.getItem(APPROVED_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data && typeof data === "object") approvedMap = data;
+    }
+  } catch (e) {
+    /* приватный режим */
+  }
+  return approvedMap;
+}
+
+function saveApprovedSwaps() {
+  try {
+    localStorage.setItem(APPROVED_KEY, JSON.stringify(loadApprovedSwaps()));
+  } catch (e) {
+    /* приватный режим */
+  }
+}
+
+/* Полная замена снимка из облака: что убрали в weeqo-swaps, то больше не утверждено. */
+function setApprovedSwaps(remote) {
+  approvedMap = {};
+  for (const key in remote) {
+    const entry = remote[key];
+    if (entry && typeof entry === "object") approvedMap[key] = entry;
+  }
+  pruneSwapMap(approvedMap);
+  saveApprovedSwaps();
+}
+
+/* Свои же записи становятся утверждёнными только после успешной записи в weeqo-swaps. */
+function mergeApprovedSwaps(entries) {
+  const map = loadApprovedSwaps();
+  let changed = false;
+  for (const key in entries) {
+    const entry = entries[key];
+    if (!entry || typeof entry !== "object") continue;
+    if (JSON.stringify(map[key]) === JSON.stringify(entry)) continue;
+    map[key] = cloneSwapMap(entry);
+    changed = true;
+  }
+  if (changed) saveApprovedSwaps();
+  return changed;
 }
 
 function swapKey(dIso, n) {
@@ -4753,22 +4811,32 @@ async function ensureFbToken() {
 }
 async function sharedUrlWithAuth(url, forceFresh = false) {
   const target = new URL(url);
-  if (target.origin !== new URL(sharedSwapsUrl()).origin) throw new Error("неверный адрес общей базы");
+  if (target.origin !== new URL(sharedSwapsUrl()).origin) throw new Error("неверный адре�� общей базы");
   if (forceFresh) resetFirebaseIdentity();
   const token = await ensureFbToken();
   if (token) target.searchParams.set("auth", token);
   return target.href;
 }
-function sharedSwapsUrl() {
-  if (LOCAL_PREVIEW || !SHARED_SWAPS_URL) return "";
+/* Запись всегда идёт в cloudRoot() + "/" + CLOUD_PATHS.swaps, поэтому чтение обязано
+   брать тот же узел. Любой путь из конфига (корень, /weeqo-swaps.json или
+   старый узел вроде /swaps.json) сводим к корню базы. Иначе замена
+   успешно записывалась (в телеграм даже приходило уведомление), а сайт
+   читал другой узел и ничего не показывал. */
+function sharedSwapsRoot() {
+  if (LOCAL_PREVIEW || !SHARED_SWAPS_URL) return null;
   try {
     const url = new URL(SHARED_SWAPS_URL);
-    if (url.protocol !== "https:" || url.username || url.password) return "";
-    if (/\.(firebaseio\.com|firebasedatabase\.app)$/.test(url.hostname) && !url.pathname.endsWith(".json")) {
-      url.pathname = url.pathname.replace(/\/$/, "") + "/" + CLOUD_PATHS.swaps + ".json";
-    }
-    return url.href;
-  } catch (_) { return ""; }
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    url.hash = "";
+    url.pathname = url.pathname.replace(/\/[^/]*\.json$/, "").replace(/\/+$/, "");
+    return url;
+  } catch (_) { return null; }
+}
+
+function sharedSwapsUrl() {
+  const root = sharedSwapsRoot();
+  if (!root) return "";
+  return cloudRoot() + "/" + CLOUD_PATHS.swaps + ".json" + (root.search || "");
 }
 
 function sharedSwapsEnabled() {
@@ -5152,7 +5220,9 @@ document.addEventListener("click", event => {
 
 /* Корень базы без имени файла: из ".../sched-swaps.json" делаем "...". */
 function cloudRoot() {
-  return sharedSwapsUrl().replace(/\/[^/]*\.json.*$/, "");
+  const root = sharedSwapsRoot();
+  /* Без завершающего слеша: иначе путь соберётся с "//" и Firebase уйдёт в другой узел. */
+  return root ? (root.origin + root.pathname).replace(/\/+$/, "") : "";
 }
 
 /* Reads use the same verified Firebase identity as writes. This matters when
@@ -5378,7 +5448,7 @@ async function cloudWriteAnonymousPendingPerKey(payloads, signal) {
     try {
       if (await putKey(key, payloads[key])) { sent += 1; continue; }
       /* Правила разрешают анониму только создание узла: если по этой паре
-         заявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
+         ��аявка уже лежит, кладём свою в свободный ключ с суффиксом — редакторы
          видят его как ту же пару (суффикс срезается при раскодировке). */
       if (lastCloudStatus === 401 || lastCloudStatus === 403) {
         const suffix = "*" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
@@ -5465,6 +5535,29 @@ async function publishSwapBatch(entries, label = "изменены пары") {
     else entry.pendingSync = true;
   }
   saveSwaps();
+  /* В weeqo-swaps пишет только редактор/владелец — такая запись сразу утверждена. */
+  if (ok && section === CLOUD_PATHS.swaps) {
+    mergeApprovedSwaps(entries);
+    /* Свои правки лента раньше пропускала: notifyAboutRemoteSwaps игнорирует
+       записи с твоим by, чтобы не дублировать чужие. Добавляем локально. */
+    const own = Object.entries(entries);
+    const [firstKey, firstEntry] = own[0];
+    if (own.length === 1) {
+      pushNotif(
+        describeSwapForNotif(firstKey, firstEntry),
+        "swaps",
+        firstEntry.deleted ? "reset" : firstEntry.cancelled ? "cancel" : firstEntry.moved ? "move" : "swap",
+        buildNotifFrag(firstKey, firstEntry),
+      );
+    } else {
+      pushNotif(
+        "опубликовано изменений: " + own.length,
+        "swaps",
+        "swap",
+        buildNotifFrag(firstKey, firstEntry),
+      );
+    }
+  }
   if (ok && !anonymous) {
     const list = Object.entries(entries);
     if (list.length === 1) {
@@ -5559,8 +5652,10 @@ async function approvePending(enc) {
   }
   if (!await cloudWrite("", updates, { method: "PATCH", notify: false })) { toast(cloudFailHint()); return; }
   const map = loadSwaps();
-  for (const [key, entry] of entries) { delete pendingMap[key]; map[decodeSwapKey(key)] = { ...entry }; }
-  saveSwaps(); updateTgButton(); renderTgSheetBody(); render();
+  const approved = {};
+  for (const [key, entry] of entries) { delete pendingMap[key]; map[decodeSwapKey(key)] = { ...entry }; approved[decodeSwapKey(key)] = { ...entry }; }
+  saveSwaps();
+  mergeApprovedSwaps(approved); updateTgButton(); renderTgSheetBody(); render();
   const [key, entry] = entries[0];
   const decoded = decodeSwapKey(key), group = decoded.split("|")[0];
   const date = (decoded.split("|")[1] || "").split(":")[0];
@@ -5703,13 +5798,14 @@ async function pullSharedSwaps() {
       if (data && typeof data === "object") remote = decodeSwapEntries(data);
     }
     notifyAboutRemoteSwaps(remote);
+    if (resp.ok) setApprovedSwaps(remote);
     const map = loadSwaps();
     const changedLocal = mergeSwapMaps(map, remote) || pruneSwapMap(map);
     if (changedLocal) {
       saveSwaps();
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
-    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
+    /* Не ушедшие записи дожимаем люб��й ролью: у автора предложения
        тоже есть право записи в weeqo-pending. */
     {
       const batches = new Map();
