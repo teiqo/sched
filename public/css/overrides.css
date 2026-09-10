@@ -3882,7 +3882,7 @@ a.sched-settings-row.sched-settings-link strong {
   background: color-mix(in srgb, var(--sched-blue, #0a84ff) 7%, transparent);
 }
 .agenda-row.is-window-row:active {
-  background: color-mix(in srgb, var(--sched-blue, #0a84ff) 12%, transparent);
+  background: var(--sched-window-bg, var(--sched-fill));
 }
 .agenda-row.is-window-row:hover .lesson-swap-btn {
   opacity: 1;
@@ -5954,7 +5954,7 @@ a.sched-settings-row,
 
 /* Drag clone keeps the exact original border-box width outside the stage. */
 .agenda-row.is-drag-float { box-sizing: border-box; }
-.sched-day-block.is-pair-dragging .agenda-break { display: none; }
+.sched-day-block.is-pair-dragging .sched-drag-original .agenda-break { display: none; }
 
 /* Кнопка замены в карточке текущей / следующей пары */
 .live-card-status-right {
