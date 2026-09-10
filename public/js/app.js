@@ -2092,7 +2092,12 @@ function bindEvents() {
       render();
     });
   });
-  $("#editor-btn")?.addEventListener("click", () => {
+  $("#editor-btn")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    /* Пока закрытие дорисовывает анимацию, повторный мобильный click не должен
+       снова включить редактор. */
+    if (editorClosing) return;
     if (state.editorMode) cancelEditorMode();
     else startEditorMode();
   });
@@ -3701,7 +3706,7 @@ function playEditorToolbarOpen() {
 }
 
 function startEditorMode() {
-  if (state.editorMode) return;
+  if (state.editorMode || editorClosing) return;
   closeSettings();
   closeSwapSheet();
   const baseline = cloneSwapMap(loadSwaps());
@@ -3780,12 +3785,23 @@ function playEditorClose(done) {
 }
 
 function closeEditorAnimated() {
-  if (!state.editorMode || editorClosing) {
-    if (!editorClosing) finishEditorMode();
+  if (editorClosing) return Promise.resolve();
+  if (!state.editorMode) {
+    finishEditorMode();
     return Promise.resolve();
   }
   editorClosing = true;
   document.body.classList.add("is-editor-closing");
+
+  /* Критично для телефона: логически выключаем редактор сразу в том же click,
+     не ждём 340 мс анимации. Иначе следующий тап по паре видел старый
+     editorMode=true и снова запускал редактирование/перетаскивание. */
+  state.editorMode = false;
+  editorSession = null;
+  closeSwapSheet();
+  closeMoveSheet();
+  applyFlags();
+
   return new Promise(resolve => {
     playEditorClose(before => {
       editorClosing = false;
