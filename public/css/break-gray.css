@@ -1,0 +1,45 @@
+/* Серая плашка активного перерыва.
+   Подключать ПОСЛЕДНИМ, после всех остальных css. */
+
+.live-lesson-card.is-break {
+  --break-gray: var(--sched-secondary, #98989d);
+}
+
+/* Весь текст карточки перерыва — серый */
+.live-lesson-card.is-break,
+.live-lesson-card.is-break h3,
+.live-lesson-card.is-break p,
+.live-lesson-card.is-break span,
+.live-lesson-card.is-break small,
+.live-lesson-card.is-break time,
+.live-lesson-card.is-break strong,
+.live-lesson-card.is-break .live-card-status,
+.live-lesson-card.is-break .live-card-status span,
+.live-lesson-card.is-break .live-card-status time,
+.live-lesson-card.is-break .lesson-meta,
+.live-lesson-card.is-break .lesson-type-accent,
+.live-lesson-card.is-break .lesson-room,
+.live-lesson-card.is-break .live-card-timing,
+.live-lesson-card.is-break .live-card-range,
+.live-lesson-card.is-break #live-clock,
+.live-lesson-card.is-break #live-passed,
+.live-lesson-card.is-break #live-left {
+  color: var(--break-gray) !important;
+}
+
+/* Точка статуса и её пульс */
+.live-lesson-card.is-break .live-card-status > span > i,
+.live-lesson-card.is-break .live-card-status > span > i:after {
+  background: var(--break-gray) !important;
+}
+
+/* Полоса прогресса перерыва */
+.live-lesson-card.is-break .live-card-progress i {
+  background: color-mix(in srgb, var(--break-gray) 80%, transparent) !important;
+}
+
+/* Кнопки внутри карточки оставляем читаемыми */
+.live-lesson-card.is-break button,
+.live-lesson-card.is-break button * {
+  color: var(--break-gray) !important;
+}

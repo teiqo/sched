@@ -1625,7 +1625,7 @@ function endScrub(options = {}) {
   const keepVisual = Boolean(options.keepVisual);
   const skipRender = Boolean(options.skipRender);
   /* Работает и без активного scrub: используется как полный сброс состояния,
-     чтобы после резкого о��пускания не оставались инлайн-трансформ и блюр. */
+     чтобы после резкого отпускания не оставались инлайн-трансформ и блюр. */
   const stripEl = (scrub && scrub.strip) || $("#strip");
   if (!stripEl) return;
   const wasActive = Boolean(scrub && (scrub.active || scrub.targetIndex !== undefined));
@@ -2356,7 +2356,7 @@ function futureDaysHtml() {
       : cachedFutureDay(d),
   );
   /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
-     а не возникали резко вмест�� со сменой сцены. */
+     а не возникали резко вместе со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
@@ -2738,7 +2738,7 @@ function openProfile() {
             </span>
             <span class="sched-settings-copy">
               <strong>отменить все замены</strong>
-              <span>сброс��ть все созданные замены для группы</span>
+              <span>сбросить все созданные замены для группы</span>
             </span>
           </span>
         </button>
@@ -2946,7 +2946,7 @@ var basicsTourRouletteOriginalDate = null;
 var basicsTourLastTriggerTime = 0;
 const BASICS_TOUR = [
   { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
-  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — ��еделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
+  { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3438,7 +3438,7 @@ function bindExtra() {
       toggleNotifPref(sw.dataset.npref, sw);
       return;
     }
-    /* Действия заявок/редакторов внутри профиля — ��������е же data-tg, что в шторке. */
+    /* Действия заявок/редакторов внутри профиля — такие же data-tg, что в шторке. */
     const tgEl = e.target.closest("[data-tg]");
     if (tgEl) {
       const tgAct = tgEl.dataset.tg;
@@ -4045,7 +4045,7 @@ function openMoveSheet(dIso, n) {
   backdrop.id = "move-backdrop";
   backdrop.className = "sched-replace-backdrop is-open";
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
-    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} па��а · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
+    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
     <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n ? 'disabled aria-current="true"' : ""}>
       <span class="sched-move-number">${slot.n}</span><span class="sched-move-target-copy"><strong>${escapeHtml(slot.window || slot.cancelled ? "окно" : slot.subject)}</strong>
@@ -4626,7 +4626,7 @@ function refreshSchedule(force) {
     .catch(() => false);
 }
 
-/* Пока на сервере пусто, проверяем каждые 5 ��инут, а не раз в час. */
+/* Пока на сервере пусто, проверяем каждые 5 минут, а не раз в час. */
 var scheduleRetryTimer = null;
 
 function planScheduleRetry() {
@@ -5318,9 +5318,9 @@ function cloudWrite(path, body, options = {}) {
   cloudMutationChain = task.catch(() => {});
   return task;
 }
-function cloudFailHint() { return lastCloudMessage || "не отправилось — проверь ин��ернет"; }
+function cloudFailHint() { return lastCloudMessage || "не отправилось — проверь интернет"; }
 
-/* Приводим запись к виду, который пропускает .validate в правила�� базы:
+/* Приводим запись к виду, который пропускает .validate в правилах базы:
    updatedAt — число не из будущего, строки — строками и в пределах лимитов. */
 function sanitizeSwapPayload(entry) {
   const e = Object.assign({}, entry);
@@ -5408,7 +5408,7 @@ async function cloudWriteAnonymousPending(payloads) {
           lastCloudMessage = "";
           return true;
         }
-        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или ��ойди через телеграм";
+        lastCloudMessage = "предложения без входа запрещены базой: опубликуй config/firebase.rules.json или войди через телеграм";
         return false;
       }
       lastCloudMessage = "не удалось отправить предложение (" + response.status + ")";
@@ -5683,7 +5683,7 @@ async function pullSharedSwaps() {
       lastCloudStatus = resp.status;
       lastCloudMessage = resp.status === 401
         ? "облако не приняло сессию — войди через телеграм заново"
-        : "нет доступа к общей баз�� — проверь опубликованные правила Firebase";
+        : "нет доступа к общей базе — проверь опубликованные правила Firebase";
       if (!pullSharedSwaps._warned) {
         /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
         pullSharedSwaps._warned = true;
@@ -5709,7 +5709,7 @@ async function pullSharedSwaps() {
       saveSwaps();
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
-    /* Не ушед��и�� записи дожимаем любой ролью: у автора предложения
+    /* Не ушедшие записи дожимаем любой ролью: у автора предложения
        тоже есть право записи в weeqo-pending. */
     {
       const batches = new Map();
@@ -5719,7 +5719,7 @@ async function pullSharedSwaps() {
         if (!batches.has(id)) batches.set(id, {});
         batches.get(id)[key] = entry;
       }
-      for (const batch of batches.values()) publishSwapBatch(batch, "повторная отправка измен��ний");
+      for (const batch of batches.values()) publishSwapBatch(batch, "повторная отправка изменений");
     }
   } catch (e) {
     /* офлайн — повторим в следующий тик */
@@ -6247,7 +6247,7 @@ function describeSwapForNotif(key, entry) {
 
 /* Состояние дня после наложения замен. По нему понятно, реально ли день
    стал другим: правка «туда и обратно» не должна будить уведомление.
-   Для чужой группы базовое расписание недоступно — воз��ращаем null
+   Для чужой группы базовое расписание недоступно — возвращаем null
    и такую запись не фильтруем. */
 function daySwapSignature(group, dIso, map) {
   if (group && group !== (state.group || DEFAULT_GROUP)) return null;
@@ -6489,7 +6489,7 @@ var NOTIF_ICONS = {
 };
 
 /* Структурированный фрагмент дня для карточки уведомления/заявки.
-   У отмены/сброса в облаке нет полей пары — берём её и�� базового расписания. */
+   У отмены/сброса в облаке нет полей пары — берём её из базового расписания. */
 function buildNotifFrag(key, entry) {
   const m = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
   if (!m) return null;
@@ -6533,7 +6533,7 @@ function buildNotifFrag(key, entry) {
   };
 }
 
-/* Длительность пары из ��асписания звонков: «1 ч 35 мин». Без времени начала/конца. */
+/* Длительность пары из расписания звонков: «1 ч 35 мин». Без времени начала/конца. */
 function lessonDurationLabel(dIso, n) {
   const d = dateFromIso(dIso);
   const bell = BELLS.find((b) => b.n === Number(n));
