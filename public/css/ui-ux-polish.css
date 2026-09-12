@@ -1,0 +1,123 @@
+/* UI/UX hardening: loaded last to resolve legacy cascade conflicts safely. */
+
+/* The welcome screen previously collapsed to one grid row, placing the CTA on
+   top of the logo and copy. Keep content and the primary action in separate rows. */
+.sched-onboarding-slide.is-welcome {
+  grid-template-rows: minmax(0, 1fr) auto !important;
+}
+
+.sched-onboarding-slide.is-welcome .sched-onboarding-copy {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.sched-onboarding-slide[aria-hidden="true"] {
+  pointer-events: none;
+}
+
+/* Consistent focus treatment for every native control, including fields that
+   were missing from the shared button/link rule. */
+:is(.sched-app, .sched-onboarding, .editor-backdrop, .confirmation-backdrop, .sched-profile-backdrop, .sched-freshness-slide)
+  :is(button, a, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--sched-blue) 42%, transparent) !important;
+  outline-offset: 3px !important;
+}
+
+/* Preserve the compact header while making its hit areas meet the 44px target. */
+:is(.sched-tg-btn, .sched-settings-trigger, .sched-refresh-btn, .date-strip-week-arrow) {
+  position: relative;
+}
+
+:is(.sched-tg-btn, .sched-settings-trigger, .sched-refresh-btn)::after {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  content: "";
+}
+
+.date-strip-week-arrow::after {
+  position: absolute;
+  inset: 0 -8px;
+  content: "";
+}
+
+:is(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .sched-onboarding-slide {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .sched-onboarding-mark {
+    width: clamp(96px, 31vw, 118px);
+    height: clamp(96px, 31vw, 118px);
+    margin-bottom: 18px;
+    border-radius: 32px;
+  }
+
+  .sched-onboarding-copy h1 {
+    max-width: 100%;
+    font-size: clamp(30px, 9vw, 36px);
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  .sched-onboarding-copy > p {
+    font-size: 15px;
+    line-height: 1.48;
+    text-wrap: pretty;
+  }
+
+  .sched-onboarding-action {
+    min-height: 54px;
+    margin-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-height: 700px) {
+  .sched-onboarding-slide {
+    gap: 14px;
+  }
+
+  .sched-onboarding-mark {
+    width: 88px;
+    height: 88px;
+    margin-bottom: 12px;
+    border-radius: 26px;
+  }
+
+  .sched-onboarding-copy h1 {
+    margin-top: 8px;
+    font-size: 30px;
+  }
+
+  .sched-onboarding-copy > p {
+    margin-top: 10px;
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.sched-app, .sched-onboarding, .editor-backdrop, .confirmation-backdrop, .sched-profile-backdrop, .sched-freshness-slide),
+  :is(.sched-app, .sched-onboarding, .editor-backdrop, .confirmation-backdrop, .sched-profile-backdrop, .sched-freshness-slide) * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* On very narrow screens the floating editor action shared the footer row and
+   could cover refresh. Reserve a dedicated lane without hiding either action. */
+@media (max-width: 385px) {
+  .sched-schedule-footer {
+    padding-right: 72px !important;
+    padding-left: 8px !important;
+  }
+}

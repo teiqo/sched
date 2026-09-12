@@ -2843,7 +2843,7 @@ function onboardingHtml() {
   const dots = [];
   for (let i = 0; i < total; i += 1) {
     dots.push(
-      `<button type="button" class="${i === state.onboardingStep ? "is-active" : ""}" data-step="${i}" aria-label="шаг ${
+      `<button type="button" class="${i === state.onboardingStep ? "is-active" : ""}" data-step="${i}" aria-current="${i === state.onboardingStep ? "step" : "false"}" aria-label="шаг ${
         i + 1
       }"></button>`,
     );
@@ -2856,7 +2856,7 @@ function onboardingHtml() {
   <div class="sched-onboarding-slides" style="--onboarding-count:${total};--onboarding-slide-width:${
     100 / total
   }%;--onboarding-offset:${offset}">
-    <div class="sched-onboarding-slide is-welcome" aria-hidden="${state.onboardingStep === 0 ? "false" : "true"}">
+    <div class="sched-onboarding-slide is-welcome" aria-hidden="${state.onboardingStep === 0 ? "false" : "true"}"${state.onboardingStep === 0 ? "" : " inert"}>
       <div class="sched-onboarding-copy is-centered">
         <div class="sched-onboarding-mark">
           <svg class="sched-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.937A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
@@ -2867,7 +2867,7 @@ function onboardingHtml() {
       </div>
       <button class="sched-onboarding-action" type="button" data-act="next">выбрать группу</button>
     </div>
-    <div class="sched-onboarding-slide is-profile" aria-hidden="${state.onboardingStep === 1 ? "false" : "true"}">
+    <div class="sched-onboarding-slide is-profile" aria-hidden="${state.onboardingStep === 1 ? "false" : "true"}"${state.onboardingStep === 1 ? "" : " inert"}>
       <div class="sched-onboarding-copy">
         <button class="sched-onboarding-back" type="button" data-act="back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
@@ -2887,7 +2887,7 @@ function onboardingHtml() {
       </div>
       <button class="sched-onboarding-action" type="button" data-act="next-telegram">${draft ? "подтвердить группу" : "продолжить без группы"}</button>
     </div>
-    <div class="sched-onboarding-slide is-telegram-link" aria-hidden="${state.onboardingStep === 2 ? "false" : "true"}">
+    <div class="sched-onboarding-slide is-telegram-link" aria-hidden="${state.onboardingStep === 2 ? "false" : "true"}"${state.onboardingStep === 2 ? "" : " inert"}>
       <div class="sched-onboarding-copy is-centered">
         <button class="sched-onboarding-back" type="button" data-act="back">${ICON_CHEVRON}<span>назад</span></button>
         <div class="sched-onboarding-telegram-mark">${ICON_BELL}</div>
