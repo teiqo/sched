@@ -264,7 +264,11 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   scene.addEventListener('pointerdown', e => {
     if (!e.isPrimary || e.button !== 0 || drag) return;
     const source = sourceFor(e.target);
-    if (!source || (e.pointerType === 'touch' && !source.handle)) return;
+    if (!source) return;
+    /* На пк вне редактора зажатая пара больше не предлагает переместить себя:
+       перенос там запускается только явно — через пункт «переместить» в предложке. */
+    if (e.pointerType !== 'touch' && !editorMode()) return;
+    if (e.pointerType === 'touch' && !source.handle) return;
     pending = { ...source, x: e.clientX, y: e.clientY, pointerId: e.pointerId };
     /* На пк удержание самой карточки начинало выделение текста строки.
        Сбрасываем уже сделанное выделение и глушим новое до отпускания. */
