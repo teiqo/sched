@@ -1938,7 +1938,7 @@ body.is-dragging-pair {
 }
 .agenda-row.is-cancelled .agenda-row-content > strong {
   text-decoration: line-through;
-  color: var(--sched-tertiary);
+  color: var(--sched-secondary);
 }
 .lesson-origin-mark.is-swap {
   margin-left: 6px;
@@ -2333,24 +2333,24 @@ body.is-dragging-pair {
   color: #ffffff;
 }
 
-/* --- отменённая пара: зачёркиваем весь текст строки --- */
+/* --- отменённая пара: зачёркиваем весь текст строки серыми линиями --- */
 .agenda-row.is-cancelled .agenda-row-content > strong,
 .agenda-row.is-cancelled .agenda-row-content > small,
 .agenda-row.is-cancelled .agenda-row-content > .lesson-meta > *,
 .agenda-row.is-cancelled .agenda-row-time time,
 .agenda-row.is-cancelled .agenda-row-time time > span {
-  color: var(--sched-tertiary);
+  color: var(--sched-secondary);
   text-decoration: line-through;
-  text-decoration-thickness: 1.5px;
-  text-decoration-color: color-mix(in srgb, var(--sched-danger) 62%, currentColor);
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--sched-secondary) 65%, transparent);
 }
 .agenda-row.is-cancelled .lesson-origin-mark.is-swap,
 .agenda-row.is-cancelled .lesson-advisory {
   text-decoration: none;
 }
 .agenda-row.is-cancelled .lesson-origin-mark.is-swap {
-  background: color-mix(in srgb, var(--sched-danger) 16%, transparent);
-  color: var(--sched-danger);
+  background: color-mix(in srgb, var(--sched-secondary) 12%, transparent);
+  color: var(--sched-secondary);
 }
 
 /* --- свайп по дням на телефоне: сцена едет за пальцем --- */
@@ -3713,11 +3713,12 @@ a.sched-settings-row.sched-settings-link strong {
   font-style: normal;
 }
 .sched-notif-row.is-cancel .sched-notif-frag {
-  border-color: color-mix(in srgb, var(--sched-danger) 30%, var(--sched-separator));
+  border-color: color-mix(in srgb, var(--sched-separator) 75%, transparent);
 }
 .sched-notif-row.is-cancel .sched-notif-frag-lesson b {
-  color: var(--sched-danger);
+  color: var(--sched-secondary);
   text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--sched-secondary) 65%, transparent);
 }
 
 /* --- сегмент пары в заявке (без времени) --- */
@@ -6001,5 +6002,4 @@ a.sched-settings-row,
   color: var(--sched-secondary, #8e8e93);
   padding: 4px 6px;
 }
-
 

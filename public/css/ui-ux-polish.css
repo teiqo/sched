@@ -127,7 +127,7 @@
    чтобы отмена читалась спокойнее активных пар и замен. */
 .agenda-row.is-cancelled {
   --sched-cancelled-ink: var(--sched-secondary);
-  --sched-cancelled-line: color-mix(in srgb, var(--sched-secondary) 55%, transparent);
+  --sched-cancelled-line: color-mix(in srgb, var(--sched-secondary) 65%, transparent);
   --sched-cancelled-tint: color-mix(in srgb, var(--sched-secondary) 12%, transparent);
 }
 
@@ -149,10 +149,26 @@
   color: var(--sched-cancelled-ink) !important;
 }
 
-/* Зачёркивание — серой линией, а не цветом темы. */
-.agenda-row.is-cancelled :is(strong, small, time, .lesson-meta, .lesson-meta span) {
+.agenda-row.is-cancelled .agenda-row-content strong {
+  font-weight: 600;
+}
+
+/* Зачёркивание — серой линией, а не цветом темы, для всех элементов внутри строки. */
+.agenda-row.is-cancelled,
+.agenda-row.is-cancelled * {
   text-decoration-color: var(--sched-cancelled-line) !important;
-  text-decoration-thickness: 1px;
+}
+
+.agenda-row.is-cancelled :is(strong, small, time, .lesson-meta, .lesson-meta span),
+.agenda-row.is-cancelled .agenda-row-time time span {
+  text-decoration-color: var(--sched-cancelled-line) !important;
+  text-decoration-thickness: 1px !important;
+}
+
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap,
+.agenda-row.is-cancelled .lesson-advisory,
+.agenda-row.is-cancelled .lesson-suggest-btn {
+  text-decoration: none !important;
 }
 
 /* Рамки чипов внутри строки — той же серой линией. */
@@ -182,5 +198,5 @@
 .sched-notif-frag-lesson.is-cancelled,
 .sched-notif-frag-lesson.is-cancelled :is(time, b, i) {
   color: var(--sched-secondary) !important;
-  text-decoration-color: color-mix(in srgb, var(--sched-secondary) 55%, transparent) !important;
+  text-decoration-color: color-mix(in srgb, var(--sched-secondary) 65%, transparent) !important;
 }

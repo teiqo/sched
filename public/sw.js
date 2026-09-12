@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-11-v60-break-gray";
+const CACHE = CACHE_PREFIX + "2026-09-12-v61-cancelled-gray";
 const ASSETS = [
   "./",
   "./index.html",
@@ -27,8 +27,10 @@ const ASSETS = [
   "./css/interaction.css",
   "./css/editor-mode.css",
   "./css/editor-mode-close.css",
+  "./css/phone-fixes.css",
   "./css/onboarding-tour.css",
   "./css/break-gray.css",
+  "./css/ui-ux-polish.css",
   "./assets/fonts/inter.ttf",
   "./assets/icons/sched.svg",
   "./assets/icons/tg-bot-avatar.jpg",
