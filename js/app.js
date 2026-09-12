@@ -91,6 +91,10 @@ const systemTheme = () =>
     ? "light"
     : "dark";
 
+var TOUR_STEP_STRIP = 0;
+var TOUR_STEP_SWAP = 1;
+var TOUR_STEP_SETTINGS = 2;
+
 function isLearningModeActive() {
   if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return true;
   if (typeof state !== "undefined" && !state.onboarded) return true;
@@ -1771,7 +1775,7 @@ function bindStrip() {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
     const btn = e.target.closest("button[data-date-index]");
     if (!btn) return;
-    if (basicsTourStep === 1) return;
+    if (basicsTourStep === TOUR_STEP_STRIP) return;
     /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
@@ -2004,7 +2008,7 @@ function bindStrip() {
       dragClick = false;
       return;
     }
-    if (basicsTourStep === 1) {
+    if (basicsTourStep === TOUR_STEP_STRIP) {
       const [y, m, d] = btn.dataset.date.split("-").map(Number);
       triggerTourRoulette(new Date(y, m - 1, d));
       return;
@@ -2973,15 +2977,16 @@ function closeOnboarding() {
 }
 
 var basicsTourStep = -1;
-var basicsTourOpenedEditor = false;
-var basicsTourEditorTimers = [];
 var basicsTourRouletteAnimation = null;
 var basicsTourRouletteFrame = null;
 var basicsTourRouletteTimer = null;
 var basicsTourRouletteOriginalDate = null;
 var basicsTourLastTriggerTime = 0;
+var basicsTourSwapTimers = [];
+var basicsTourSwapOverride = null;
 const BASICS_TOUR = [
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
+  { selector: "#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)", title: "кнопка замены", text: "видишь кнопку <span class=\"sched-tour-accent\">↔</span> справа? через неё можно быстро отметить, если пару отменили или заменили." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3026,7 +3031,6 @@ function startBasicsTourRoulette(options = {}) {
 
   if (state.editorMode && !editorChangedEntries().length) {
     finishEditorMode();
-    basicsTourOpenedEditor = false;
   }
 
   const strip = document.getElementById("strip");
@@ -3061,14 +3065,14 @@ function startBasicsTourRoulette(options = {}) {
   // Предварительное мягкое нажатие перед движением
   const pressDelay = Math.max(0, initialDelay - 200);
   basicsTourRouletteTimer = window.setTimeout(() => {
-    if (basicsTourStep !== 1 || !selection.isConnected) return;
+    if (basicsTourStep !== TOUR_STEP_STRIP || !selection.isConnected) return;
     strip.classList.add("is-tour-demo", "is-pressing");
     const buttons = [...strip.querySelectorAll("button[data-date-index]")];
     buttons.forEach((btn, i) => btn.toggleAttribute("data-under-selection", i === current));
 
     basicsTourRouletteTimer = window.setTimeout(() => {
       basicsTourRouletteTimer = null;
-      if (basicsTourStep !== 1 || !selection.isConnected) return;
+      if (basicsTourStep !== TOUR_STEP_STRIP || !selection.isConnected) return;
 
       strip.classList.add("is-scrubbing");
       selection.style.willChange = "transform";
@@ -3083,7 +3087,7 @@ function startBasicsTourRoulette(options = {}) {
       const turnPoint = 0.44;
 
       const paintFingerSwipe = now => {
-        if (!selection.isConnected || basicsTourStep !== 1) return;
+        if (!selection.isConnected || basicsTourStep !== TOUR_STEP_STRIP) return;
         const progress = Math.min(1, (now - startedAt) / duration);
 
         let factor;
@@ -3162,7 +3166,7 @@ function startBasicsTourRoulette(options = {}) {
         // Высоту stage и активный статус держим заблокированными до завершения анимации полоски (380ms),
         // чтобы пары внизу не вздрагивали
         window.setTimeout(() => {
-          if (basicsTourStep === 1) {
+          if (basicsTourStep === TOUR_STEP_STRIP) {
             stage?.style.removeProperty("min-height");
             document.body.classList.remove("is-tour-roulette-active");
           }
@@ -3181,7 +3185,7 @@ function isTourRouletteRunning() {
 }
 
 function triggerTourRoulette(clickedDate) {
-  if (basicsTourStep !== 1) return;
+  if (basicsTourStep !== TOUR_STEP_STRIP) return;
   const now = performance.now();
   if (now - basicsTourLastTriggerTime < 500) return;
   if (isTourRouletteRunning()) return;
@@ -3194,71 +3198,121 @@ function triggerTourRoulette(clickedDate) {
   startBasicsTourRoulette({ delay: 180, keepDate: true });
 }
 
-function stopBasicsTourEditorDemo() {
-  while (basicsTourEditorTimers.length) {
-    clearTimeout(basicsTourEditorTimers.pop());
+function stopBasicsTourSwapDemo() {
+  while (basicsTourSwapTimers.length) {
+    clearTimeout(basicsTourSwapTimers.pop());
   }
-  const btn = document.getElementById("editor-btn");
-  btn?.classList.remove("is-tour-pressed");
-  if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) {
-    finishEditorMode();
-    basicsTourOpenedEditor = false;
+  document.querySelectorAll(".lesson-suggest-btn.is-tour-highlight, .lesson-suggest-btn.is-tour-pressed").forEach(b => {
+    b.classList.remove("is-tour-highlight", "is-tour-pressed");
+  });
+  if (basicsTourSwapOverride) {
+    basicsTourSwapOverride = null;
+    render();
   }
 }
 
-function startBasicsTourEditorDemo() {
-  stopBasicsTourEditorDemo();
-  if (basicsTourStep !== 0) return;
+function startBasicsTourSwapDemo() {
+  stopBasicsTourSwapDemo();
+  if (basicsTourStep !== TOUR_STEP_SWAP) return;
 
   const scheduleTimer = (fn, delay) => {
     const t = window.setTimeout(() => {
-      const idx = basicsTourEditorTimers.indexOf(t);
-      if (idx !== -1) basicsTourEditorTimers.splice(idx, 1);
+      const idx = basicsTourSwapTimers.indexOf(t);
+      if (idx !== -1) basicsTourSwapTimers.splice(idx, 1);
       fn();
     }, delay);
-    basicsTourEditorTimers.push(t);
+    basicsTourSwapTimers.push(t);
     return t;
   };
 
-  // 1. Пауза, чтобы сориентироваться, затем визуальное нажатие на карандаш (~550ms)
-  scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.add("is-tour-pressed");
-  }, 550);
+  const row = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+  if (!row) return;
+  const n = Number(row.dataset.rowN);
+  const dIso = iso(state.selected);
 
-  // 2. Отпускание и плавное вылезание панели редактора (+160ms = 710ms)
+  // 1. Мягкая подсветка кнопки ↔ (пульсирующее синее свечение)
   scheduleTimer(() => {
-    if (basicsTourStep !== 0) return;
-    const btn = document.getElementById("editor-btn");
-    btn?.classList.remove("is-tour-pressed");
-    if (!state.editorMode) {
-      startEditorMode();
-      basicsTourOpenedEditor = true;
-    }
-  }, 710);
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+    curRow?.querySelector(".lesson-suggest-btn")?.classList.add("is-tour-highlight");
+  }, 450);
 
-  /* 3. Дальше панель остаётся открытой: редактор закроется только когда
-     пользователь нажмёт «дальше» (или «пропустить»), а не сам по таймеру. */
+  // 2. Визуальное нажатие на кнопку ↔
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+    const b = curRow?.querySelector(".lesson-suggest-btn");
+    b?.classList.remove("is-tour-highlight");
+    b?.classList.add("is-tour-pressed");
+  }, 1200);
+
+  // 3. Отмена пары: показываем как выглядит отменённая пара
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const key = swapKey(dIso, n);
+    basicsTourSwapOverride = { [key]: { cancelled: true, updatedAt: Date.now() } };
+    render();
+    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+    curRow?.querySelector(".lesson-suggest-btn")?.classList.add("is-tour-highlight");
+  }, 1450);
+
+  // 4. Повторное визуальное нажатие на кнопку (чтобы вернуть как было)
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+    const b = curRow?.querySelector(".lesson-suggest-btn");
+    b?.classList.remove("is-tour-highlight");
+    b?.classList.add("is-tour-pressed");
+  }, 3600);
+
+  // 5. Возврат пары в исходное состояние
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    basicsTourSwapOverride = null;
+    render();
+    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+    curRow?.querySelector(".lesson-suggest-btn")?.classList.add("is-tour-highlight");
+  }, 3850);
+
+  // 6. Повтор цикла
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    startBasicsTourSwapDemo();
+  }, 5600);
 }
 
 function finishBasicsTour() {
-  stopBasicsTourEditorDemo();
+  stopBasicsTourSwapDemo();
   stopBasicsTourRoulette();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
   document.body.classList.remove("is-tour-active", "is-tour-roulette-active");
   applyPerfMode();
-  if (basicsTourOpenedEditor && state.editorMode && !editorChangedEntries().length) finishEditorMode();
-  basicsTourOpenedEditor = false;
 }
 
 function renderBasicsTour() {
   stopBasicsTourRoulette();
-  if (state.editorMode && !editorChangedEntries().length) {
-    finishEditorMode();
-    basicsTourOpenedEditor = false;
+  stopBasicsTourSwapDemo();
+
+  if (basicsTourStep === TOUR_STEP_SWAP) {
+    if (!state.group && typeof GROUPS !== "undefined" && GROUPS.length) {
+      state.group = GROUPS[0].id;
+      state.draftGroup = GROUPS[0].id;
+      render();
+    }
+    let row = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
+    if (!row) {
+      const mon = weekStart(state.selected);
+      for (let offset = 0; offset < 6; offset++) {
+        const d = addDays(mon, offset);
+        if (slotsFor(d).some(s => !s.window && !s.empty)) {
+          selectDate(d, null, { silent: true, preview: true, animated: false });
+          break;
+        }
+      }
+    }
   }
+
   const step = BASICS_TOUR[basicsTourStep];
   const target = step && document.querySelector(step.selector);
   if (!step || !target) { finishBasicsTour(); return; }
@@ -3272,14 +3326,14 @@ function renderBasicsTour() {
     host.setAttribute("aria-label", "обучение");
     document.body.appendChild(host);
   }
-  const visualTarget = basicsTourStep === 1 && target.classList.contains("is-avatar")
+  const visualTarget = basicsTourStep === TOUR_STEP_SETTINGS && target.classList.contains("is-avatar")
     ? target.querySelector(".sched-trigger-avatar") || target
     : target;
   const rect = visualTarget.getBoundingClientRect();
-  const pad = basicsTourStep === 0 ? 0 : 3;
-  const left = basicsTourStep === 0 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-  const top = basicsTourStep === 0 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-  const width = basicsTourStep === 0
+  const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : 3;
+  const left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+  const top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+  const width = basicsTourStep === TOUR_STEP_STRIP
     ? Math.min(innerWidth - left, rect.width)
     : Math.min(innerWidth - left - 8, rect.width + pad * 2);
   const height = rect.height + pad * 2;
@@ -3288,7 +3342,7 @@ function renderBasicsTour() {
 
   const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === 0 ? 20 : 12;
+  const spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 12;
 
   let spotlight = host.querySelector(".sched-tour-spotlight");
   let copy = host.querySelector(".sched-tour-copy");
@@ -3342,13 +3396,13 @@ function renderBasicsTour() {
     const action = event.target.closest("[data-tour]")?.dataset.tour;
     if (action === "skip") { finishBasicsTour(); return; }
     if (action === "next") {
-      stopBasicsTourEditorDemo();
+      stopBasicsTourSwapDemo();
       basicsTourStep += 1;
       if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
       else renderBasicsTour();
       return;
     }
-    if (basicsTourStep === 0) {
+    if (basicsTourStep === TOUR_STEP_STRIP) {
       if (event.target.closest(".sched-tour-copy")) return;
       const strip = document.getElementById("strip");
       if (strip) {
@@ -3369,25 +3423,37 @@ function renderBasicsTour() {
       }
       return;
     }
+    if (basicsTourStep === TOUR_STEP_SWAP) {
+      if (event.target.closest(".sched-tour-copy")) return;
+      startBasicsTourSwapDemo();
+      return;
+    }
   };
 
-  if (basicsTourStep === 0) {
+  if (basicsTourStep === TOUR_STEP_STRIP) {
     startBasicsTourRoulette({ delay: 650 });
+  } else if (basicsTourStep === TOUR_STEP_SWAP) {
+    startBasicsTourSwapDemo();
   }
 }
 
 function startBasicsTour() {
   closeSettings();
   closeProfile();
-  stopBasicsTourEditorDemo();
+  stopBasicsTourSwapDemo();
   if (state.editorMode && !editorChangedEntries().length) {
     finishEditorMode();
   }
-  basicsTourOpenedEditor = false;
-  basicsTourStep = 0;
+  basicsTourStep = TOUR_STEP_STRIP;
   document.body.classList.add("is-tour-active");
   applyPerfMode();
   renderBasicsTour();
+}
+if (typeof window !== "undefined") {
+  window.startBasicsTour = startBasicsTour;
+  window.finishBasicsTour = finishBasicsTour;
+  Object.defineProperty(window, "basicsTourStep", { get: () => basicsTourStep, configurable: true });
+  Object.defineProperty(window, "basicsTourSwapOverride", { get: () => basicsTourSwapOverride, configurable: true });
 }
 
 /* ---------- события разделов ---------- */
@@ -3704,7 +3770,8 @@ function cloneSwapMap(map) {
 }
 
 function activeSwapMap() {
-  return state.editorMode && editorSession ? editorSession.draft : loadSwaps();
+  const base = state.editorMode && editorSession ? editorSession.draft : loadSwaps();
+  return basicsTourSwapOverride ? Object.assign({}, base, basicsTourSwapOverride) : base;
 }
 
 function playEditorToolbarOpen() {
@@ -3939,7 +4006,7 @@ function swapKey(dIso, n) {
 }
 
 function swapFor(dIso, n) {
-  const entry = loadSwaps()[swapKey(dIso, n)];
+  const entry = activeSwapMap()[swapKey(dIso, n)];
   return entry && !entry.deleted ? entry : null;
 }
 

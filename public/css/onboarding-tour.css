@@ -201,6 +201,33 @@
   transition: none !important;
 }
 
+:root .lesson-suggest-btn.is-tour-highlight {
+  opacity: 1 !important;
+  color: var(--sched-blue) !important;
+  background: color-mix(in srgb, var(--sched-blue) 18%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sched-blue) 25%, transparent) !important;
+  animation: sched-tour-btn-pulse 1.4s ease-in-out infinite !important;
+}
+
+:root .lesson-suggest-btn.is-tour-pressed {
+  transform: scale(0.85) !important;
+  background: var(--sched-blue) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--sched-blue) 40%, transparent) !important;
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), background 0.12s ease, color 0.12s ease !important;
+}
+
+@keyframes sched-tour-btn-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--sched-blue) 30%, transparent);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--sched-blue) 0%, transparent);
+  }
+}
+
 .sched-tour-copy .sched-tour-accent {
   display: inline;
   font-weight: 600;
