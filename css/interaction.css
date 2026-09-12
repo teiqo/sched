@@ -1,0 +1,1303 @@
+/* sched 1.3.1: compact controls and predictable direct manipulation. */
+:root .sched-day-revert {
+  min-height: 44px; min-width: 44px; padding: 8px; border: 0; border-radius: 8px;
+  background: transparent; box-shadow: none; color: var(--sched-secondary);
+  font-size: 14px; font-weight: 400; text-decoration: none;
+}
+:root .sched-day-revert:hover { background: var(--sched-fill); color: var(--sched-text); }
+:root .sched-day-revert[hidden] { display: none !important; }
+:root .sched-day-heading { align-items: flex-start; gap: 8px; }
+:root .sched-day-heading-copy { flex: 1; min-width: 0; }
+:root .sched-day-heading h2 { white-space: normal; overflow-wrap: break-word; }
+:root .sched-day-actions { display: flex; flex: none; align-items: flex-start; margin-top: -4px; }
+/* The existing "today" link occupies the far-right end of the primary heading. */
+:root .sched-day-heading.has-today-action .sched-day-actions { margin-right: 88px; }
+:root .agenda-row:not(.is-bell-pair):not(.is-bell-break) { grid-template-columns: 94px minmax(0, 1fr); column-gap: 12px; }
+:root .agenda-row-time { gap: 8px; align-items: flex-start; }
+:root .agenda-row-num {
+  box-sizing: border-box; width: 38px; height: 38px; min-width: 38px;
+  margin-top: 0; padding: 0; border-radius: 8px; font-size: 18px; line-height: 1; font-weight: 650;
+}
+:root .agenda-row-time time { padding-top: 0; font-size: 13px; line-height: 17px; }
+:root .agenda-row-time time span { margin-top: 3px; font-size: 13px; line-height: 17px; }
+:root .agenda-row.is-window-row .agenda-row-num { color: var(--sched-secondary); }
+:root .agenda-row[data-row-n], :root .live-lesson-card[data-row-n] { -webkit-touch-callout: none; }
+:root .sched-drag-original[hidden] { display: none !important; }
+:root .sched-drag-board {
+  position: relative; display: flex; flex-direction: column; overflow: visible;
+  padding: 0; margin: 0; gap: 8px; background: transparent !important; border: 0 !important;
+  isolation: isolate; overflow-anchor: none;
+}
+:root .sched-drag-board > .agenda-row {
+  flex: none; margin: 0; border: 1px solid var(--sched-separator); border-radius: 12px;
+  background: var(--sched-surface); box-sizing: border-box; min-height: 80px;
+}
+/* No cascading entrances on hold, including accent+ and an interrupted day entry.
+   WAAPI transform animations for neighbours are started only by applyOrder(). */
+:root #scene #stage .sched-drag-board,
+:root #scene #stage .sched-drag-board * {
+  animation: none !important; transition: none !important;
+}
+:root #stage .sched-drag-board { contain: none !important; }
+:root #stage .sched-drag-board > .agenda-row { opacity: 1; }
+:root .sched-drag-board > .agenda-row.is-drag-ghost {
+  opacity: 1; border-color: transparent; color: var(--sched-secondary); background: var(--sched-fill);
+  outline: 2px dashed color-mix(in srgb, var(--sched-blue) 58%, transparent); outline-offset: 8px;
+}
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  visibility: visible; opacity: 1; border: 1px solid transparent;
+  outline: 2px dashed var(--sched-blue); outline-offset: 8px;
+  background: color-mix(in srgb, var(--sched-blue) 6%, var(--sched-surface)); box-shadow: none;
+}
+:root .sched-drag-board > .agenda-row.is-drag-src .agenda-row-content,
+:root .sched-drag-board > .agenda-row.is-drag-src .lesson-swap-btn { visibility: hidden; }
+:root .sched-drag-board > .agenda-row.is-drop-target {
+  border: 1px solid transparent; outline: 3px dashed var(--sched-blue); outline-offset: 8px;
+}
+:root .sched-drag-board .lesson-swap-btn { visibility: hidden; }
+:root .is-drag-float.agenda-row, :root .is-drag-float.live-lesson-card {
+  position: fixed !important; z-index: 900; box-sizing: border-box; margin: 0 !important;
+  pointer-events: none; visibility: visible; opacity: 1; transform: scale(.975) !important;
+  transform-origin: center center !important;
+  animation: none !important; transition: none !important; max-width: 100vw;
+  border-radius: 12px; box-shadow: 0 2px 6px #0001, 0 12px 30px #0002;
+}
+:root .is-drag-float .lesson-swap-btn { display: grid !important; opacity: .7; }
+:root .is-drag-float .agenda-row-content { padding-right: 38px; }
+:root .is-drag-float.live-lesson-card { color: var(--sched-text); background: var(--sched-surface); }
+:root .sched-drag-status {
+  bottom: max(12px, env(safe-area-inset-bottom)); padding: 10px 14px; font-size: 14px;
+  background: var(--sched-surface); color: var(--sched-text); border-radius: 12px;
+}
+body.is-dragging-pair { user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+body.is-dragging-pair #scene { overflow-anchor: none; }
+.sched-login { display: grid; gap: 10px; width: 100%; }
+.sched-telegram-button {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 48px; width: 100%; box-sizing: border-box; padding: 12px 16px;
+  border: 0; border-radius: 12px; font: 600 16px/1.4 Inter, system-ui, sans-serif;
+  background: #1673c7; color: #fff; cursor: pointer;
+}
+.sched-telegram-button > svg { width: 22px; height: 22px; flex: none; }
+.sched-telegram-button:hover:not(:disabled) { background: #1267b4; }
+.sched-telegram-button:disabled { cursor: wait; opacity: .72; }
+.sched-telegram-button:focus-visible,
+.sched-choose-group button:focus-visible, .sched-report-sheet button:focus-visible,
+.sched-telegram-connect:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }
+.sched-login-spinner { width: 14px; height: 14px; border: 2px solid #ffffff66; border-top-color: #fff; border-radius: 50%; animation: sched-login-spin 1s linear infinite; }
+@keyframes sched-login-spin { to { transform: rotate(360deg); } }
+.sched-login-note { margin: 0; color: var(--sched-secondary); font-size: 14px; line-height: 1.45; }
+.sched-login-error { margin: 0; font-size: 14px; line-height: 1.45; color: var(--sched-danger, #cc3939); overflow-wrap: anywhere; }
+.sched-telegram-connect { display: block; min-height: 44px; padding: 8px 0; font-size: 14px; color: var(--sched-blue); text-decoration: underline; }
+.sched-choose-group button { min-height: 44px; margin-top: 8px; padding: 10px 18px; border: 0; border-radius: 10px; background: #1673c7; color: white; font: 600 14px/1.5 Inter, system-ui, sans-serif; cursor: pointer; }
+#report-backdrop {
+  display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+#report-backdrop .sched-report-sheet {
+  box-sizing: border-box; width: min(480px, 100%);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  margin: 0; overflow-y: auto; overscroll-behavior: contain;
+}
+#report-sheet-content { display: grid; gap: 16px; min-width: 0; }
+#report-backdrop [hidden] { display: none !important; }
+#report-backdrop .sched-replace-field { display: grid; gap: 8px; margin: 0; font-size: 14px; }
+#report-backdrop textarea { min-height: 80px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.45; resize: vertical; }
+#report-backdrop .sched-report-dropzone { width: 100%; min-height: 76px; margin: 0; color: var(--sched-text); background: var(--sched-fill); font: inherit; text-align: left; }
+#report-backdrop .sched-report-file-preview { margin: 0; gap: 12px; }
+#report-backdrop .sched-report-file-info { min-width: 0; }
+#report-backdrop .sched-report-file-info strong { overflow-wrap: anywhere; white-space: normal; }
+#report-backdrop #report-file-remove { min-width: 44px; min-height: 44px; font-size: 24px; border: 0; background: transparent; color: var(--sched-text); cursor: pointer; }
+.sched-report-include { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.sched-report-include input { width: 20px; height: 20px; accent-color: var(--sched-blue); }
+.sched-report-privacy { font-size: 14px; line-height: 1.45; color: var(--sched-secondary); }
+#report-backdrop .sched-report-diag-pre {
+  max-height: 200px; font-size: 14px; line-height: 1.5; color: var(--sched-text);
+  overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+.sched-report-download { min-height: 44px; border: 0; background: transparent; padding: 8px 0; color: var(--sched-blue); font: 500 14px/1.5 Inter, system-ui, sans-serif; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+#report-backdrop .sched-report-details { margin: 0; }
+#report-backdrop .sched-report-details summary { min-height: 44px; box-sizing: border-box; padding: 10px 0; font-size: 14px; }
+#report-backdrop .sched-report-details .sched-replace-field { margin-top: 12px; }
+#report-backdrop .sched-report-success-view { padding: 24px 0; gap: 16px; }
+
+/* All replacement controls keep a readable, scrollable sheet on small screens. */
+#swap-backdrop {
+  align-items: center; box-sizing: border-box;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+#swap-backdrop .sched-replace-sheet {
+  box-sizing: border-box; margin: 0; width: min(440px, 100%);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; overscroll-behavior: contain;
+}
+#swap-backdrop .sched-replace-field > span,
+#swap-backdrop .sched-replace-hint { font-size: 14px; line-height: 1.4; }
+#swap-backdrop input, #swap-backdrop select { font-size: 16px; min-height: 44px; }
+#swap-backdrop .sched-replace-actions button { min-height: 44px; }
+#swap-backdrop #swap-teacher:disabled { opacity: 1; color: var(--sched-secondary); }
+:root .lesson-swap-btn { color: var(--sched-secondary); }
+:root .sched-schedule-footer #refresh-btn { border-radius: 50% !important; }
+
+/* Nested spans used to multiply 0.65 opacity three times inside a notification. */
+:root .sched-tg-row-text .sched-notif-frag,
+:root .sched-tg-row-text .sched-notif-frag span,
+:root .sched-tg-row-text .sched-notif-frag time {
+  opacity: 1 !important; filter: none !important;
+}
+:root .sched-notif-frag { background: var(--sched-surface); color: var(--sched-text); }
+:root .sched-notif-frag-main b { font-size: 14px; overflow-wrap: anywhere; }
+:root .sched-notif-frag-main i { font-size: 14px; color: var(--sched-secondary); }
+:root .sched-notif-row .sched-tg-row-text { min-width: 0; }
+#bell-backdrop .sched-replace-actions button { min-height: 44px; }
+.sched-notif-row.is-move .sched-notif-ico { background: var(--sched-blue); }
+
+/* Swiping uses inexpensive translations even in performance mode. */
+:root #scene:is(.is-swiping, .is-swipe-return, .is-swipe-commit) #stage {
+  transform: translate3d(var(--swipe-x, 0px), 0, 0);
+}
+:root #scene:is(.is-swipe-return, .is-swipe-commit) #stage,
+:root #scene.is-swipe-commit > .sched-swipe-peek,
+:root #scene > .sched-swipe-peek.is-returning {
+  transition: transform var(--swipe-anim-dur, 260ms) cubic-bezier(.22, 1, .36, 1) !important;
+}
+:root #strip.is-swipe-settling #selection {
+  transition: transform var(--strip-swipe-duration, 260ms) cubic-bezier(.22, 1, .36, 1) !important;
+}
+:root #strip.is-swipe-linked #selection { transition: none !important; }
+:root #strip.is-day-swiping #today-btn {
+  visibility: hidden; opacity: 0; pointer-events: none; transition: none !important;
+}
+:root #scene > .sched-swipe-peek * { animation: none !important; }
+:root #scene.is-motion-lite #stage * { animation: none !important; }
+:root[data-perf] #stage .sched-active-day-scene.is-entering * { animation: none !important; }
+
+@media (max-width: 767px), (pointer: coarse) {
+  /* Always a bottom line: pressing, dragging and settling cannot raise a pill. */
+  :root #strip { --strip-selection-on: #fff; }
+  :root #strip.date-strip #selection::before {
+    transform: scaleY(0.050847458) !important;
+    transform-origin: 50% 100% !important;
+    clip-path: none !important; transition: none !important; animation: none !important;
+  }
+}
+@media (max-width: 767px) {
+  :root .sched-app { padding-top: calc(20px + env(safe-area-inset-top, 0px)); }
+  :root .sched-date-controls { top: calc(12px + env(safe-area-inset-top, 0px)); }
+  :root .sched-day-heading.has-today-action .sched-day-revert-label { display: none; }
+}
+@media (max-width: 480px) {
+  :root .sched-notif-frag-lesson { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+@media (max-width: 360px) {
+  :root .agenda-row:not(.is-bell-pair):not(.is-bell-break) { grid-template-columns: 90px minmax(0, 1fr); column-gap: 8px; padding-left: 10px; padding-right: 10px; }
+  :root .agenda-row-num { width: 36px; height: 38px; min-width: 36px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-login-spinner { animation: none; }
+  :root #scene:is(.is-swipe-return, .is-swipe-commit) #stage,
+  :root #scene > .sched-swipe-peek,
+  :root #strip #selection { transition: none !important; }
+}
+
+body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
+
+/* Telegram avatar: image and fallback are separate, always clipped to a circle. */
+.sched-avatar-image { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.sched-avatar-image[hidden], .sched-avatar-fallback[hidden] { display: none !important; }
+.sched-avatar-fallback { place-self: center; color: #fff; font-weight: 700; line-height: 1; }
+#account-icon:has(.sched-avatar-image), #account-icon:has(.sched-avatar-fallback) { overflow: hidden; border-radius: 50%; background: linear-gradient(180deg, #58c7ff, #1689ec); }
+#account-icon .sched-avatar-fallback { font-size: 14px; }
+.sched-profile-hero-avatar { overflow: hidden !important; isolation: isolate; }
+.sched-profile-hero-avatar .sched-avatar-fallback { font-size: 32px; }
+#settings-trigger.is-avatar {
+  overflow: visible !important;
+  padding: 3px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#settings-trigger.is-avatar .sched-trigger-avatar {
+  width: calc(100% - 6px) !important;
+  height: calc(100% - 6px) !important;
+  aspect-ratio: 1 / 1 !important;
+  flex-shrink: 0 !important;
+  margin: auto;
+  border: 1.5px solid var(--sched-accent, #2e9bff);
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  box-shadow: none !important;
+}
+
+
+/* v1.4 UI cleanup. */
+.sched-settings-more{margin:0;border:0}.sched-settings-more>summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:0 14px;cursor:pointer;list-style:none;color:var(--sched-secondary);font-size:13px;font-weight:650;user-select:none}.sched-settings-more>summary::-webkit-details-marker{display:none}.sched-settings-more>summary svg{width:17px;height:17px;transition:transform .18s ease}.sched-settings-more[open]>summary svg{transform:rotate(180deg)}.sched-settings-more>.sched-settings-group{margin:0;border-top:1px solid var(--sched-separator)}
+:root .sched-day-revert{min-width:0;min-height:34px;padding:4px 7px;gap:5px;border-radius:7px;font-size:12px;line-height:1}:root .sched-day-revert svg{width:14px;height:14px}
+:root[data-perf] #stage .sched-active-day-scene.is-entering .agenda-row,:root[data-perf] #stage .sched-active-day-scene.is-entering .live-lesson-card,:root[data-perf] #stage .sched-active-day-scene.is-entering .agenda-break,:root[data-perf] #stage .sched-active-day-scene.is-entering .completed-lessons,:root[data-perf] #stage .sched-active-day-scene.is-entering .t-stagger-line{animation:none!important;animation-delay:0s!important;opacity:1!important;transform:none!important}
+.agenda-list.is-completed .agenda-row[data-row-n]{touch-action:pan-y}.agenda-list.is-completed .lesson-swap-btn{touch-action:none!important}
+@media(max-width:370px){.sched-week-badge{gap:4px!important;padding:1px 5px!important;white-space:nowrap}#week-parity{font-size:0}#week-parity::after{content:"неч.";font-size:9px}.sched-week-switch.is-second #week-parity::after{content:"чёт."}.sched-academic-week{width:18px;height:18px}}
+
+
+/* v1.4 requested interaction fixes. */
+:root[data-show-swap-buttons="false"] .lesson-swap-btn { display: none !important; }
+
+/* Stable break baseline before, during and after scene compositing. */
+.agenda-break-chip,
+#stage .agenda-break-chip,
+.sched-swipe-peek .agenda-break-chip {
+  top: 0 !important;
+  transform: translate3d(-50%, -50%, 0) !important;
+  align-items: center !important;
+  line-height: 14px !important;
+  -webkit-font-smoothing: antialiased;
+}
+.agenda-break-chip strong { line-height: 14px !important; }
+
+/* Clean selector fill: no animated sheen or centre glow. */
+:root #strip #selection::before,
+:root[data-sched-palette="accent-plus"] #strip #selection::before {
+  background: var(--strip-selection-fill, var(--sched-blue)) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  animation: none !important;
+}
+
+/* A day-roulette drag raises the selector on touch devices; an ordinary page swipe does not. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root #strip.date-strip #selection::before { transform: scaleY(0.050847458) !important; }
+  :root #strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-releasing) #selection::before {
+    transform: scaleY(1) !important;
+    transition: transform 120ms cubic-bezier(.2,.9,.3,1) !important;
+  }
+}
+
+/* Keep “today” available during a horizontal day swipe. */
+:root #strip.is-day-swiping #today-btn.is-visible {
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Smaller lesson number and replacement affordance. */
+:root .agenda-row-num { width: 32px; min-width: 32px; height: 32px; border-radius: 7px; font-size: 12px; font-weight: 700; }
+:root .agenda-row:not(.is-bell-pair):not(.is-bell-break) { grid-template-columns: 82px minmax(0,1fr); }
+:root .lesson-swap-btn { width: 24px; height: 24px; border-radius: 7px; }
+:root .lesson-swap-btn svg { width: 14px; height: 14px; }
+:root .live-lesson-card .lesson-swap-btn { width: 24px; height: 24px; }
+
+/* Restore a true top-to-bottom cascade without moving break text. */
+@keyframes sched-pair-down-in { from { opacity: 0; transform: translate3d(0,-9px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@keyframes sched-break-fade-in { from { opacity: 0; } to { opacity: 1; } }
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n] {
+  animation: sched-pair-down-in var(--duration-fast,.4s) var(--ease-smooth-out) both !important;
+}
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="1"] { animation-delay: 50ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="2"] { animation-delay: 110ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="3"] { animation-delay: 170ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="4"] { animation-delay: 230ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="5"] { animation-delay: 290ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="6"] { animation-delay: 350ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-break {
+  animation: sched-break-fade-in .22s ease-out both !important;
+}
+
+/* “Дополнительно” looks like the other settings rows (for example, bell schedule). */
+.sched-settings-more-group { overflow: hidden; }
+.sched-settings-more { width: 100%; }
+.sched-settings-more > summary.sched-settings-more-summary {
+  margin: 0;
+  padding: 5px 9px !important;
+  min-height: 46px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sched-text);
+}
+.sched-settings-more > summary.sched-settings-more-summary:hover { background: var(--sched-fill); }
+.sched-settings-more > summary .sched-settings-more-chevron { flex: none; width: 18px; height: 18px; color: var(--sched-secondary); transform: rotate(0); }
+.sched-settings-more[open] > summary .sched-settings-more-chevron { transform: rotate(90deg); }
+
+/* Theme choices never consume the copy column on narrow devices. */
+.sched-theme-row { gap: 8px; align-items: stretch; flex-direction: column; }
+.sched-theme-row .sched-settings-row-main { min-width: 0; width: 100%; }
+.sched-theme-modes { flex: none; width: 100%; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.sched-theme-modes button { min-width: 0; padding-inline: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sched-replace-meta-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(100px,.55fr); gap: 10px; align-items: end; }
+@media (max-width: 360px) { .sched-replace-meta-grid { grid-template-columns: 1fr; } }
+
+/* Avatar stays prominent but is slightly smaller than the header actions. */
+#settings-trigger.is-avatar { width: 40px !important; min-width: 40px !important; height: 40px !important; padding: 0 !important; }
+#settings-trigger.is-avatar .sched-trigger-avatar {
+  width: 100% !important; height: 100% !important; margin: 0 !important;
+  border: 0 !important;
+  box-shadow: 0 0 0 1.5px var(--sched-header-bg,var(--sched-surface)), 0 0 0 3px var(--sched-accent,var(--sched-blue)) !important;
+}
+
+/* Align the day reset action with the “today” action baseline. */
+:root .sched-day-heading.has-today-action .sched-day-actions { margin-top: 2px; }
+
+/* One compositor layer per scene keeps touch swipes smooth instead of promoting every text node. */
+#scene:is(.is-swiping,.is-swipe-return,.is-swipe-commit) #stage,
+#scene:is(.is-swiping,.is-swipe-return,.is-swipe-commit) > .sched-swipe-peek {
+  contain: layout paint style;
+  will-change: transform;
+}
+#scene:is(.is-swiping,.is-swipe-return,.is-swipe-commit) :is(.agenda-row,.agenda-row *, .agenda-break-chip, .sched-day-heading *) {
+  -webkit-backface-visibility: visible;
+  backface-visibility: visible;
+}
+
+
+/* v1.4 direct-manipulation and notification polish. */
+:root .is-drag-float.is-magnetized.agenda-row,
+:root .is-drag-float.is-magnetized.live-lesson-card {
+  transition: left 135ms cubic-bezier(.2,.86,.24,1), top 135ms cubic-bezier(.2,.86,.24,1) !important;
+}
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  background: color-mix(in srgb, #000 18%, var(--sched-surface)) !important;
+}
+
+/* Performance mode removes wheel/list and roulette motion, while the dedicated
+   horizontal phone swipe keeps its inexpensive compositor transition. */
+:root[data-perf] :where(html, body, #scene, #stage, .agenda-list) { scroll-behavior: auto !important; }
+:root[data-perf] #scene:not(.is-swiping):not(.is-swipe-return):not(.is-swipe-commit) #stage .sched-active-day-scene,
+:root[data-perf] #scene:not(.is-swiping):not(.is-swipe-return):not(.is-swipe-commit) #stage .sched-active-day-scene * {
+  animation: none !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+}
+:root[data-perf] #strip:not(.is-day-swiping):not(.is-swipe-settling):not(.is-swipe-linked) #selection,
+:root[data-perf] #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* The attachment target has a thicker inset dashed frame instead of a border
+   glued to its outer edge. */
+#report-backdrop .sched-report-dropzone {
+  position: relative;
+  box-sizing: border-box;
+  border: 0 !important;
+}
+#report-backdrop .sched-report-dropzone::before {
+  position: absolute;
+  inset: 5px;
+  border: 2px dashed var(--sched-separator);
+  border-radius: 10px;
+  content: "";
+  pointer-events: none;
+  transition: border-color var(--sched-motion-state,160ms) ease;
+}
+#report-backdrop .sched-report-dropzone:is(:hover,:focus-visible,.is-dragover)::before {
+  border-color: var(--sched-blue);
+}
+
+/* A restrained glow separates the logo from every palette without changing its motion. */
+:root .sched-header-mark {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sched-blue) 32%, transparent)) !important;
+}
+
+/* The idle touch selector is a geometrically flat 2px line. Direct roulette
+   interaction expands it, while day digits always stay above the blue shape. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root #strip #selection { z-index: 0 !important; }
+  :root #strip button[data-date-index] { position: relative; z-index: 2 !important; isolation: isolate; }
+  :root #strip button[data-date-index] > span:first-child,
+  :root #strip button[data-date-index] > strong { position: relative; z-index: 3; }
+  :root #strip.date-strip #selection::before {
+    clip-path: inset(calc(100% - 2px) 5px 0 5px round 1px) !important;
+    transform: none !important;
+    transform-origin: 50% 100% !important;
+    transition: clip-path 120ms cubic-bezier(.2,.9,.3,1) !important;
+  }
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+    clip-path: inset(0 round 17px) !important;
+    transform: none !important;
+  }
+  :root[data-perf] #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+    transition: none !important;
+  }
+}
+
+/* Replacement notifications show old and new lessons vertically. */
+:root .sched-notif-frag-change { display: grid; }
+:root .sched-notif-frag-change .sched-notif-frag-lesson + .sched-notif-frag-lesson {
+  border-top: 1px solid color-mix(in srgb, var(--sched-separator) 72%, transparent);
+}
+:root .sched-notif-frag-arrow {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  margin: -4px auto;
+  place-items: center;
+  position: relative;
+  z-index: 1;
+  border: 1px solid color-mix(in srgb, var(--sched-blue) 24%, var(--sched-separator));
+  border-radius: 50%;
+  background: var(--sched-surface);
+  color: var(--sched-blue);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+
+/* Weak-device mode keeps the cheap horizontal phone swipe, but never replays
+   the per-lesson entrance cascade after the new day is committed. */
+:root[data-perf] #stage .sched-active-day-scene.is-entering,
+:root[data-perf] #stage .sched-active-day-scene.is-entering :is(
+  .agenda-row,
+  .agenda-break,
+  .live-lesson-card,
+  #live-host,
+  .completed-lessons,
+  .t-stagger-line
+) {
+  animation: none !important;
+  animation-name: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+:root[data-perf] #stage .sched-active-day-scene.is-entering :is(
+  .agenda-row,
+  .agenda-break,
+  .live-lesson-card,
+  #live-host,
+  .completed-lessons,
+  .t-stagger-line
+) {
+  transform: none !important;
+}
+
+/* On touch, the raised blue selector stays behind high-contrast day text. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index][data-under-selection="true"],
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index].is-selected {
+    color: #fff !important;
+  }
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index][data-under-selection="true"] > :is(span:first-child,strong),
+  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing)
+    button[data-date-index].is-selected > :is(span:first-child,strong) {
+    position: relative;
+    z-index: 4;
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 24%);
+  }
+}
+
+
+/* Mobile report dialogs use the visual viewport and keep every card inside the
+   right safe area. This also fixes the owner report list, whose padded sheet
+   previously used content-box sizing and could extend past the phone edge. */
+#report-backdrop,
+#reports-backdrop {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+}
+#report-backdrop :is(.sched-report-sheet,#report-sheet-content),
+#reports-backdrop :is(.sched-reports-sheet,.sched-reports-list,.sched-report-card) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+#reports-backdrop .sched-reports-sheet {
+  width: min(600px, 100%) !important;
+  margin-inline: auto !important;
+  overflow-x: hidden;
+}
+#reports-backdrop :is(.sched-report-card-top,.sched-report-card-sender,.sched-report-card-file) {
+  min-width: 0;
+  max-width: 100%;
+}
+#reports-backdrop :is(.sched-report-card-sender,.sched-report-card-msg,.sched-report-file-link) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+#reports-backdrop .sched-report-card-file {
+  flex-wrap: wrap;
+}
+#reports-backdrop .sched-report-card-thumb,
+#reports-backdrop .sched-report-card-thumb img {
+  max-width: 100%;
+  height: auto;
+}
+#reports-backdrop .sched-report-card-diag pre {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media (max-width: 640px) {
+  #report-backdrop,
+  #reports-backdrop {
+    padding-top: max(12px, env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  #reports-backdrop .sched-reports-sheet {
+    width: 100% !important;
+    padding: 18px 16px !important;
+    border-radius: 20px;
+  }
+  #reports-backdrop .sched-report-card {
+    width: 100%;
+    padding: 14px;
+  }
+}
+
+
+/* Performance mode: the viewport itself still slides on #stage, but no lesson,
+   break, future-day or nested card runs an entrance animation. */
+:root[data-perf] #stage * {
+  animation: none !important;
+  animation-name: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+}
+:root[data-perf] #stage *:not(.sched-active-day-stage),
+:root[data-perf] #stage *:not(.sched-active-day-stage)::before,
+:root[data-perf] #stage *:not(.sched-active-day-stage)::after {
+  transition: none !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+/* .sched-active-day-stage is the only exception: it is the cheap compositor
+   layer that follows a finger during a real horizontal phone swipe. */
+
+
+/* A dragged card is moved under body, outside .sched-app, so it must carry the
+   application typeface explicitly — including the current live lesson. */
+:root :is(.agenda-row,.live-lesson-card).is-drag-float {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
+  font-style: normal;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+:root :is(.agenda-row,.live-lesson-card).is-drag-float :is(button,input,select,textarea) {
+  font: inherit;
+}
+
+/* The replacement form never grows sideways. Teacher and room use equal,
+   shrinkable columns and every control remains inside its grid cell. */
+#swap-backdrop {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+#swap-backdrop .sched-replace-sheet {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden !important;
+  scrollbar-gutter: auto;
+}
+#swap-backdrop .sched-replace-sheet,
+#swap-backdrop .sched-replace-sheet * {
+  box-sizing: border-box;
+}
+#swap-backdrop .sched-replace-meta-grid {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+#swap-backdrop .sched-replace-meta-grid > *,
+#swap-backdrop .sched-replace-field,
+#swap-backdrop .sched-replace-select {
+  min-width: 0;
+  max-width: 100%;
+}
+#swap-backdrop :is(input,select) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+#swap-backdrop .sched-replace-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+#swap-backdrop .sched-replace-actions > button {
+  min-width: 0;
+}
+@media (max-width: 360px) {
+  #swap-backdrop .sched-replace-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* The attachment dash sits outside the button instead of eating into its
+   content area. The sheet padding leaves enough room for this outer frame. */
+#report-backdrop .sched-report-dropzone::before {
+  inset: -6px !important;
+  border-width: 2px;
+  border-radius: 20px;
+}
+
+/* Background authentication refreshes may rebuild profile content, but they
+   must never replay the opening animation or flash the whole overlay. */
+.sched-profile-backdrop.is-refreshing,
+.sched-profile-backdrop.is-refreshing .sched-profile {
+  animation: none !important;
+  transition: none !important;
+}
+
+
+/* ==========================================================================
+   Горизонтальный свайп дня: пока палец на экране, страница не должна
+   перерисовывать дорогие эффекты. Слой #stage и превью — единственное, что
+   двигается; всё остальное на время жеста упрощается.
+   ========================================================================== */
+
+/* Липкие поверхности с backdrop-filter пересчитывают размытие на каждом кадре,
+   когда под ними едет контент. На время свайпа заменяем размытие на
+   непрозрачный фон. */
+:root.is-day-swiping :is(
+  .sched-date-controls,
+  .sched-header,
+  .date-strip,
+  .sched-schedule-footer,
+  .sched-app > header,
+  .sched-schedule-view > header
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root.is-day-swiping .sched-date-controls {
+  background: var(--sched-bg) !important;
+}
+
+/* Никаких размытий, теней и фильтров внутри едущих слоёв: они заставляют
+   браузер перерисовывать растр вместо простого сдвига композитного слоя. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) :is(
+  .agenda-row,
+  .agenda-list,
+  .agenda-break,
+  .agenda-break-chip,
+  .live-lesson-card,
+  .completed-lessons,
+  .sched-day-block,
+  .sched-empty-day
+) {
+  filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* Любая работающая анимация (частицы живой пары, пульсации, шиммеры) держит
+   главный поток занятым весь жест. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-date-controls) *,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
+  animation-play-state: paused !important;
+}
+/* Переходы внутри едущих слоёв не нужны, но подчёркивание дня в полоске
+   продолжает доводиться своим переходом — его не трогаем. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) * {
+  transition: none !important;
+}
+:root.is-day-swiping .live-card-particles,
+:root.is-day-swiping .live-card-particles i {
+  display: none !important;
+}
+
+/* Два композитных слоя на весь жест: сам день и превью соседнего дня. */
+:root.is-day-swiping #stage,
+:root.is-day-swiping .sched-swipe-peek {
+  contain: layout paint style;
+  will-change: transform;
+  transform-style: flat;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* Дочерние элементы наоборот не должны получать собственные слои. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) * {
+  will-change: auto !important;
+}
+
+
+/* Предварительно собранные превью соседних дней висят за краями экрана, пока
+   палец ещё не поехал: WebKit успевает растрировать их до начала движения. */
+.sched-swipe-peek.is-warming {
+  pointer-events: none;
+  contain: layout paint style;
+  will-change: transform;
+}
+
+/* Safari растрирует только видимую часть слоя, но при сдвиге добирает соседние
+   тайлы. Для превью высота выше экрана всё равно никогда не видна. */
+.sched-swipe-peek {
+  max-height: calc(var(--sched-viewport-height, 100dvh) + 120px);
+  overflow: hidden;
+}
+
+
+/* ==========================================================================
+   iOS Safari: рывки по всей длине свайпа дают backdrop-filter и маски.
+   Любое размытие подложки пересчитывается каждый кадр, пока под ним или
+   вместе с ним едет контент — и это невозможно вынести на композитор.
+   На время жеста размытие снимается целиком, фоны становятся непрозрачными.
+   ========================================================================== */
+:root.is-day-swiping *,
+:root.is-day-swiping *::before,
+:root.is-day-swiping *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Непрозрачные замены для того, что без размытия стало бы полупрозрачным. */
+:root.is-day-swiping .sched-date-controls { background: var(--sched-bg) !important; }
+:root.is-day-swiping .sched-tab-bar,
+:root.is-day-swiping .sched-tab-bar::after,
+:root.is-day-swiping .sched-dock-refresh { background: var(--sched-raised) !important; }
+:root.is-day-swiping .sched-dock::before { background: var(--sched-bg) !important; }
+
+/* Маски и широкие градиентные подсветки внутри едущего слоя тоже считаются
+   на каждом кадре (особенно псевдоэлемент шириной 100vw у живой пары). */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *::after {
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-backglow,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-glass::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-glass::after {
+  display: none !important;
+}
+/* Стеклянная карточка текущей пары — главный источник перерисовки внутри
+   самой сцены: на время жеста это обычная плоская карточка. */
+:root.is-day-swiping .live-card-glass {
+  background: var(--sched-surface) !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+
+/* ==========================================================================
+   Ключевая iOS-правка: не двигаем весь #stage. В режиме «неделя» внутри него
+   лежат текущий день плюс до шести полностью отрисованных будущих дней.
+   Safari создавал огромную текстуру и перетайлил её на протяжении всего
+   свайпа. Рулетка плавная именно потому, что этот контейнер не двигает.
+   Теперь едет только первый (активный) .sched-day-block.
+   ========================================================================== */
+:root.is-day-swiping #stage {
+  transform: none !important;
+  will-change: auto !important;
+  contain: none !important;
+}
+:root.is-day-swiping .is-swipe-mover {
+  position: relative;
+  z-index: 2;
+  contain: layout paint style;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+#scene:is(.is-swipe-return, .is-swipe-commit) .is-swipe-mover {
+  transition: transform var(--swipe-anim-dur, 260ms) cubic-bezier(.22, 1, .36, 1) !important;
+}
+/* Будущие дни остаются обычным неподвижным потоком и не входят в
+   композитную текстуру активного дня. */
+:root.is-day-swiping #day-scene > .sched-future-days {
+  position: relative;
+  z-index: 0;
+  will-change: auto !important;
+  contain: none !important;
+}
+
+
+/* ==========================================================================
+   Перенос пары: пунктир без воздушного зазора — вплотную к краю подложки.
+   Исходное место серое; переносимая карточка и активная цель лежат выше строк.
+   ========================================================================== */
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  position: relative;
+  z-index: 20;
+  border-color: transparent !important;
+  outline: 2px dashed var(--sched-secondary) !important;
+  outline-offset: 0 !important;
+  background: var(--sched-surface) !important;
+  box-shadow: none !important;
+}
+:root .sched-drag-board > .agenda-row.is-drag-ghost {
+  position: relative;
+  z-index: 10;
+  outline-color: var(--sched-secondary) !important;
+  outline-offset: 0 !important;
+}
+:root .sched-drag-board > .agenda-row.is-drop-target {
+  position: relative;
+  z-index: 30;
+  outline: 2px dashed var(--sched-blue) !important;
+  outline-offset: 0 !important;
+}
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  z-index: 2147483000 !important;
+  border-color: transparent !important;
+  outline: 2px dashed var(--sched-blue) !important;
+  outline-offset: 0 !important;
+}
+/* Линии края дня тоже поверх соседних карточек, без внешнего зазора. */
+:root .sched-drag-board > .agenda-row:is(.is-drop-before, .is-drop-after) {
+  position: relative;
+  z-index: 31;
+}
+
+
+/* ==========================================================================
+   Одинаковый вход первой видимой пары во все дни. Раньше задержка бралась из
+   data-row-n: если четверг начинался, например, с 3-й пары, первая карточка
+   получала задержку третьей и появлялась заметно позже.
+   ========================================================================== */
+#stage .sched-active-day-scene.is-entering
+  .sched-day-block > .agenda-list > .agenda-row:first-child {
+  animation-delay: 50ms !important;
+}
+
+/* Карточка «далее»: fixes.css оставлял кнопке flex-basis:44px и отрицательный
+   правый margin, хотя визуальный размер позже стал 24px. Из-за этого иконка
+   выглядела сдвинутой вправо. */
+:root .live-card-status {
+  justify-content: space-between;
+}
+:root .live-card-status > span {
+  flex: 1 1 auto;
+}
+:root .live-card-status-right {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  align-items: center;
+}
+:root .live-lesson-card .lesson-swap-btn {
+  position: static !important;
+  flex: 0 0 24px !important;
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: center;
+  transform: none !important;
+}
+
+
+/* ==========================================================================
+   Трёхпанельная карусель дней: [предыдущий] [текущий] [следующий].
+   Все панели создаются заранее; во время жеста двигается один track, поэтому
+   левый и правый день всегда остаются стык-в-стык без независимой отрисовки.
+   ========================================================================== */
+.sched-swipe-carousel {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 300%;
+  min-height: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  opacity: 0;
+  contain: layout paint style;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-tap-highlight-color: transparent;
+  transition: none;
+}
+.sched-swipe-carousel.is-active,
+.sched-swipe-carousel.is-settling {
+  opacity: 1;
+}
+.sched-swipe-carousel.is-settling {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+.sched-swipe-panel {
+  position: relative;
+  width: calc(100% / 3);
+  min-width: calc(100% / 3);
+  max-width: calc(100% / 3);
+  flex: 0 0 calc(100% / 3);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--sched-bg);
+  min-height: 100%;
+  contain: layout paint style;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.sched-swipe-panel > .sched-day-block {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Живая сцена сохраняет геометрию в потоке, но скрывается целиком,
+   чтобы будущие дни и фоновые карточки акцентных тем не подсвечивались сзади. */
+.sched-days-scene.is-carousel-swiping #stage,
+.sched-days-scene.is-carousel-swiping #day-scene {
+  visibility: hidden !important;
+}
+.sched-swipe-panel.is-blocked {
+  min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
+  display: grid;
+  place-items: center;
+  color: var(--sched-secondary);
+}
+.sched-swipe-panel.is-blocked .sched-easter-egg-wrap {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: grid;
+  width: var(--blocked-reveal, 0px);
+  min-height: inherit;
+  place-items: center;
+  overflow: hidden;
+}
+.sched-swipe-panel.is-blocked .sched-easter-egg-msg {
+  font-size: 24px;
+  font-weight: 700;
+}
+/* Старый transform на stage больше не участвует в новом алгоритме. */
+:root.is-day-swiping #stage {
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-swipe-carousel.is-settling { transition: none !important; }
+}
+
+
+/* Перенос пары: нейтральный пунктир темнее, а на исходном месте взятой пары
+   остаётся только пустая подложка без второй пунктирной рамки. */
+:root .sched-drag-board > .agenda-row.is-drag-src {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+:root .sched-drag-board > .agenda-row.is-drag-ghost {
+  outline-color: color-mix(in srgb, var(--sched-tertiary) 58%, var(--sched-bg)) !important;
+}
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  outline-color: color-mix(in srgb, var(--sched-tertiary) 68%, var(--sched-bg)) !important;
+}
+
+
+/* Переносимая пара сохраняет исходный размер 1:1. */
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  transform: none !important;
+  scale: 1 !important;
+}
+
+
+/* ==========================================================================
+   Профиль владельца/редактора — вкладка статистики.
+   ========================================================================== */
+.sched-profile-main-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 10px 20px 8px;
+}
+.sched-profile-main-tabs button {
+  min-height: 38px;
+  font-size: 13px;
+}
+.sched-profile-content.is-stats-view {
+  padding-top: 8px;
+}
+.sched-stats {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+.sched-stats-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sched-stats-head > div {
+  min-width: 0;
+}
+.sched-stats-head span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--sched-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.sched-stats-head h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+}
+.sched-stats-status {
+  min-width: 72px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sched-separator);
+  border-radius: 9px;
+  background: var(--sched-raised);
+  color: var(--sched-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+.sched-stats-status.is-error {
+  color: var(--sched-danger, #e56458);
+}
+.sched-stats-error {
+  margin: -6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sched-danger, #e56458) 28%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sched-danger, #e56458) 8%, transparent);
+  color: var(--sched-danger, #e56458);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.sched-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.sched-stat-card {
+  display: flex;
+  min-width: 0;
+  min-height: 112px;
+  padding: 15px;
+  justify-content: space-between;
+  flex-direction: column;
+  border: 1px solid var(--sched-separator);
+  border-radius: 14px;
+  background: var(--sched-raised);
+}
+.sched-stat-card strong {
+  overflow: hidden;
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -.04em;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.sched-stat-card span {
+  max-width: 15ch;
+  color: var(--sched-secondary);
+  font-size: 13px;
+  line-height: 1.3;
+}
+.sched-stat-card.is-primary {
+  border-color: color-mix(in srgb, var(--sched-blue) 26%, var(--sched-separator));
+  background: color-mix(in srgb, var(--sched-blue) 9%, var(--sched-raised));
+}
+.sched-stat-card.is-primary strong,
+.sched-stat-card.is-accent strong {
+  color: var(--sched-blue);
+}
+.sched-stat-card.is-positive {
+  border-color: color-mix(in srgb, var(--sched-green) 24%, var(--sched-separator));
+  background: color-mix(in srgb, var(--sched-green) 8%, var(--sched-raised));
+}
+.sched-stat-card.is-positive strong {
+  color: var(--sched-green);
+}
+.sched-stats-section {
+  display: grid;
+  gap: 7px;
+}
+.sched-stats-section h3 {
+  margin: 0 2px;
+  color: var(--sched-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sched-stats-list {
+  overflow: hidden;
+  border: 1px solid var(--sched-separator);
+  border-radius: 14px;
+  background: var(--sched-raised);
+}
+.sched-stat-row {
+  display: flex;
+  min-height: 44px;
+  padding: 10px 13px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sched-stat-row + .sched-stat-row {
+  border-top: 1px solid var(--sched-separator);
+}
+.sched-stat-row span {
+  min-width: 0;
+  color: var(--sched-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.sched-stat-row strong {
+  flex: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.sched-stats-note {
+  margin: 0 2px 6px;
+  color: var(--sched-tertiary, var(--sched-secondary));
+  font-size: 11px;
+  line-height: 1.45;
+}
+@media (max-width: 390px) {
+  .sched-stats-grid { gap: 8px; }
+  .sched-stat-card { min-height: 104px; padding: 13px; }
+  .sched-stat-card strong { font-size: 27px; }
+}
+
+
+/* Background sync after returning to the tab must be visually silent. */
+:root.is-passive-refresh #day-scene,
+:root.is-passive-refresh #day-scene *,
+:root.is-passive-refresh #strip,
+:root.is-passive-refresh #strip * {
+  animation: none !important;
+  transition: none !important;
+}
+
+
+/* Кнопка предложки для обычного пользователя: та же ручка 44px, что у редактора.
+   Собственный класс нужен потому, что .lesson-swap-btn вне режима редактора
+   скрыт правилом display:none !important. */
+:root .lesson-suggest-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sched-tertiary);
+  opacity: .8;
+  cursor: grab;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  transition: opacity .16s ease, background .16s ease, color .16s ease;
+}
+:root .lesson-suggest-btn svg { width: 18px; height: 18px; pointer-events: none; }
+:root .lesson-suggest-btn:hover,
+:root .lesson-suggest-btn:active { opacity: 1; background: var(--sched-fill); color: var(--sched-blue); }
+:root .lesson-suggest-btn:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }
+:root[data-editor-mode="true"] .lesson-suggest-btn { display: none !important; }
+:root .agenda-row.is-drag-float .lesson-suggest-btn { display: none; }
+:root .sched-drag-board .lesson-suggest-btn { visibility: hidden; }
+/* У отменённой пары зачёркивать иконку не надо. */
+.agenda-row.is-cancelled .lesson-suggest-btn { text-decoration: none; }
+
+/* Атрибут hidden проигрывал `display:flex` из layout.css, поэтому служебные строки
+   настроек (заявки и редакторы, отчёты об ошибках) видели все. */
+:root .sched-settings-row[hidden] { display: none !important; }
+
+/* У круглой кнопки обновления есть ::after для расширения зоны нажатия, но fixes.css
+   ставит ей position: static — и этот ::after с inset: -2px привязывался не к кнопке,
+   а к далёкому родителю и накрывал полэкрана кликабельным слоем. */
+:root .sched-schedule-footer #refresh-btn { position: relative !important; }
+:root .sched-refresh-btn::after,
+:root .sched-schedule-footer #refresh-btn::after {
+  inset: -2px !important;
+  pointer-events: none !important;
+}
+
+/* ---------- плавающая шторка переноса («время сдвинули») ----------
+   Пару не держат пальцем: она просто выбрана и ездит за курсором, поэтому
+   решение принимает круглая панель снизу — сохранить или отменить. */
+:root .sched-pick-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 2147483001;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  transform: translate(-50%, 14px);
+  opacity: 0;
+  transition: transform 180ms cubic-bezier(.2,.86,.24,1), opacity 180ms ease;
+}
+:root .sched-pick-bar.is-open { transform: translate(-50%, 0); opacity: 1; }
+:root .sched-pick-hint {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--sched-secondary);
+  text-shadow: 0 1px 3px var(--sched-bg, #0000);
+  font: 500 13px/1.3 Inter, system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+:root .sched-pick-actions { display: flex; gap: 8px; }
+:root .sched-pick-btn {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  font: 600 15px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* Кнопки сами себе фон: общей круглой подложки за ними нет. */
+:root .sched-pick-btn.is-cancel {
+  background: var(--sched-surface);
+  color: var(--sched-text);
+  box-shadow: 0 1px 3px #0000001f, 0 10px 24px #00000026;
+}
+:root .sched-pick-btn.is-save {
+  background: var(--sched-blue, #1673c7);
+  color: #fff;
+  box-shadow: 0 1px 3px #0000001f, 0 10px 24px #1673c740;
+}
+:root .sched-pick-btn:disabled { opacity: .45; cursor: default; }
+:root .sched-pick-btn:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }
+/* Подсказку для скринридера прячем под шторку, чтобы не было двух панелей. */
+body.is-dragging-pair .sched-pick-bar ~ .sched-drag-status { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root .sched-pick-bar { transition: none; }
+}
+
+/* На пк удержание самой пары (а не кнопки) выделяло текст строки синим.
+   Карточка — элемент управления, а не текст для копирования. */
+:root :is(.agenda-row, .live-lesson-card)[data-row-n],
+:root :is(.agenda-row, .live-lesson-card)[data-row-n] * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+:root :is(.agenda-row, .live-lesson-card)[data-row-n] :is(input, textarea, [contenteditable="true"]) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+:root .sched-drag-board, :root .sched-drag-board *,
+:root :is(.agenda-row, .live-lesson-card).is-drag-float,
+:root :is(.agenda-row, .live-lesson-card).is-drag-float * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
