@@ -1174,3 +1174,37 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   animation: none !important;
   transition: none !important;
 }
+
+
+/* Кнопка предложки для обычного пользователя: та же ручка 44px, что у редактора.
+   Собственный класс нужен потому, что .lesson-swap-btn вне режима редактора
+   скрыт правилом display:none !important. */
+:root .lesson-suggest-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sched-tertiary);
+  opacity: .8;
+  cursor: grab;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  transition: opacity .16s ease, background .16s ease, color .16s ease;
+}
+:root .lesson-suggest-btn svg { width: 18px; height: 18px; pointer-events: none; }
+:root .lesson-suggest-btn:hover,
+:root .lesson-suggest-btn:active { opacity: 1; background: var(--sched-fill); color: var(--sched-blue); }
+:root .lesson-suggest-btn:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }
+:root[data-editor-mode="true"] .lesson-suggest-btn { display: none !important; }
+:root .agenda-row.is-drag-float .lesson-suggest-btn { display: none; }
+:root .sched-drag-board .lesson-suggest-btn { visibility: hidden; }
+/* У отменённой пары зачёркивать иконку не надо. */
+.agenda-row.is-cancelled .lesson-suggest-btn { text-decoration: none; }

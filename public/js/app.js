@@ -398,14 +398,26 @@ function visibleSlotsFor(d) {
   const preferences = state.editorMode
     ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
     : state;
-  /* Отменённая пара показывается окном. Если окна выключены в настройках,
-     такую строку всё равно оставляем: иначе своё же предложение пропадает
-     с экрана и его негде откатить. */
+  /* У редактора отменённая пара — свободное место, поэтому рисуется окном.
+     Всем остальным показываем саму пару зачёркнутой и серой: видно, что именно
+     отменили, и есть за что нажать, чтобы вернуть как было. */
+  return slotsFor(d)
+    .map((slot) => slot.cancelled && state.editorMode
+      ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
+      : slot)
+    .filter((s) => s.cancelled || isSlotVisible(s, preferences));
+}
+
+/* Набор мест для переноса. Собирается так же, как у редактора: окна, вакансии и
+   самостоятельные видны на время жеста, даже если в настройках они выключены:
+   иначе класть пару буквально некуда и перетаскивание ничего не делает. */
+function dragSlotsFor(d) {
+  const preferences = { ...state, windows: true, showVacancies: true, showSelfStudy: true };
   return slotsFor(d)
     .map((slot) => slot.cancelled
-      ? { ...slot, cancelled: false, window: true, empty: true, keepRow: true, subject: "окно", teacher: null, room: null }
+      ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
       : slot)
-    .filter((s) => s.keepRow || isSlotVisible(s, preferences));
+    .filter((s) => isSlotVisible(s, preferences));
 }
 
 function mins(hhmm) {
@@ -616,10 +628,10 @@ function rowHtml(slot, live, dIso) {
     cls.push("is-window-row");
     const editorAttrs = state.editorMode
       ? ` data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить"`
-      : windowSuggestAttrs(dIso, slot);
+      : "";
     return `<div class="${cls.join(" ")}"${editorAttrs}>${time}<div class="agenda-row-content">
       <strong>окно</strong>
-    </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : ""}</div>`;
+    </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : suggestButtonHtml(dIso, slot)}</div>`;
   }
 
   const mark = isCurrent
@@ -634,11 +646,11 @@ function rowHtml(slot, live, dIso) {
       ? `<span class="lesson-origin-mark is-swap">${changeLabel(slot)}</span>`
       : "";
 
-  return `<div class="${cls.join(" ")}" data-row-n="${slot.n}"${suggestRowAttrs(dIso, slot)}>${time}<div class="agenda-row-content">
+  return `<div class="${cls.join(" ")}" data-row-n="${slot.n}">${time}<div class="agenda-row-content">
     <strong>${escapeHtml(slot.subject)}${swapMark}${mark}</strong>
     <span class="lesson-meta">${metaHtml(slot)}</span>
     <small>${bellDuration(mins(slot.to) - mins(slot.from))}</small>
-  </div>${swapButtonHtml(dIso, slot.n)}</div>`;
+  </div>${swapButtonHtml(dIso, slot.n)}${suggestButtonHtml(dIso, slot)}</div>`;
 }
 
 /* Перерыв между парами: маленький чип, встроенный в линию-разделитель
@@ -4001,7 +4013,8 @@ function movePair(dIso, fromN, toN) {
   const target = slots.find(slot => slot.n === toN);
   const changes = normalizeMoveChanges(dIso, planPairSwap(slots, fromN, toN));
   if (!applyDayChanges(dIso, changes, `перенос ${fromN} ↔ ${toN}`)) return false;
-  toast(target?.window || target?.cancelled ? `пара перенесена на ${toN}-е место · прежнее место — окно` : "пары поменяны местами");
+  if (state.editorMode) toast(target?.window || target?.cancelled ? `пара перенесена на ${toN}-е место · прежнее место — окно` : "пары поменяны местами");
+  else toast(`перенос на ${toN}-е место · уйдёт редакторам на проверку`);
   render();
   return true;
 }
@@ -4009,7 +4022,7 @@ function movePair(dIso, fromN, toN) {
 function movePairRelative(dIso, fromN, toN, after) {
   const changes = normalizeMoveChanges(dIso, planPairInsert(slotsFor(dateFromIso(dIso)), fromN, toN, after));
   if (!applyDayChanges(dIso, changes, "изменён порядок пар")) return false;
-  toast("порядок пар изменён");
+  toast(state.editorMode ? "порядок пар изменён" : "порядок пар · уйдёт редакторам на проверку");
   render();
   return true;
 }
@@ -4098,18 +4111,20 @@ function closeSuggestSheet() {
   document.getElementById("suggest-backdrop")?.remove();
 }
 
-function suggestRowAttrs(dIso, slot) {
-  if (!dIso || state.editorMode || slot.window || slot.empty) return "";
-  const label = (slot.subject || "пара") + ", " + slot.n + " пара, нажми, чтобы сообщить об изменении";
-  return ` data-act="suggest" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="${escapeHtml(label)}"`;
-}
-
-/* Отменённая пара в обычном режиме показывается окном, поэтому вернуть её
-   как было можно только через строку окна. */
-function windowSuggestAttrs(dIso, slot) {
-  if (!dIso || state.editorMode || !swapFor(dIso, slot.n)) return "";
-  const label = "изменение на " + slot.n + " паре, нажми, чтобы вернуть как было";
-  return ` data-act="suggest" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="${escapeHtml(label)}"`;
+/* Вход в предложку — отдельная кнопка, а не вся строка: тап по строке
+   конкурировал со скроллом и свайпом на телефоне. Кнопка же служит и ручкой
+   для перетаскивания — точно как в режиме редактора. */
+function suggestButtonHtml(dIso, slot) {
+  if (!dIso || state.editorMode) return "";
+  const isEmpty = Boolean(slot.window || slot.empty);
+  /* В пустом окне предлагать нечего — кнопка нужна только чтобы откатить изменение. */
+  if (isEmpty && !swapFor(dIso, slot.n)) return "";
+  const label = isEmpty
+    ? "изменение на " + slot.n + " паре, нажми, чтобы вернуть как было"
+    : (slot.subject || "пара") + ", " + slot.n + " пара: сообщить об изменении — нажми или потяни";
+  const safe = escapeHtml(label);
+  return '<button class="lesson-suggest-btn" type="button" data-act="suggest" data-date="' + dIso +
+    '" data-n="' + slot.n + '" aria-label="' + safe + '" title="' + safe + '">' + ICON_SWAP + "</button>";
 }
 
 /* Содержимое пары берём с экрана и накладываем сверху одно изменение: так
@@ -4684,29 +4699,19 @@ var swapDragSuppressUntil = 0;
   });
 })();
 
-/* Тап по строке пары вне режима редактора открывает предложку. Перетаскивание
-   и свайп дня глушат его через swapDragSuppressUntil — иначе шторка вылезала бы
-   после каждого жеста. */
+/* Клик по кнопке-ручке открывает предложку. Перетаскивание и свайп дня
+   глушат его через swapDragSuppressUntil — иначе шторка вылезала бы после
+   каждого жеста. Enter и Пробел отрабатывает сама кнопка. */
 (() => {
   const scene = document.getElementById("scene");
   if (!scene) return;
-  const openFrom = target => {
-    if (state.editorMode || pairDragActive || Date.now() < swapDragSuppressUntil) return false;
-    const row = target.closest('[data-act="suggest"]');
-    if (!row || !row.dataset.date) return false;
-    openSuggestSheet(row.dataset.date, Number(row.dataset.n));
-    return true;
-  };
   scene.addEventListener("click", e => {
-    if (!openFrom(e.target)) return;
+    if (state.editorMode || pairDragActive || Date.now() < swapDragSuppressUntil) return;
+    const button = e.target.closest('.lesson-suggest-btn[data-act="suggest"]');
+    if (!button || !button.dataset.date) return;
     e.preventDefault();
     e.stopPropagation();
-  });
-  scene.addEventListener("keydown", e => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    if (!openFrom(e.target)) return;
-    e.preventDefault();
-    e.stopPropagation();
+    openSuggestSheet(button.dataset.date, Number(button.dataset.n));
   });
 })();
 
@@ -4715,7 +4720,7 @@ bindPairDrag({
   scene: document.getElementById("scene"),
   /* Те же строки, что и на экране: иначе в режиме редактора превью переноса
      собиралось из другого набора пар и места путались. */
-  slotsForDate: date => visibleSlotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
+  slotsForDate: date => dragSlotsFor(dateFromIso(date)), renderRow: (slot, date) => rowHtml(slot, null, date),
   onSwap: movePair, onReorder: (date, from, to) => movePairRelative(date, from, to, to > from),
   onActiveChange: active => {
     pairDragActive = active;
