@@ -1237,13 +1237,10 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   box-sizing: border-box;
   width: max-content;
   max-width: calc(100vw - 24px);
-  padding: 10px 14px 12px;
-  border: 1px solid var(--sched-separator);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sched-surface) 92%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  box-shadow: 0 2px 8px #0000001a, 0 18px 40px #00000026;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
   transform: translate(-50%, 14px);
   opacity: 0;
   transition: transform 180ms cubic-bezier(.2,.86,.24,1), opacity 180ms ease;
@@ -1251,8 +1248,9 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 :root .sched-pick-bar.is-open { transform: translate(-50%, 0); opacity: 1; }
 :root .sched-pick-hint {
   margin: 0;
-  padding: 0 6px;
+  padding: 0 4px;
   color: var(--sched-secondary);
+  text-shadow: 0 1px 3px var(--sched-bg, #0000);
   font: 500 13px/1.3 Inter, system-ui, sans-serif;
   text-align: center;
   white-space: nowrap;
@@ -1267,8 +1265,17 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   cursor: pointer;
   touch-action: manipulation;
 }
-:root .sched-pick-btn.is-cancel { background: var(--sched-fill); color: var(--sched-text); }
-:root .sched-pick-btn.is-save { background: var(--sched-blue, #1673c7); color: #fff; }
+/* Кнопки сами себе фон: общей круглой подложки за ними нет. */
+:root .sched-pick-btn.is-cancel {
+  background: var(--sched-surface);
+  color: var(--sched-text);
+  box-shadow: 0 1px 3px #0000001f, 0 10px 24px #00000026;
+}
+:root .sched-pick-btn.is-save {
+  background: var(--sched-blue, #1673c7);
+  color: #fff;
+  box-shadow: 0 1px 3px #0000001f, 0 10px 24px #1673c740;
+}
 :root .sched-pick-btn:disabled { opacity: .45; cursor: default; }
 :root .sched-pick-btn:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }
 /* Подсказку для скринридера прячем под шторку, чтобы не было двух панелей. */
