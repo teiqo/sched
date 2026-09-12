@@ -173,13 +173,7 @@ body.is-dragging-pair #scene { overflow-anchor: none; }
 :root[data-perf] #stage .sched-active-day-scene.is-entering * { animation: none !important; }
 
 @media (max-width: 767px), (pointer: coarse) {
-  /* Always a bottom line: pressing, dragging and settling cannot raise a pill. */
   :root #strip { --strip-selection-on: #fff; }
-  :root #strip.date-strip #selection::before {
-    transform: scaleY(0.050847458) !important;
-    transform-origin: 50% 100% !important;
-    clip-path: none !important; transition: none !important; animation: none !important;
-  }
 }
 @media (max-width: 767px) {
   :root .sched-app { padding-top: calc(20px + env(safe-area-inset-top, 0px)); }
@@ -262,14 +256,6 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   animation: none !important;
 }
 
-/* A day-roulette drag raises the selector on touch devices; an ordinary page swipe does not. */
-@media (max-width: 767px), (pointer: coarse) {
-  :root #strip.date-strip #selection::before { transform: scaleY(0.050847458) !important; }
-  :root #strip:is(.is-pressing, .is-scrubbing, .is-settling, .is-releasing) #selection::before {
-    transform: scaleY(1) !important;
-    transition: transform 120ms cubic-bezier(.2,.9,.3,1) !important;
-  }
-}
 
 /* Keep “today” available during a horizontal day swipe. */
 :root #strip.is-day-swiping #today-btn.is-visible {
@@ -409,11 +395,23 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
     clip-path: inset(calc(100% - 2px) 5px 0 5px round 1px) !important;
     transform: none !important;
     transform-origin: 50% 100% !important;
-    transition: clip-path 120ms cubic-bezier(.2,.9,.3,1) !important;
+    transition: clip-path 120ms cubic-bezier(.2,.9,.3,1), transform 120ms cubic-bezier(.2,.9,.3,1) !important;
   }
-  :root #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
+  :root #strip.is-pressing #selection::before {
+    clip-path: inset(0 round 17px) !important;
+    transform: scale(0.992) !important;
+    transition: clip-path 120ms cubic-bezier(.2,.9,.3,1), transform 120ms cubic-bezier(.2,.9,.3,1) !important;
+  }
+  :root #strip:is(.is-scrubbing, .is-settling) #selection::before {
+    clip-path: inset(0 round 17px) !important;
+    transform: scale(1.022) !important;
+    box-shadow: 0 5px 12px color-mix(in srgb, var(--sched-blue) 18%, transparent) !important;
+    transition: clip-path 120ms cubic-bezier(.2,.9,.3,1), transform 120ms cubic-bezier(.2,.9,.3,1), box-shadow 120ms ease !important;
+  }
+  :root #strip:is(.is-releasing, .is-hop) #selection::before {
     clip-path: inset(0 round 17px) !important;
     transform: none !important;
+    transition: clip-path 140ms cubic-bezier(.2,.9,.3,1), transform 140ms cubic-bezier(.2,.9,.3,1) !important;
   }
   :root[data-perf] #strip:is(.is-pressing,.is-scrubbing,.is-settling,.is-releasing) #selection::before {
     transition: none !important;

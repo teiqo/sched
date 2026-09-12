@@ -1520,7 +1520,7 @@ function selectDate(d, direction, options) {
     return;
   }
   const dir =
-    options?.fromSwipe || direction === null
+    options?.fromSwipe
       ? null
       : direction || (next > state.selected ? "forward" : next < state.selected ? "backward" : null);
   const weekChanged = weekStart(next).getTime() !== weekStart(state.selected).getTime();
@@ -4821,8 +4821,9 @@ var scheduleCheckedAt = (function () {
 var scheduleApply = null;
 
 function previewAnimated() {
-  /* Во время ведения рулетки смена сцены тихая, без каскада строк на каждый кадр */
-  return false;
+  /* Один и тот же сценарий анимаций на компьютере и на телефоне:
+     без троттлинга и без облегчённого режима. */
+  return Boolean(scrub);
 }
 
 function migrateSwaps(data) {
