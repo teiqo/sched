@@ -125,7 +125,7 @@ var state = {
   palette: "default",
   accent: DEFAULT_ACCENT,
   windows: false,
-  showVacancies: false,
+  showVacancies: true,
   showSelfStudy: true,
   editorMode: false,
   parityMode: "auto",
@@ -240,8 +240,13 @@ function weekStart(d) {
   return addDays(x, -shift);
 }
 
+/* На выходных смотреть нечего, поэтому сразу показываем ближайший понедельник. */
 function defaultSelectedDate() {
-  return startOfDay(currentDate());
+  const today = startOfDay(currentDate());
+  const day = today.getDay();
+  if (day === 6) return addDays(today, 2);
+  if (day === 0) return addDays(today, 1);
+  return today;
 }
 
 function sameDay(a, b) {
@@ -1494,7 +1499,7 @@ function selectDate(d, direction, options) {
     if (todayButton) {
       todayButton.classList.toggle(
         "is-visible",
-        !sameDay(state.selected, startOfDay(currentDate())),
+        !sameDay(state.selected, defaultSelectedDate()),
       );
     }
     window.requestAnimationFrame(checkCompactHeading);
@@ -4251,7 +4256,12 @@ function openSuggestSheet(dIso, n) {
       if (id === "cancelled") suggestSend(dIso, n, { cancelled: true });
       else if (id === "revert") suggestSend(dIso, n, null);
       /* Перенос — это та же шторка, что у редактора: список мест в дне. */
-      else if (id === "move") { closeSuggestSheet(); openMoveSheet(dIso, n); }
+      /* «время сдвинули» — сразу та же доска с окнами, что в редакторе.
+         Списком мест подстраховываемся, если строки на экране нет. */
+      else if (id === "move") {
+        closeSuggestSheet();
+        if (!pairDragController?.beginPick(dIso, n)) openMoveSheet(dIso, n);
+      }
       else if (id === "subject") renderSubject();
       else renderField(id);
       return;
@@ -4719,7 +4729,7 @@ var swapDragSuppressUntil = 0;
 })();
 
 /* Shared movement controller for all lesson card types. */
-bindPairDrag({
+var pairDragController = bindPairDrag({
   scene: document.getElementById("scene"),
   /* Те же строки, что и на экране: иначе в режиме редактора превью переноса
      собиралось из другого набора пар и места путались. */
@@ -6034,6 +6044,9 @@ function renderAccountRow() {
   const tgBtn = document.getElementById("go-tg-sheet");
   if (tgBtn) {
     tgBtn.hidden = !canReview;
+    tgBtn.setAttribute("aria-hidden", String(!canReview));
+    if (canReview) tgBtn.removeAttribute("tabindex");
+    else tgBtn.setAttribute("tabindex", "-1");
     const pHint = document.getElementById("settings-pending-hint");
     if (pHint)
       pHint.textContent = pendingCount
@@ -6043,7 +6056,11 @@ function renderAccountRow() {
 
   const repBtn = document.getElementById("go-reports-sheet");
   if (repBtn) {
-    repBtn.hidden = role !== "owner";
+    const canSeeReports = role === "owner";
+    repBtn.hidden = !canSeeReports;
+    repBtn.setAttribute("aria-hidden", String(!canSeeReports));
+    if (canSeeReports) repBtn.removeAttribute("tabindex");
+    else repBtn.setAttribute("tabindex", "-1");
   }
 }
 

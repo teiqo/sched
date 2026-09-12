@@ -195,6 +195,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (commit && d.moved) updateTarget();
     const target = d.targetN;
     drag = null;
+    d.cleanup?.();
     try { if (scene.hasPointerCapture(d.pointerId)) scene.releasePointerCapture(d.pointerId); } catch (_) {}
     d.clone.remove(); d.status.remove(); d.board.remove();
     d.hidden.forEach(([el, hidden]) => { el.hidden = hidden; el.classList.remove('sched-drag-original'); });
@@ -281,5 +282,40 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     finish(false);
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) finish(false); });
-  return { cancel: () => finish(false) };
+  /* Тот же перенос, но запущенный из кода, а не удержанием: доска с окнами
+     появляется сразу, карточка ездит за курсором и магнитится к местам, а кладётся
+     обычным нажатием. Так перенос работает и без долгого удержания пальца. */
+  const beginPick = (date, n) => {
+    if (drag || pending) return false;
+    const selector = editorMode() ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
+    const button = scene?.querySelector(`${selector}[data-date="${date}"][data-n="${n}"]`);
+    const row = button?.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
+    if (!row) return false;
+    const rect = row.getBoundingClientRect();
+    pending = { row, date, n, handle: true, touchBody: true, pointerId: -1,
+      x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    start();
+    if (!drag) { clearPending(); return false; }
+    drag.moved = true;
+    drag.pick = true;
+    const onPickMove = event => { if (drag?.pick) move(event.clientX, event.clientY); };
+    const onPickDown = event => {
+      if (!drag?.pick) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!event.target.closest('.sched-drag-board')) { finish(false); return; }
+      drag.x = event.clientX; drag.y = event.clientY;
+      updateTarget();
+      finish(true);
+    };
+    document.addEventListener('pointermove', onPickMove, true);
+    document.addEventListener('pointerdown', onPickDown, true);
+    drag.cleanup = () => {
+      document.removeEventListener('pointermove', onPickMove, true);
+      document.removeEventListener('pointerdown', onPickDown, true);
+    };
+    updateTarget();
+    announce('выбери место и нажми на него');
+    return true;
+  };
+  return { cancel: () => finish(false), beginPick };
 }

@@ -1208,3 +1208,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 :root .sched-drag-board .lesson-suggest-btn { visibility: hidden; }
 /* У отменённой пары зачёркивать иконку не надо. */
 .agenda-row.is-cancelled .lesson-suggest-btn { text-decoration: none; }
+
+/* Атрибут hidden проигрывал `display:flex` из layout.css, поэтому служебные строки
+   настроек (заявки и редакторы, отчёты об ошибках) видели все. */
+:root .sched-settings-row[hidden] { display: none !important; }
