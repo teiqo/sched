@@ -1,3 +1,12 @@
+/* ---------- шрифт Inter (variable, вшит локально) ---------- */
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 .app-loading-state,
 .app-loading-state * {
   box-sizing: border-box;

@@ -967,7 +967,13 @@ function bellsHtml() {
 function setScene(html, direction) {
   const stage = $("#stage");
   const old = $("#day-scene");
-  if (old && old._schedHtml === html) return;
+  if (old && old._schedHtml === html) {
+    if (!direction && old.classList.contains("is-entering")) {
+      old.classList.remove("is-entering");
+      old.removeAttribute("data-direction");
+    }
+    return;
+  }
   if (sceneOutTimer !== null) {
     window.clearTimeout(sceneOutTimer);
     sceneOutTimer = null;
@@ -1001,6 +1007,14 @@ function setScene(html, direction) {
     Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
 
   if (!direction || reduced) {
+    if (sceneTimer !== null) {
+      window.clearTimeout(sceneTimer);
+      sceneTimer = null;
+    }
+    if (sceneOutTimer !== null) {
+      window.clearTimeout(sceneOutTimer);
+      sceneOutTimer = null;
+    }
     old.getAnimations().forEach((a) => a.cancel());
     old.classList.remove("is-leaving", "is-entering");
     old.removeAttribute("data-direction");
@@ -1506,7 +1520,9 @@ function selectDate(d, direction, options) {
     return;
   }
   const dir =
-    direction || (next > state.selected ? "forward" : next < state.selected ? "backward" : null);
+    options?.fromSwipe || direction === null
+      ? null
+      : direction || (next > state.selected ? "forward" : next < state.selected ? "backward" : null);
   const weekChanged = weekStart(next).getTime() !== weekStart(state.selected).getTime();
   state.selected = next;
   /* Внешнее переключение даты (стрелки недель, «сегодня», колесо) во время
@@ -4805,9 +4821,8 @@ var scheduleCheckedAt = (function () {
 var scheduleApply = null;
 
 function previewAnimated() {
-  /* Один и тот же сценарий анимаций на компьютере и на телефоне:
-     без троттлинга и без облегчённого режима. */
-  return Boolean(scrub);
+  /* Во время ведения рулетки смена сцены тихая, без каскада строк на каждый кадр */
+  return false;
 }
 
 function migrateSwaps(data) {

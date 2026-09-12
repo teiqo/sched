@@ -2140,26 +2140,28 @@ body.is-dragging-pair {
   }
 }
 .sched-future-days {
-  animation: sched-future-in var(--duration-medium, 0.42s)
-    var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation: none;
 }
 .sched-future-days > .sched-day-block {
+  animation: none;
+}
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block {
   animation: sched-future-in var(--duration-medium, 0.42s)
     var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
-.sched-future-days > .sched-day-block:nth-of-type(1) {
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) {
   animation-delay: 40ms;
 }
-.sched-future-days > .sched-day-block:nth-of-type(2) {
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) {
   animation-delay: 90ms;
 }
-.sched-future-days > .sched-day-block:nth-of-type(3) {
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) {
   animation-delay: 140ms;
 }
-.sched-future-days > .sched-day-block:nth-of-type(4) {
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(4) {
   animation-delay: 185ms;
 }
-.sched-future-days > .sched-day-block:nth-of-type(n + 5) {
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 5) {
   animation-delay: 225ms;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -4948,9 +4950,10 @@ a.sched-settings-row,
 .sched-future-days {
   animation: none;
 }
-/* Новые будущие дни сохраняют собственное плавное появление; при начале/конце
-   жеста их animation-name, delay и transform больше не изменяются. */
 .sched-future-days > .sched-day-block {
+  animation: none;
+}
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block {
   animation: sched-future-in var(--duration-medium, 0.42s) var(--ease-smooth-out) both;
 }
 

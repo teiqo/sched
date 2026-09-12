@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-12-v64-pair-drag-pick-fix";
+const CACHE = CACHE_PREFIX + "2026-09-12-v66-font-cache-first";
 const ASSETS = [
   "./",
   "./index.html",
@@ -94,6 +94,29 @@ self.addEventListener("fetch", (event) => {
   // Never cache credentials, authenticated requests or login callback URLs.
   if (request.headers.has("Authorization") || /\/auth(?:\/|$)/.test(url.pathname) ||
       ["code", "state", "hash", "auth_date", "id_token", "session_token"].some((key) => url.searchParams.has(key))) return;
+
+  // Fonts and static media assets are cache-first: immutable within a version, eliminates FOUT / constant reloading.
+  const isStaticAsset =
+    url.pathname.includes("/assets/fonts/") ||
+    url.pathname.includes("/assets/icons/") ||
+    /\.(?:ttf|woff2?|eot|otf|svg|png|jpg|jpeg|webp|ico)$/i.test(url.pathname);
+
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok && response.type !== "opaque" && !/no-store/i.test(response.headers.get("Cache-Control") || "")) {
+            const copy = response.clone();
+            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
+          }
+          return response;
+        });
+      }),
+    );
+    return;
+  }
+
   // Stable filenames for editable CSS/JS are network-first, not cached forever.
   event.respondWith(
     fetch(request)
