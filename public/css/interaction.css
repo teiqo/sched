@@ -602,37 +602,37 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   overflow-x: hidden !important;
   scrollbar-gutter: auto;
 }
-#swap-backdrop .sched-replace-sheet,
-#swap-backdrop .sched-replace-sheet * {
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-sheet,
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-sheet * {
   box-sizing: border-box;
 }
-#swap-backdrop .sched-replace-meta-grid {
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-meta-grid {
   width: 100%;
   min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
 }
-#swap-backdrop .sched-replace-meta-grid > *,
-#swap-backdrop .sched-replace-field,
-#swap-backdrop .sched-replace-select {
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-meta-grid > *,
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-field,
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-select {
   min-width: 0;
   max-width: 100%;
 }
-#swap-backdrop :is(input,select) {
+:is(#swap-backdrop, #suggest-backdrop) :is(input,select) {
   display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
 }
-#swap-backdrop .sched-replace-actions {
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-actions {
   min-width: 0;
   max-width: 100%;
 }
-#swap-backdrop .sched-replace-actions > button {
+:is(#swap-backdrop, #suggest-backdrop) .sched-replace-actions > button {
   min-width: 0;
 }
 @media (max-width: 360px) {
-  #swap-backdrop .sched-replace-meta-grid {
+  :is(#swap-backdrop, #suggest-backdrop) .sched-replace-meta-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-12-v62-cancelled-room-gray";
+const CACHE = CACHE_PREFIX + "2026-09-12-v63-suggest-custom-meta";
 const ASSETS = [
   "./",
   "./index.html",

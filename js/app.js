@@ -4219,11 +4219,41 @@ function openSuggestSheet(dIso, n) {
     sheet.innerHTML = head("какая пара вместо неё?") +
       '<label class="sched-replace-field"><span>предмет из расписания</span><div class="sched-replace-select"><select id="suggest-subject">' + options + "</select></div></label>" +
       '<label class="sched-replace-field"><span>или свой предмет</span><input id="suggest-subject-custom" type="text" maxlength="120" placeholder="название предмета" /></label>' +
-      '<p class="sched-replace-hint">выбрал из списка — преподаватель и аудитория подставятся сами</p>' +
+      '<div class="sched-replace-meta-grid">' +
+      '<label class="sched-replace-field"><span>преподаватель</span><input id="suggest-teacher" type="text" maxlength="120" placeholder="фамилия (необязательно)" /></label>' +
+      '<label class="sched-replace-field"><span>аудитория *</span><input id="suggest-room" type="text" maxlength="40" placeholder="номер" /></label>' +
+      '</div>' +
+      '<p class="sched-replace-hint">выбрал из списка — преподаватель и аудитория подставятся сами; для своего предмета укажи номер аудитории</p>' +
       '<div class="sched-replace-actions"><button class="is-primary" type="button" data-suggest-send="subject">отправить</button>' +
       '<button type="button" data-suggest-back>назад</button></div>' +
       swapAccessHint();
-    sheet.querySelector("#suggest-subject")?.focus({ preventScroll: true });
+
+    const picker = sheet.querySelector("#suggest-subject");
+    const custom = sheet.querySelector("#suggest-subject-custom");
+    const teacherField = sheet.querySelector("#suggest-teacher");
+    const roomField = sheet.querySelector("#suggest-room");
+
+    let autoFilled = false;
+    picker?.addEventListener("change", () => {
+      const chosen = picker.options[picker.selectedIndex];
+      if (!picker.value || !chosen) return;
+      if (custom) custom.value = "";
+      if (teacherField) teacherField.value = chosen.dataset.teacher || "";
+      if (roomField) roomField.value = chosen.dataset.room || "";
+      autoFilled = true;
+    });
+
+    custom?.addEventListener("input", () => {
+      if (!custom.value.trim()) return;
+      if (picker?.value) picker.value = "";
+      if (autoFilled) {
+        if (teacherField) teacherField.value = "";
+        if (roomField) roomField.value = "";
+        autoFilled = false;
+      }
+    });
+
+    picker?.focus({ preventScroll: true });
   };
 
   const sendField = kind => {
@@ -4237,10 +4267,24 @@ function openSuggestSheet(dIso, n) {
     const picker = sheet.querySelector("#suggest-subject");
     const custom = (sheet.querySelector("#suggest-subject-custom")?.value || "").trim().slice(0, 120);
     const chosen = picker?.options[picker.selectedIndex];
+    const teacher = (sheet.querySelector("#suggest-teacher")?.value || "").trim().slice(0, 120);
+    const room = (sheet.querySelector("#suggest-room")?.value || "").trim().slice(0, 40);
+
     if (!custom && !picker?.value) { toast("выбери или впиши предмет"); return; }
-    suggestSend(dIso, n, custom
-      ? { subject: custom, teacher: "", room: "" }
-      : { subject: picker.value, teacher: chosen?.dataset.teacher || "", room: chosen?.dataset.room || "" });
+    if (custom) {
+      if (!room) {
+        toast("впиши номер аудитории");
+        sheet.querySelector("#suggest-room")?.focus();
+        return;
+      }
+      suggestSend(dIso, n, { subject: custom, teacher, room });
+      return;
+    }
+    suggestSend(dIso, n, {
+      subject: picker.value,
+      teacher: teacher || chosen?.dataset.teacher || "",
+      room: room || chosen?.dataset.room || "",
+    });
   };
 
   backdrop.addEventListener("click", event => {
