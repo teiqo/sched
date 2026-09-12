@@ -613,7 +613,7 @@ function rowHtml(slot, live, dIso) {
     cls.push("is-window-row");
     const editorAttrs = state.editorMode
       ? ` data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить"`
-      : "";
+      : windowSuggestAttrs(dIso, slot);
     return `<div class="${cls.join(" ")}"${editorAttrs}>${time}<div class="agenda-row-content">
       <strong>окно</strong>
     </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : ""}</div>`;
@@ -631,7 +631,7 @@ function rowHtml(slot, live, dIso) {
       ? `<span class="lesson-origin-mark is-swap">${changeLabel(slot)}</span>`
       : "";
 
-  return `<div class="${cls.join(" ")}" data-row-n="${slot.n}">${time}<div class="agenda-row-content">
+  return `<div class="${cls.join(" ")}" data-row-n="${slot.n}"${suggestRowAttrs(dIso, slot)}>${time}<div class="agenda-row-content">
     <strong>${escapeHtml(slot.subject)}${swapMark}${mark}</strong>
     <span class="lesson-meta">${metaHtml(slot)}</span>
     <small>${bellDuration(mins(slot.to) - mins(slot.from))}</small>
@@ -3727,6 +3727,7 @@ function finishEditorMode() {
   editorSession = null;
   closeSwapSheet();
   closeMoveSheet();
+  closeSuggestSheet();
   applyFlags();
   render();
 }
@@ -4076,6 +4077,186 @@ function openMoveSheet(dIso, n) {
     }
   });
   backdrop.querySelector("[data-move-to]:not(:disabled)")?.focus({ preventScroll: true });
+}
+
+/* ---------- предложка для обычного пользователя ----------
+   Студент не редактирует расписание, он сообщает, что увидел. Поэтому здесь
+   выбор готового варианта, а не форма редактора: два тапа вместо заполнения
+   полей. «время сдвинули» отдаёт управление шторке переноса — ровно той же,
+   что работает в режиме редактора. */
+var SUGGEST_OPTIONS = [
+  { id: "cancelled", mark: "✕", title: "пары не будет", hint: "отменили или преподаватель не пришёл" },
+  { id: "room", mark: "🚪", title: "другой кабинет", hint: "пару перевесили в другую аудиторию" },
+  { id: "teacher", mark: "👤", title: "другой преподаватель", hint: "ведёт кто-то другой" },
+  { id: "subject", mark: "🔄", title: "вместо неё другая пара", hint: "предмет заменили целиком" },
+  { id: "move", mark: "🕐", title: "время сдвинули", hint: "пара идёт на другом месте в дне" },
+];
+
+function closeSuggestSheet() {
+  document.getElementById("suggest-backdrop")?.remove();
+}
+
+function suggestRowAttrs(dIso, slot) {
+  if (!dIso || state.editorMode || slot.window || slot.empty) return "";
+  const label = (slot.subject || "пара") + ", " + slot.n + " пара, нажми, чтобы сообщить об изменении";
+  return ` data-act="suggest" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="${escapeHtml(label)}"`;
+}
+
+/* Отменённая пара в обычном режиме показывается окном, поэтому вернуть её
+   как было можно только через строку окна. */
+function windowSuggestAttrs(dIso, slot) {
+  if (!dIso || state.editorMode || !swapFor(dIso, slot.n)) return "";
+  const label = "изменение на " + slot.n + " паре, нажми, чтобы вернуть как было";
+  return ` data-act="suggest" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="${escapeHtml(label)}"`;
+}
+
+/* Содержимое пары берём с экрана и накладываем сверху одно изменение: так
+   предложение не теряет предмет и преподавателя, которых студент не трогал. */
+function suggestEntry(dIso, n, patch) {
+  const slot = slotsFor(dateFromIso(dIso)).find(item => item.n === n) || {};
+  const current = swapFor(dIso, n) || {};
+  const entry = {
+    subject: slot.subject || "",
+    teacher: slot.teacher || "",
+    room: slot.room || "",
+    self: Boolean(slot.self),
+  };
+  if (current.moved) {
+    entry.moved = true;
+    if (current.movedFrom) entry.movedFrom = current.movedFrom;
+  }
+  return { ...entry, ...patch };
+}
+
+function suggestSend(dIso, n, patch) {
+  if (!setSwap(dIso, n, patch === null ? null : suggestEntry(dIso, n, patch))) return;
+  closeSuggestSheet();
+  render();
+  if (patch === null) toast("вернул как было");
+  else if (!sharedSwapsEnabled()) toast("изменение сохранено только у тебя");
+  else toast("отправляю предложение…");
+}
+
+function openSuggestSheet(dIso, n) {
+  document.getElementById("sched-toast-container")?.replaceChildren();
+  closeSuggestSheet();
+  closeSwapSheet();
+  closeMoveSheet();
+  const d = dateFromIso(dIso);
+  const slot = slotsFor(d).find(item => item.n === n);
+  if (!slot) return;
+  const hasSwap = Boolean(swapFor(dIso, n));
+  const isEmptySlot = Boolean(slot.window || slot.empty);
+  /* В пустом окне без замен предлагать нечего. */
+  if (isEmptySlot && !hasSwap) return;
+  const meta = (slot.subject || "пара") + " · " + n + " пара" +
+    (slot.from && slot.to ? " · " + slot.from + "–" + slot.to : "") + " · " + dateLabel(d);
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "suggest-backdrop";
+  backdrop.className = "sched-replace-backdrop";
+  backdrop.innerHTML = '<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="suggest-title"></div>';
+  document.body.appendChild(backdrop);
+  const sheet = backdrop.firstElementChild;
+  window.requestAnimationFrame(() => backdrop.classList.add("is-open"));
+
+  const head = title => `<div class="sched-replace-head"><strong id="suggest-title">${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span></div>`;
+  const option = (mark, title, hint, attrs) => `<button class="sched-move-target" type="button" ${attrs}>
+    <span class="sched-move-number">${mark}</span><span class="sched-move-target-copy"><strong>${escapeHtml(title)}</strong>
+    <small>${escapeHtml(hint)}</small></span>${ICON_CHEVRON}</button>`;
+
+  const renderRoot = () => {
+    const list = isEmptySlot ? [] : SUGGEST_OPTIONS;
+    sheet.innerHTML = head("что изменилось?") +
+      '<p class="sched-move-help">выбери, что именно поменялось — редакторы проверят и подтвердят.</p>' +
+      '<div class="sched-move-targets">' +
+      list.map(item => option(item.mark, item.title, item.hint, `data-suggest-pick="${item.id}"`)).join("") +
+      (hasSwap ? option("↺", "вернуть как было", "убрать это изменение из расписания", 'data-suggest-pick="revert"') : "") +
+      "</div>" +
+      '<div class="sched-replace-actions"><button type="button" data-suggest-close>отмена</button></div>' +
+      swapAccessHint();
+    sheet.querySelector("[data-suggest-pick]")?.focus({ preventScroll: true });
+  };
+
+  const renderField = kind => {
+    const room = kind === "room";
+    sheet.innerHTML = head(room ? "новый кабинет" : "новый преподаватель") +
+      `<label class="sched-replace-field"><span>${room ? "номер аудитории" : "фамилия"}</span>
+      <input id="suggest-value" type="text" ${room ? 'inputmode="numeric" maxlength="40"' : 'maxlength="120"'}
+      value="${escapeHtml(room ? slot.room || "" : slot.teacher || "")}" placeholder="${room ? "например, 305" : "например, иванов"}" /></label>` +
+      '<div class="sched-replace-actions"><button class="is-primary" type="button" data-suggest-send="' + kind + '">отправить</button>' +
+      '<button type="button" data-suggest-back>назад</button></div>' +
+      swapAccessHint();
+    const input = sheet.querySelector("#suggest-value");
+    input?.focus({ preventScroll: true });
+    input?.setSelectionRange(input.value.length, input.value.length);
+  };
+
+  const renderSubject = () => {
+    const options = ['<option value="">выбери предмет</option>'].concat(subjectCatalog().map(item =>
+      `<option value="${escapeHtml(item.subject)}" data-teacher="${escapeHtml(item.teacher)}" data-room="${escapeHtml(item.room)}">${escapeHtml(item.subject)}${item.teacher ? " · " + escapeHtml(item.teacher) : ""}</option>`)).join("");
+    sheet.innerHTML = head("какая пара вместо неё?") +
+      '<label class="sched-replace-field"><span>предмет из расписания</span><div class="sched-replace-select"><select id="suggest-subject">' + options + "</select></div></label>" +
+      '<label class="sched-replace-field"><span>или свой предмет</span><input id="suggest-subject-custom" type="text" maxlength="120" placeholder="название предмета" /></label>' +
+      '<p class="sched-replace-hint">выбрал из списка — преподаватель и аудитория подставятся сами</p>' +
+      '<div class="sched-replace-actions"><button class="is-primary" type="button" data-suggest-send="subject">отправить</button>' +
+      '<button type="button" data-suggest-back>назад</button></div>' +
+      swapAccessHint();
+    sheet.querySelector("#suggest-subject")?.focus({ preventScroll: true });
+  };
+
+  const sendField = kind => {
+    const limit = kind === "room" ? 40 : 120;
+    const value = (sheet.querySelector("#suggest-value")?.value || "").trim().slice(0, limit);
+    if (!value) { toast(kind === "room" ? "впиши номер аудитории" : "впиши фамилию"); return; }
+    suggestSend(dIso, n, { [kind]: value });
+  };
+
+  const sendSubject = () => {
+    const picker = sheet.querySelector("#suggest-subject");
+    const custom = (sheet.querySelector("#suggest-subject-custom")?.value || "").trim().slice(0, 120);
+    const chosen = picker?.options[picker.selectedIndex];
+    if (!custom && !picker?.value) { toast("выбери или впиши предмет"); return; }
+    suggestSend(dIso, n, custom
+      ? { subject: custom, teacher: "", room: "" }
+      : { subject: picker.value, teacher: chosen?.dataset.teacher || "", room: chosen?.dataset.room || "" });
+  };
+
+  backdrop.addEventListener("click", event => {
+    if (event.target === backdrop || event.target.closest("[data-suggest-close]")) { closeSuggestSheet(); return; }
+    if (event.target.closest("[data-suggest-back]")) { renderRoot(); return; }
+    const pick = event.target.closest("[data-suggest-pick]");
+    if (pick) {
+      const id = pick.dataset.suggestPick;
+      if (id === "cancelled") suggestSend(dIso, n, { cancelled: true });
+      else if (id === "revert") suggestSend(dIso, n, null);
+      /* Перенос — это та же шторка, что у редактора: список мест в дне. */
+      else if (id === "move") { closeSuggestSheet(); openMoveSheet(dIso, n); }
+      else if (id === "subject") renderSubject();
+      else renderField(id);
+      return;
+    }
+    const send = event.target.closest("[data-suggest-send]");
+    if (!send) return;
+    if (send.dataset.suggestSend === "subject") sendSubject();
+    else sendField(send.dataset.suggestSend);
+  });
+
+  backdrop.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.stopPropagation(); closeSuggestSheet(); return; }
+    if (event.key === "Enter" && event.target.matches("input")) {
+      event.preventDefault();
+      sheet.querySelector("[data-suggest-send]")?.click();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...sheet.querySelectorAll("button:not(:disabled), input, select")];
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+    else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+  });
+
+  renderRoot();
 }
 
 /* Базовое расписание лежит в slotsForBase, а здесь накладываются замены. */
@@ -4467,6 +4648,7 @@ function openSwapSheet(dIso, n) {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeMoveSheet();
+    closeSuggestSheet();
     closeSwapSheet();
     closeTgSheet();
     closeUpdatesSheet();
@@ -4497,6 +4679,32 @@ var swapDragSuppressUntil = 0;
         openSwapSheet(btn.dataset.date, Number(btn.dataset.n));
       }
     }
+  });
+})();
+
+/* Тап по строке пары вне режима редактора открывает предложку. Перетаскивание
+   и свайп дня глушат его через swapDragSuppressUntil — иначе шторка вылезала бы
+   после каждого жеста. */
+(() => {
+  const scene = document.getElementById("scene");
+  if (!scene) return;
+  const openFrom = target => {
+    if (state.editorMode || pairDragActive || Date.now() < swapDragSuppressUntil) return false;
+    const row = target.closest('[data-act="suggest"]');
+    if (!row || !row.dataset.date) return false;
+    openSuggestSheet(row.dataset.date, Number(row.dataset.n));
+    return true;
+  };
+  scene.addEventListener("click", e => {
+    if (!openFrom(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  scene.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (!openFrom(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
   });
 })();
 
@@ -5633,7 +5841,7 @@ function copyTextToClipboard(text) {
 
 /* ---------- тосты ---------- */
 function toast(text) {
-  const dialog = document.querySelector('#move-backdrop .sched-replace-sheet, #bot-login-backdrop .sched-replace-sheet');
+  const dialog = document.querySelector('#move-backdrop .sched-replace-sheet, #suggest-backdrop .sched-replace-sheet, #bot-login-backdrop .sched-replace-sheet');
   if (dialog) {
     let notice = dialog.querySelector('.sched-inline-notice');
     if (!notice) { notice = document.createElement('p'); notice.className = 'sched-inline-notice'; notice.setAttribute('role', 'status'); dialog.appendChild(notice); }
@@ -5673,7 +5881,8 @@ async function pullSharedSwaps() {
   const url = sharedSwapsUrl();
   if (!url) return;
   /* Пока открыт редактор замены, сеть не дёргаем, чтобы не потерять ввод. */
-  if (pairDragActive || document.getElementById("swap-backdrop") || document.getElementById("move-backdrop")) return;
+  if (pairDragActive || document.getElementById("swap-backdrop") || document.getElementById("move-backdrop") ||
+    document.getElementById("suggest-backdrop")) return;
   try {
     const resp = await cloudFetch(url, {
       headers: { Accept: "application/json" },
