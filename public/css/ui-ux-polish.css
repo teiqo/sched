@@ -159,8 +159,9 @@
   text-decoration-color: var(--sched-cancelled-line) !important;
 }
 
-.agenda-row.is-cancelled :is(strong, small, time, .lesson-meta, .lesson-meta span),
+.agenda-row.is-cancelled :is(strong, small, time, .lesson-meta, .lesson-meta span, .lesson-room),
 .agenda-row.is-cancelled .agenda-row-time time span {
+  text-decoration: line-through !important;
   text-decoration-color: var(--sched-cancelled-line) !important;
   text-decoration-thickness: 1px !important;
 }
@@ -189,6 +190,17 @@
   background: var(--sched-cancelled-tint) !important;
 }
 
+/* Аудитория у отменённой пары — серая и зачёркнутая при любых темах и палитрах. */
+:root .agenda-row.is-cancelled .lesson-room,
+:root[data-sched-palette] .agenda-row.is-cancelled .lesson-room {
+  color: var(--sched-cancelled-ink) !important;
+  background: var(--sched-cancelled-tint) !important;
+  border-color: var(--sched-cancelled-line) !important;
+  text-decoration: line-through !important;
+  text-decoration-color: var(--sched-cancelled-line) !important;
+  text-decoration-thickness: 1px !important;
+}
+
 /* Плашка «отменена» — серая, без акцента замены. */
 .agenda-row.is-cancelled .lesson-origin-mark.is-swap {
   color: var(--sched-cancelled-ink) !important;
@@ -198,5 +210,6 @@
 .sched-notif-frag-lesson.is-cancelled,
 .sched-notif-frag-lesson.is-cancelled :is(time, b, i) {
   color: var(--sched-secondary) !important;
+  text-decoration: line-through !important;
   text-decoration-color: color-mix(in srgb, var(--sched-secondary) 65%, transparent) !important;
 }
