@@ -58,8 +58,10 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const before = new Map([...d.items.values()].map(row => [row, row.getBoundingClientRect().top]));
     const order = pairOrder(d.slots, d.fromN, targetN);
     const fragment = document.createDocumentFragment();
+    let movedTargetSlot = null;
     order.forEach((originN, i) => {
       const row = d.items.get(originN), slot = d.slots[i];
+      if (originN === d.fromN) movedTargetSlot = slot;
       row.getAnimations().forEach(a => a.cancel());
       row.dataset.dropN = slot.n;
       if (row.dataset.rowN) row.dataset.rowN = slot.n;
@@ -70,6 +72,23 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       fragment.appendChild(row);
     });
     d.board.appendChild(fragment);
+    if (d.clone && movedTargetSlot) {
+      const numEl = d.clone.querySelector('.agenda-row-num');
+      if (numEl) numEl.textContent = movedTargetSlot.n;
+      const timeEl = d.clone.querySelector('.agenda-row-time time');
+      if (timeEl) timeEl.innerHTML = `${movedTargetSlot.from}<span>${movedTargetSlot.to}</span>`;
+      const liveRange = d.clone.querySelector('.live-card-range, .live-next-range');
+      if (liveRange) {
+        const small = liveRange.querySelector('small');
+        liveRange.innerHTML = `${movedTargetSlot.from}–${movedTargetSlot.to}${small ? small.outerHTML : ''}`;
+      }
+      const liveStatus = d.clone.querySelector('.live-card-status > span');
+      if (liveStatus) {
+        liveStatus.innerHTML = liveStatus.innerHTML.replace(/\d+\s+пара/, `${movedTargetSlot.n} пара`);
+      }
+      d.clone.dataset.dropN = movedTargetSlot.n;
+      if (d.clone.dataset.rowN) d.clone.dataset.rowN = movedTargetSlot.n;
+    }
     for (const row of d.items.values()) {
       const delta = before.get(row) - row.getBoundingClientRect().top;
       // Only real neighbours move on hover. Windows and the source are static targets.
@@ -134,6 +153,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (!drag) return;
     const d = drag;
     if (!d.scope.isConnected) { finish(false); return; }
+    if (d.clone.classList.contains('is-magnetized') || (d.pick && !d.holding)) {
+      centerCloneOnPlaceholder();
+    }
     const viewport = d.scroller === document.scrollingElement ? { top: 0, bottom: innerHeight } : d.scroller.getBoundingClientRect();
     const edge = 64;
     const speed = !d.moved || (d.pick && !d.holding) ? 0 : d.y < viewport.top + edge ? -Math.min(13, (viewport.top + edge - d.y) / 5)
@@ -321,8 +343,19 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     start();
     if (!drag) { clearPending(); return false; }
-    drag.moved = true;
     drag.pick = true;
+    drag.moved = false;
+    drag.targetN = drag.fromN;
+    drag.previewN = drag.fromN;
+    drag.clone.classList.add('is-magnetized');
+    const placeholder = drag.items.get(n);
+    if (placeholder) {
+      const phRect = placeholder.getBoundingClientRect();
+      drag.x = phRect.left + phRect.width / 2;
+      drag.y = phRect.top + phRect.height / 2;
+      drag.grabX = phRect.width / 2;
+      drag.grabY = phRect.height / 2;
+    }
     /* Плавающая круглая шторка внизу: пара не зажата, её просто переставляют,
        поэтому выбор нужно либо сохранить, либо отменить. */
     const bar = document.createElement('div');
@@ -362,6 +395,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       if (!event.target.closest('.sched-drag-board')) return; // вне доски ничего не роняем
       event.preventDefault(); event.stopPropagation();
       drag.holding = true;
+      drag.moved = true;
       drag.x = event.clientX; drag.y = event.clientY;
       updateTarget();
       syncBar();
@@ -385,7 +419,6 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       document.removeEventListener('keydown', onPickKey, true);
       bar.remove();
     };
-    updateTarget();
     syncBar();
     announce('перетащи пару на новое место, затем сохрани или отмени');
     return true;
