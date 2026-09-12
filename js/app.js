@@ -1589,7 +1589,7 @@ function scrubFrameStep(now) {
       /* Доводка после тапа: пилюля уже стоит ровно на новом дне, поэтому
          инлайн-трансформ снимается в этом же кадре без видимого скачка,
          а опускание идёт по сценарию отпускания вождения. Рендер не нужен —
-         selectDate уже отработал в момент отпускан����я. */
+         selectDate уже отработал в момент отпускан������������я. */
       if (scrub.tapGlide) endScrub({ skipRender: true });
       else endScrub();
       return;
@@ -1969,7 +1969,7 @@ function bindStrip() {
       else endScrub();
     }
   });
-  /* Отпустили курсор вне полосы или ушли из окна — состояние всё равно чистим / д��в��дим. */
+  /* Отпустили курсор вне полосы или ушли из окна — состояние всё ра��но чистим / д��в��дим. */
   window.addEventListener("pointerup", (e) => {
     if (scrub && scrub.pointerId === e.pointerId) {
       if (scrub.active) release(e);
@@ -2965,7 +2965,6 @@ var basicsTourRouletteTimer = null;
 var basicsTourRouletteOriginalDate = null;
 var basicsTourLastTriggerTime = 0;
 const BASICS_TOUR = [
-  { selector: "#editor-btn", title: "редактор расписания", text: "карандаш открывает все пары, окна, вакансии и самостоятельные. внутри можно менять и переносить пары, а затем сохранить или предложить правки." },
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
@@ -3037,7 +3036,7 @@ function startBasicsTourRoulette(options = {}) {
   if (current !== todayIndex) {
     targetIndex = todayIndex;
   } else {
-    // Если уже на сегодняшнем дне — идём к началу недели (понедельник 0) и возвращаемся в сегодня.
+    // Есл�� уже на сегодняшнем дне — идём к началу недели (понедельник 0) и возвращаемся в сегодня.
     // Если сегодня понедельник (0) — идём к пятнице (4) и возвращаемся в сегодня.
     targetIndex = todayIndex === 0 ? 4 : 0;
   }
@@ -3240,7 +3239,7 @@ function finishBasicsTour() {
 
 function renderBasicsTour() {
   stopBasicsTourRoulette();
-  if (basicsTourStep !== 0 && state.editorMode && !editorChangedEntries().length) {
+  if (state.editorMode && !editorChangedEntries().length) {
     finishEditorMode();
     basicsTourOpenedEditor = false;
   }
@@ -3257,31 +3256,23 @@ function renderBasicsTour() {
     host.setAttribute("aria-label", "обучение");
     document.body.appendChild(host);
   }
-  const visualTarget = basicsTourStep === 2 && target.classList.contains("is-avatar")
+  const visualTarget = basicsTourStep === 1 && target.classList.contains("is-avatar")
     ? target.querySelector(".sched-trigger-avatar") || target
     : target;
   const rect = visualTarget.getBoundingClientRect();
-  const pad = basicsTourStep === 1 ? 0 : basicsTourStep === 2 ? 3 : 4;
-  const left = basicsTourStep === 1 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-  const top = basicsTourStep === 1 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-  const width = basicsTourStep === 1
+  const pad = basicsTourStep === 0 ? 0 : 3;
+  const left = basicsTourStep === 0 ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+  const top = basicsTourStep === 0 ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+  const width = basicsTourStep === 0
     ? Math.min(innerWidth - left, rect.width)
     : Math.min(innerWidth - left - 8, rect.width + pad * 2);
   const height = rect.height + pad * 2;
   const copyWidth = Math.min(340, innerWidth - 24);
   const below = top + height + 14;
 
-  let copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
-  if (basicsTourStep === 0) {
-    const strip = document.getElementById("strip");
-    const stripRect = strip?.getBoundingClientRect();
-    const copyTopStep0 = stripRect ? Math.round(stripRect.bottom + 105) : 225;
-    if (copyTopStep0 + 175 < innerHeight) {
-      copyTop = copyTopStep0;
-    }
-  }
+  const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === 1 ? 20 : 12;
+  const spotRadius = basicsTourStep === 0 ? 20 : 12;
 
   let spotlight = host.querySelector(".sched-tour-spotlight");
   let copy = host.querySelector(".sched-tour-copy");
@@ -3336,32 +3327,12 @@ function renderBasicsTour() {
     if (action === "skip") { finishBasicsTour(); return; }
     if (action === "next") {
       stopBasicsTourEditorDemo();
-      if (basicsTourStep === 0 && state.editorMode && !editorChangedEntries().length) {
-        closeEditorAnimated();
-        basicsTourOpenedEditor = false;
-      }
       basicsTourStep += 1;
       if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
       else renderBasicsTour();
       return;
     }
     if (basicsTourStep === 0) {
-      if (event.target.closest(".sched-tour-copy")) return;
-      const btn = document.getElementById("editor-btn");
-      if (btn) {
-        const r = btn.getBoundingClientRect();
-        if (
-          event.clientX >= r.left &&
-          event.clientX <= r.right &&
-          event.clientY >= r.top &&
-          event.clientY <= r.bottom
-        ) {
-          startBasicsTourEditorDemo();
-        }
-      }
-      return;
-    }
-    if (basicsTourStep === 1) {
       if (event.target.closest(".sched-tour-copy")) return;
       const strip = document.getElementById("strip");
       if (strip) {
@@ -3385,8 +3356,6 @@ function renderBasicsTour() {
   };
 
   if (basicsTourStep === 0) {
-    startBasicsTourEditorDemo();
-  } else if (basicsTourStep === 1) {
     startBasicsTourRoulette({ delay: 650 });
   }
 }
@@ -3621,7 +3590,7 @@ function syncCompactHeader() {
   if (!brand) return;
   brand.setAttribute("role", "button");
   brand.setAttribute("tabindex", "0");
-  brand.setAttribute("aria-label", "воспроизвести анимацию sched");
+  brand.setAttribute("aria-label", "��оспроизвести анимацию sched");
   brand.removeAttribute("aria-disabled");
 }
 
@@ -3853,7 +3822,7 @@ function undoEditorAction() {
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-  /* «Исходн��й день» = базовое расписание парсера: сносим все правки дня,
+  /* ��Исходн��й день» = базовое расписание парсера: сносим все правки дня,
      а не возвращаем уже подтверждённые замены из baseline. */
   const dayKeys = Object.keys(editorSession.draft).filter(key => key.startsWith(prefix));
   const live = dayKeys.filter(key => editorSession.draft[key] && !editorSession.draft[key].deleted);
@@ -4151,7 +4120,7 @@ function closeSuggestSheet() {
 function suggestButtonHtml(dIso, slot) {
   if (!dIso || state.editorMode) return "";
   const isEmpty = Boolean(slot.window || slot.empty);
-  /* В пустом окне предлагать нечего — кнопка нужна только чтобы откатить изменение. */
+  /* В пус��ом окне предлагать нечего — кнопка нужна только чтобы откатить изменение. */
   if (isEmpty && !swapFor(dIso, slot.n)) return "";
   const label = isEmpty
     ? "изменение на " + slot.n + " паре, нажми, чтобы вернуть как было"
@@ -4882,7 +4851,7 @@ function refreshSchedule(force) {
     .catch(() => false);
 }
 
-/* Пока на сервере пусто, проверяем каждые 5 минут, а не раз в час. */
+/* Пока на сервере ��усто, проверяем каждые 5 минут, а не раз в час. */
 var scheduleRetryTimer = null;
 
 function planScheduleRetry() {
@@ -5344,7 +5313,8 @@ function swapPrimaryLabel() {
 
 function swapAccessHint() {
   if (!sharedSwapsEnabled()) return "";
-  if (myRole() === "anon") return '<p class="sched-replace-hint">предложение сохранится у тебя и отправится редакторам без входа. telegram можно привязать позже.</p>';
+  /* Подсказку для гостей убрали: она только шумела в шторке. */
+  if (myRole() === "anon") return "";
   if (myRole() === "user") return '<p class="sched-replace-hint">у тебя применится сразу, у остальных — после проверки владельцем.</p>';
   return "";
 }
@@ -5558,7 +5528,7 @@ function cloudWrite(path, body, options = {}) {
       if (!response?.ok) {
         if ([401, 403, 429].includes(response?.status)) cloudWriteRetryAt = Date.now() + 60000;
         lastCloudMessage = response?.status === 401
-          ? "firebase не принял обновлённые права — опубликуй config/firebase.rules.json и проверь, что Web API key относится к этой базе"
+          ? "firebase не принял обновлённые права — опубликуй config/firebase.rules.json и проверь, что Web API key относится �� этой базе"
           : "база отклонила запись — проверь config/firebase.rules.json и серверный ключ firebase";
         return false;
       }
@@ -5942,7 +5912,7 @@ async function pullSharedSwaps() {
         /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
         pullSharedSwaps._warned = true;
         console.warn(
-          "sched: облако отклоняет чтение (" +
+          "sched: облако отклоняе�� чтение (" +
             resp.status +
             ") — опубликуй config/firebase.rules.json и войди через телеграм заново",
         );
@@ -5993,7 +5963,7 @@ function updateTgButton() {
   renderAccountRow();
 }
 
-/* Аватар из Telegram вместо шестерёнки настроек. */
+/* Аватар из Telegram вместо шестерёнки на��троек. */
 function tgAvatarInitial(user = tgSession) {
   return (tgDisplayName(user) || "?").trim().charAt(0).toUpperCase() || "?";
 }
@@ -6234,7 +6204,7 @@ function tgSheetBodyHtml(inline) {
     html += '<div class="sched-tg-section is-editors"><span>редакторы</span>';
     if (!ids.length)
       html +=
-        '<p class="sched-replace-hint">пока нет. добавь по id ниже или кнопкой «+ редактор» в любой заявке.</p>';
+        '<p class="sched-replace-hint">пока нет. добавь по id ниже или кнопко�� «+ редактор» в любой заявке.</p>';
     ids.forEach((tg) => {
       html +=
         '<div class="sched-tg-row"><div class="sched-tg-row-text"><strong>' +
@@ -6334,7 +6304,7 @@ var NOTIF_SEEN_SCHEDULE_KEY = "sched:notif-seen-schedule:v1";
 var NOTIF_SEEN_PENDING_KEY = "sched:notif-seen-pending:v1";
 var notifList = null;
 
-/* Настройки уведомлений: что показывать в колокольчике и дублировать в Telegram. */
+/* Настройки уведомлений: что показывать в колокольчике и дублирова��ь в Telegram. */
 var NOTIF_PREFS_KEY = LOCAL_PREVIEW ? "sched:notif-prefs:local:v1" : "sched:notif-prefs:v1";
 var notifPrefs = null;
 
@@ -6725,7 +6695,7 @@ function notifyAboutScheduleStamp(updatedAt, groups) {
   } catch (e) {}
 }
 
-/* Визуальный тип записи ленты: отмена — красным, замена — синим и т.д.
+/* Визуальный тип записи ленты: от��ена — красным, замена — синим и т.д.
    У старых записей без tone определяем тип по тексту. */
 function notifTone(n) {
   if (n && n.tone) return n.tone;
@@ -6810,7 +6780,7 @@ function lessonDurationLabel(dIso, n) {
 }
 
 /* Мини-карточка дня в уведомлении: дата, время и сама пара —
-   отменённая зачёркнута. Вместо «полотна текста». */
+   отменённая зачёркнута. Вместо «по��отна текста». */
 function notifLessonHtml(f, lesson, cancelled) {
   const d = dateFromIso(f.d);
   const bell = BELLS.find((b) => b.n === Number(f.n));
@@ -6949,13 +6919,11 @@ function openBellSheet() {
 /* ---------- журнал обновлений расписания («?» внизу настроек) ---------- */
 var scheduleUpdatedAt = null;
 
-/* Компактный штамп данных в шапке под бейджем чётности: число и время. */
+/* Компактный штамп данных: только время, без дня и месяца. */
 function fmtStamp(isoValue) {
   const d = new Date(isoValue);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("ru", {
-    day: "numeric",
-    month: "short",
+  return d.toLocaleTimeString("ru", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -7078,7 +7046,7 @@ function manualRefresh(btn) {
   btn.disabled = true;
   const icon = btn.querySelector(".sched-settings-icon svg") || btn.querySelector("svg");
   if (icon) icon.classList.add("is-spinning");
-  /* Штамп под расписанием на время обновления показывает «обновляем…». */
+  /* Штамп под расписани��м на время обновления показывает «обновляем…». */
   dataRefreshing = true;
   renderDataStamp();
   /* Замены тянем параллельно, у них своя защита от ошибок сети. */

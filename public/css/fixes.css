@@ -30,16 +30,20 @@
 .sched-day-revert:hover { color: var(--sched-blue); background: var(--sched-fill); }
 
 /* Timestamp in the bottom centre; the refresh action immediately to its right. */
+/* Штамп всегда ровно по центру строки: кнопка обновления живёт в своей
+   колонке справа и больше не сдвигает текст «обновлено …». */
 .sched-schedule-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
+  justify-items: center;
   gap: 12px;
   margin: 24px auto 0;
   padding: 12px 0 max(16px, env(safe-area-inset-bottom, 0px));
   max-width: 100%;
 }
 .sched-stamp-button {
+  grid-column: 2;
   border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--sched-text) 82%, var(--sched-secondary));
@@ -58,7 +62,7 @@
   margin: 0;
   color: color-mix(in srgb, var(--sched-text) 82%, var(--sched-secondary)) !important;
   white-space: normal;
-  text-align: right;
+  text-align: center;
   transition: opacity 0.15s ease;
 }
 :root:is([data-theme="dark"], [data-sched-palette="opaque"]) .sched-stamp-button,
@@ -73,6 +77,8 @@
   opacity: 0.6;
 }
 :root .sched-schedule-footer #refresh-btn {
+  grid-column: 3;
+  justify-self: start;
   position: static;
   display: inline-flex !important;
   align-items: center;

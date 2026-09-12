@@ -116,8 +116,71 @@
 /* On very narrow screens the floating editor action shared the footer row and
    could cover refresh. Reserve a dedicated lane without hiding either action. */
 @media (max-width: 385px) {
+  /* Отступы симметричные, иначе штамп «обновлено …» уезжал влево от центра. */
   .sched-schedule-footer {
-    padding-right: 72px !important;
+    padding-right: 8px !important;
     padding-left: 8px !important;
   }
+}
+
+/* Отменённая пара — «выключенная» строка: и текст, и линии уходят в серое,
+   чтобы отмена читалась спокойнее активных пар и замен. */
+.agenda-row.is-cancelled {
+  --sched-cancelled-ink: var(--sched-secondary);
+  --sched-cancelled-line: color-mix(in srgb, var(--sched-secondary) 55%, transparent);
+  --sched-cancelled-tint: color-mix(in srgb, var(--sched-secondary) 12%, transparent);
+}
+
+/* Ни предмет, ни преподаватель, ни время не остаются акцентными. */
+.agenda-row.is-cancelled,
+.agenda-row.is-cancelled .agenda-row-content,
+.agenda-row.is-cancelled .agenda-row-content strong,
+.agenda-row.is-cancelled .agenda-row-content small,
+.agenda-row.is-cancelled .lesson-meta,
+.agenda-row.is-cancelled .lesson-meta span,
+.agenda-row.is-cancelled .lesson-type-accent,
+.agenda-row.is-cancelled .lesson-type-accent.is-vacancy,
+.agenda-row.is-cancelled .lesson-room,
+.agenda-row.is-cancelled .lesson-location,
+.agenda-row.is-cancelled .agenda-row-time,
+.agenda-row.is-cancelled .agenda-row-time time,
+.agenda-row.is-cancelled .agenda-row-time time span,
+.agenda-row.is-cancelled .agenda-row-num {
+  color: var(--sched-cancelled-ink) !important;
+}
+
+/* Зачёркивание — серой линией, а не цветом темы. */
+.agenda-row.is-cancelled :is(strong, small, time, .lesson-meta, .lesson-meta span) {
+  text-decoration-color: var(--sched-cancelled-line) !important;
+  text-decoration-thickness: 1px;
+}
+
+/* Рамки чипов внутри строки — той же серой линией. */
+.agenda-row.is-cancelled .lesson-room,
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap {
+  border-color: var(--sched-cancelled-line) !important;
+}
+
+/* Собственные разделители строки только светлеют, чтобы отмена
+   не стала заметнее соседних пар. */
+.agenda-row.is-cancelled,
+.agenda-row.is-cancelled .agenda-row-content,
+.agenda-row.is-cancelled .agenda-row-time {
+  border-color: color-mix(in srgb, var(--sched-separator) 75%, transparent) !important;
+}
+
+.agenda-row.is-cancelled :is(.lesson-room, .agenda-row-num, .lesson-origin-mark.is-swap) {
+  background: var(--sched-cancelled-tint) !important;
+}
+
+/* Плашка «отменена» — серая, без акцента замены. */
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap {
+  color: var(--sched-cancelled-ink) !important;
+}
+
+/* Та же логика у мини-карточки пары в уведомлении. */
+.sched-notif-frag-lesson.is-cancelled,
+.sched-notif-frag-lesson.is-cancelled :is(time, b, i) {
+  color: var(--sched-secondary) !important;
+  text-decoration-color: color-mix(in srgb, var(--sched-secondary) 55%, transparent) !important;
 }
