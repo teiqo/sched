@@ -398,11 +398,14 @@ function visibleSlotsFor(d) {
   const preferences = state.editorMode
     ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
     : state;
+  /* Отменённая пара показывается окном. Если окна выключены в настройках,
+     такую строку всё равно оставляем: иначе своё же предложение пропадает
+     с экрана и его негде откатить. */
   return slotsFor(d)
     .map((slot) => slot.cancelled
-      ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
+      ? { ...slot, cancelled: false, window: true, empty: true, keepRow: true, subject: "окно", teacher: null, room: null }
       : slot)
-    .filter((s) => isSlotVisible(s, preferences));
+    .filter((s) => s.keepRow || isSlotVisible(s, preferences));
 }
 
 function mins(hhmm) {
@@ -4087,8 +4090,7 @@ function openMoveSheet(dIso, n) {
 var SUGGEST_OPTIONS = [
   { id: "cancelled", mark: "✕", title: "пары не будет", hint: "отменили или преподаватель не пришёл" },
   { id: "room", mark: "🚪", title: "другой кабинет", hint: "пару перевесили в другую аудиторию" },
-  { id: "teacher", mark: "👤", title: "другой преподаватель", hint: "ведёт кто-то другой" },
-  { id: "subject", mark: "🔄", title: "вместо неё другая пара", hint: "предмет заменили целиком" },
+  { id: "subject", mark: "🔄", title: "другая пара", hint: "предмет заменили целиком" },
   { id: "move", mark: "🕐", title: "время сдвинули", hint: "пара идёт на другом месте в дне" },
 ];
 
@@ -4785,7 +4787,7 @@ function applySchedulePayload(payload) {
     if (typeof apply !== "function") return false;
     if (!apply(payload)) return false;
     scheduleRevision += 1;
-    if (!GROUPS.some((g) => g.id === state.group)) {
+    if (GROUPS.length && !GROUPS.some((g) => g.id === state.group)) {
       state.group = "";
       state.draftGroup = state.group;
       save();
@@ -5001,6 +5003,9 @@ function mergeSwapMaps(base, incoming) {
     const incT = typeof inc.updatedAt === "number" ? inc.updatedAt : 0;
     const cur = base[key];
     const curT = cur && typeof cur.updatedAt === "number" ? cur.updatedAt : 0;
+    /* Своё предложение, которое ещё не ушло в облако, важнее равной по времени
+       записи из общей базы — иначе отмена пары откатывалась на следующем опросе. */
+    if (cur && cur.pendingSync && incT <= curT) continue;
     if (!cur || incT >= curT) {
       if (JSON.stringify(cur) !== JSON.stringify(inc)) {
         base[key] = inc;

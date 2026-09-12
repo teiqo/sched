@@ -232,13 +232,18 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   const onTouchEnd = e => { if ([...e.changedTouches].some(t => t.identifier === (drag || pending)?.pointerId)) { if (drag) e.preventDefault(); finish(true); } };
   const onTouchCancel = () => finish(false);
   const sourceFor = target => {
-    if (document.documentElement.dataset.editorMode !== 'true') return null;
     const row = target.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
     if (!row || row.classList.contains('is-cancelled')) return null;
     const handle = target.closest('.lesson-swap-btn[data-act="swap"]');
     if (!handle && target.closest('button, a, input, textarea, select')) return null;
     const button = row.querySelector('.lesson-swap-btn[data-act="swap"]');
-    return button ? { row, handle: Boolean(handle), date: button.dataset.date, n: Number(button.dataset.n) } : null;
+    if (document.documentElement.dataset.editorMode === 'true') {
+      return button ? { row, handle: Boolean(handle), date: button.dataset.date, n: Number(button.dataset.n) } : null;
+    }
+    /* Вне редактора ручки переноса нет, поэтому тащим саму строку: дату и номер
+       пары берём с неё же. Дальше сценарий ровно тот же, что у редактора. */
+    if (row.dataset.act !== 'suggest' || !row.dataset.date) return null;
+    return { row, handle: false, date: row.dataset.date, n: Number(row.dataset.n) };
   };
   scene.addEventListener('pointerdown', e => {
     if (!e.isPrimary || e.button !== 0 || drag) return;
