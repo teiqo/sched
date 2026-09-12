@@ -27,7 +27,22 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     }
     return document.scrollingElement;
   };
+  const onSelectStart = e => { if (drag || pending) e.preventDefault(); };
+  const clearSelection = () => {
+    const selection = document.getSelection?.();
+    if (selection && !selection.isCollapsed) selection.removeAllRanges();
+  };
+  const blockSelection = () => {
+    clearSelection();
+    document.addEventListener('selectstart', onSelectStart, true);
+    document.addEventListener('dragstart', onSelectStart, true);
+  };
+  const unblockSelection = () => {
+    document.removeEventListener('selectstart', onSelectStart, true);
+    document.removeEventListener('dragstart', onSelectStart, true);
+  };
   const removeListeners = () => {
+    unblockSelection();
     document.removeEventListener('pointermove', onMove, true);
     document.removeEventListener('pointerup', onUp, true);
     document.removeEventListener('pointercancel', onCancel, true);
@@ -251,6 +266,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const source = sourceFor(e.target);
     if (!source || (e.pointerType === 'touch' && !source.handle)) return;
     pending = { ...source, x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+    /* На пк удержание самой карточки начинало выделение текста строки.
+       Сбрасываем уже сделанное выделение и глушим новое до отпускания. */
+    blockSelection();
     timer = setTimeout(start, source.handle ? 220 : 320);
     document.addEventListener('pointermove', onMove, { capture: true, passive: false });
     document.addEventListener('pointerup', onUp, true); document.addEventListener('pointercancel', onCancel, true);
@@ -277,7 +295,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   window.addEventListener('blur', () => finish(false));
   let lastWidth = innerWidth;
   window.addEventListener('resize', () => {
-    /* Клавиатура и адресная строка меняют только высоту — из-за этого
+    /* Клавиатура и адресная строка меняют только ��ысоту — из-за этого
        перенос срывался прямо во время удержания пары. */
     if (innerWidth === lastWidth) return;
     lastWidth = innerWidth;

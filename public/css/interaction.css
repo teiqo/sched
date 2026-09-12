@@ -1276,3 +1276,21 @@ body.is-dragging-pair .sched-pick-bar ~ .sched-drag-status { display: none; }
 @media (prefers-reduced-motion: reduce) {
   :root .sched-pick-bar { transition: none; }
 }
+
+/* На пк удержание самой пары (а не кнопки) выделяло текст строки синим.
+   Карточка — элемент управления, а не текст для копирования. */
+:root :is(.agenda-row, .live-lesson-card)[data-row-n],
+:root :is(.agenda-row, .live-lesson-card)[data-row-n] * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+:root :is(.agenda-row, .live-lesson-card)[data-row-n] :is(input, textarea, [contenteditable="true"]) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+:root .sched-drag-board, :root .sched-drag-board *,
+:root :is(.agenda-row, .live-lesson-card).is-drag-float,
+:root :is(.agenda-row, .live-lesson-card).is-drag-float * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}

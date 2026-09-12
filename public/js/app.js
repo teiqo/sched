@@ -1589,7 +1589,7 @@ function scrubFrameStep(now) {
       /* Доводка после тапа: пилюля уже стоит ровно на новом дне, поэтому
          инлайн-трансформ снимается в этом же кадре без видимого скачка,
          а опускание идёт по сценарию отпускания вождения. Рендер не нужен —
-         selectDate уже отработал в момент отпускания. */
+         selectDate уже отработал в момент отпускан����я. */
       if (scrub.tapGlide) endScrub({ skipRender: true });
       else endScrub();
       return;
@@ -1969,7 +1969,7 @@ function bindStrip() {
       else endScrub();
     }
   });
-  /* Отпустили курсор вне полосы или ушли из окна — состояние всё равно чистим / доводим. */
+  /* Отпустили курсор вне полосы или ушли из окна — состояние всё равно чистим / д��в��дим. */
   window.addEventListener("pointerup", (e) => {
     if (scrub && scrub.pointerId === e.pointerId) {
       if (scrub.active) release(e);
@@ -2380,7 +2380,7 @@ function futureDaysHtml() {
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
-/* Отложенная дорисовка наблюдает только текущую сцену, а не каждую мутацию
+/* Отл��женная дорисовка наблюдает только текущую сцену, а не каждую мута��ию
    секундомера/анимации. Не больше одного невидимого дня за кадр. */
 let lazyDayObserver = null;
 let lazyDayFrame = null;
@@ -3853,7 +3853,7 @@ function undoEditorAction() {
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-  /* «Исходный день» = базовое расписание парсера: сносим все правки дня,
+  /* «Исходн��й день» = базовое расписание парсера: сносим все правки дня,
      а не возвращаем уже подтверждённые замены из baseline. */
   const dayKeys = Object.keys(editorSession.draft).filter(key => key.startsWith(prefix));
   const live = dayKeys.filter(key => editorSession.draft[key] && !editorSession.draft[key].deleted);
@@ -3960,6 +3960,35 @@ function swapFor(dIso, n) {
 
 function setSwap(dIso, n, value) { return applyDayChanges(dIso, { [n]: value }); }
 
+/* Перенос пишет сразу две записи: саму пару на новом месте и окно на прежнем.
+   Они помечены общим operationId, поэтому «вернуть как было» обязано откатить
+   всю операцию — иначе окно оставалось, а пара просто исчезала из дня. */
+function revertSwapOperation(dIso, n, label = "возвращено как было") {
+  const map = activeSwapMap();
+  const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+  const own = map[swapKey(dIso, n)];
+  const changes = { [n]: null };
+  const live = Object.entries(map).filter(([key, value]) => key.startsWith(prefix) && value && !value.deleted);
+  const add = key => { changes[Number(key.slice(prefix.length))] = null; };
+  if (own && !own.deleted) {
+    if (own.operationId) {
+      live.forEach(([key, value]) => { if (value.operationId === own.operationId) add(key); });
+    } else {
+      /* Старые записи без operationId связываем по смыслу: пара знает, откуда
+         её перенесли, а окно — это её прежнее место. */
+      if (own.movedFrom) {
+        live.forEach(([key, value]) => {
+          if (value.makeWindow && Number(key.slice(prefix.length)) === Number(own.movedFrom)) add(key);
+        });
+      }
+      if (own.makeWindow) {
+        live.forEach(([key, value]) => { if (value.moved && Number(value.movedFrom) === n) add(key); });
+      }
+    }
+  }
+  return applyDayChanges(dIso, changes, label);
+}
+
 function applyDayChanges(dIso, changes, label = "замена") {
   const keys = Object.keys(changes).filter(n => Number.isInteger(Number(n)) && Number(n) >= 1 && Number(n) <= 6);
   if (!keys.length) return false;
@@ -4018,8 +4047,7 @@ function movePair(dIso, fromN, toN) {
   const target = slots.find(slot => slot.n === toN);
   const changes = normalizeMoveChanges(dIso, planPairSwap(slots, fromN, toN));
   if (!applyDayChanges(dIso, changes, `перенос ${fromN} ↔ ${toN}`)) return false;
-  if (state.editorMode) toast(target?.window || target?.cancelled ? `пара перенесена на ${toN}-е место · прежнее место — окно` : "пары поменяны местами");
-  else toast(`перенос на ${toN}-е место · уйдёт редакторам на проверку`);
+  /* Результат виден на самом расписании — тосты про «проверку редакторов» не нужны. */
   render();
   return true;
 }
@@ -4027,7 +4055,6 @@ function movePair(dIso, fromN, toN) {
 function movePairRelative(dIso, fromN, toN, after) {
   const changes = normalizeMoveChanges(dIso, planPairInsert(slotsFor(dateFromIso(dIso)), fromN, toN, after));
   if (!applyDayChanges(dIso, changes, "изменён порядок пар")) return false;
-  toast(state.editorMode ? "порядок пар изменён" : "порядок пар · уйдёт редакторам на проверку");
   render();
   return true;
 }
@@ -4038,7 +4065,6 @@ function movePairToEdge(dIso, fromN, after) {
   if (!target) return false;
   const changes = normalizeMoveChanges(dIso, planPairInsert(pairs, fromN, target.n, after));
   if (!applyDayChanges(dIso, changes, after ? "пара перенесена в конец дня" : "пара перенесена в начало дня")) return false;
-  toast(after ? "пара стала последней · окна сохранены" : "пара стала первой · окна сохранены");
   render();
   return true;
 }
@@ -4154,12 +4180,13 @@ function suggestEntry(dIso, n, patch) {
 }
 
 function suggestSend(dIso, n, patch) {
-  if (!setSwap(dIso, n, patch === null ? null : suggestEntry(dIso, n, patch))) return;
+  const ok = patch === null
+    ? revertSwapOperation(dIso, n)
+    : setSwap(dIso, n, suggestEntry(dIso, n, patch));
+  if (!ok) return;
   closeSuggestSheet();
   render();
-  if (patch === null) toast("вернул как было");
-  else if (!sharedSwapsEnabled()) toast("изменение сохранено только у тебя");
-  else toast("отправляю предложение…");
+  /* Изменение сразу видно в строке дня, поэтому ничего снизу не показываем. */
 }
 
 function openSuggestSheet(dIso, n) {
@@ -4614,7 +4641,8 @@ function openSwapSheet(dIso, n) {
     if (act === "reset") {
       const key = swapKey(dIso, n);
       const confirmed = state.editorMode && editorSession ? editorSession.baseline[key] : null;
-      setSwap(dIso, n, confirmed ? cloneSwapMap(confirmed) : null);
+      if (confirmed) setSwap(dIso, n, cloneSwapMap(confirmed));
+      else revertSwapOperation(dIso, n);
 
       commit();
       return;
@@ -4752,7 +4780,7 @@ var SCHEDULE_TTL = 3 * 60 * 60 * 1000;
 var scheduleFetchedAt = 0;
 var SCHEDULE_CHECKED_KEY = "sched:schedule-checked-at:v1";
 /* Момент последней удачной проверки данных — его показывает штамп «обн.».
-   Храним в localStorage, чтобы после перезапуска было видно, когда данные проверялись. */
+   Хра��им в localStorage, чтобы после перезапуска было видно, когда данные проверялись. */
 var scheduleCheckedAt = (function () {
   try {
     const v = Number(localStorage.getItem(SCHEDULE_CHECKED_KEY));
@@ -5717,16 +5745,10 @@ async function publishSwapBatch(entries, label = "изменены пары") {
     const count = Object.keys(entries).length;
     const word = plural(count, "пару", "пары", "пар");
     const author = anonymous ? "без авторизации" : tgDisplayName(tgSession);
-    if (ok) {
-      toast("предложено " + count + " " + word + " — ждём проверку редакторов");
-      pushNotif(
-        "ты предложил " + count + " " + word + " · на проверке у редакторов (" + author + ")",
-        "pending",
-        "pending",
-      );
-    } else {
-      toast("предложение не ушло — повторю сам");
-    }
+    /* Свои же предложения не засоряют ни тосты, ни колокольчик: человек и так
+       видит своё изменение в расписании. Сообщаем только о реальной ошибке отправки. */
+    void count; void word; void author;
+    if (!ok) toast("предложение не ушло — повторю сам");
   }
   return ok;
 }
