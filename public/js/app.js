@@ -4064,6 +4064,7 @@ function openMoveSheet(dIso, n) {
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
     <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
+    <p class="sched-move-help">или закрой это окно и потяни пару за кнопку справа сверху — перетащить можно руками.</p>
     <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n ? 'disabled aria-current="true"' : ""}>
       <span class="sched-move-number">${slot.n}</span><span class="sched-move-target-copy"><strong>${escapeHtml(slot.window || slot.cancelled ? "окно" : slot.subject)}</strong>
       <small>${slot.from}–${slot.to} · ${slot.n === n ? "текущее место" : slot.window || slot.cancelled ? "перенести сюда" : "поменять местами"}</small></span>${slot.n === n ? ICON_CHECK : ICON_CHEVRON}</button>`).join("")}</div>
@@ -4075,7 +4076,9 @@ function openMoveSheet(dIso, n) {
   document.body.appendChild(backdrop);
   const close = () => {
     closeMoveSheet();
-    document.querySelector(`[data-act="swap"][data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
+    /* Вне редактора ручка другая, и старый селектор терял фокус в никуда. */
+    const handle = state.editorMode ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
+    document.querySelector(`${handle}[data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
   };
   backdrop.addEventListener("click", event => {
     const target = event.target.closest("[data-move-to]");
