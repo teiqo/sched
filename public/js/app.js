@@ -2986,7 +2986,7 @@ var basicsTourSwapTimers = [];
 var basicsTourSwapOverride = null;
 const BASICS_TOUR = [
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
-  { selector: "#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)", title: "кнопка замены", text: "видишь кнопку <span class=\"sched-tour-accent\">↔</span> справа? через неё можно быстро отметить, если пару отменили или заменили." },
+  { selector: "#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn", title: "замена пары", text: "здесь можно в два тапа отметить <span class=\"sched-tour-accent\">отмену, перенос или новый кабинет</span>. изменения сразу увидят одногруппники." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3198,16 +3198,45 @@ function triggerTourRoulette(clickedDate) {
   startBasicsTourRoulette({ delay: 180, keepDate: true });
 }
 
+function updateBasicsTourSpotlight() {
+  const host = document.getElementById("basics-tour");
+  if (!host || basicsTourStep < 0) return;
+  const step = BASICS_TOUR[basicsTourStep];
+  const target = step && document.querySelector(step.selector);
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
+  const left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+  const top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+  const width = basicsTourStep === TOUR_STEP_STRIP
+    ? Math.min(innerWidth - left, rect.width)
+    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
+  const height = rect.height + pad * 2;
+  const spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : basicsTourStep === TOUR_STEP_SWAP ? 14 : 12;
+
+  const spotlight = host.querySelector(".sched-tour-spotlight");
+  if (spotlight) {
+    spotlight.style.setProperty("--tour-radius", `${spotRadius}px`);
+    spotlight.style.borderRadius = `${spotRadius}px`;
+    spotlight.style.left = `${left}px`;
+    spotlight.style.top = `${top}px`;
+    spotlight.style.width = `${width}px`;
+    spotlight.style.height = `${height}px`;
+  }
+}
+
 function stopBasicsTourSwapDemo() {
   while (basicsTourSwapTimers.length) {
     clearTimeout(basicsTourSwapTimers.pop());
   }
+  closeSuggestSheet();
   document.querySelectorAll(".lesson-suggest-btn.is-tour-highlight, .lesson-suggest-btn.is-tour-pressed").forEach(b => {
     b.classList.remove("is-tour-highlight", "is-tour-pressed");
   });
   if (basicsTourSwapOverride) {
     basicsTourSwapOverride = null;
     render();
+    updateBasicsTourSpotlight();
   }
 }
 
@@ -3233,52 +3262,88 @@ function startBasicsTourSwapDemo() {
   // 1. Мягкая подсветка кнопки ↔ (пульсирующее синее свечение)
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-    curRow?.querySelector(".lesson-suggest-btn")?.classList.add("is-tour-highlight");
-  }, 450);
+    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
+    btn?.classList.add("is-tour-highlight");
+  }, 400);
 
   // 2. Визуальное нажатие на кнопку ↔
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-    const b = curRow?.querySelector(".lesson-suggest-btn");
-    b?.classList.remove("is-tour-highlight");
-    b?.classList.add("is-tour-pressed");
-  }, 1200);
+    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
+    btn?.classList.remove("is-tour-highlight");
+    btn?.classList.add("is-tour-pressed");
+  }, 1100);
 
-  // 3. Отмена пары: показываем как выглядит отменённая пара
+  // 3. Открытие шторки замены (как открыл бы реальный человек)
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const key = swapKey(dIso, n);
-    basicsTourSwapOverride = { [key]: { cancelled: true, updatedAt: Date.now() } };
-    render();
-    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-    curRow?.querySelector(".lesson-suggest-btn")?.classList.add("is-tour-highlight");
-  }, 1450);
+    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
+    btn?.classList.remove("is-tour-pressed");
+    openSuggestSheet(dIso, n);
+  }, 1350);
 
-  // 4. Повторное визуальное нажатие на кнопку (чтобы вернуть как было)
+  // 4. Подсветка варианта «пары не будет»
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-    const b = curRow?.querySelector(".lesson-suggest-btn");
-    b?.classList.remove("is-tour-highlight");
-    b?.classList.add("is-tour-pressed");
-  }, 3600);
+    const opt = document.querySelector("#suggest-backdrop [data-suggest-pick=\"cancelled\"]");
+    opt?.classList.add("is-tour-picked");
+  }, 2600);
 
-  // 5. Возврат пары в исходное состояние
+  // 5. Клик по «пары не будет» -> шторка закрывается, пара отменена
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    basicsTourSwapOverride = null;
-    render();
-    const curRow = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-    curRow?.querySelector(".lesson-suggest-btn")?.classList.add("is-tour-highlight");
-  }, 3850);
+    const opt = document.querySelector("#suggest-backdrop [data-suggest-pick=\"cancelled\"]");
+    if (opt) {
+      opt.click();
+    } else {
+      basicsTourSwapOverride = { [swapKey(dIso, n)]: { cancelled: true, updatedAt: Date.now() } };
+      closeSuggestSheet();
+      render();
+      updateBasicsTourSpotlight();
+    }
+  }, 2900);
 
-  // 6. Повтор цикла
+  // 6. Пауза (пользователь видит отменённую пару в расписании), затем снова жмём ↔
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
+    btn?.classList.add("is-tour-pressed");
+  }, 5300);
+
+  // 7. Открытие шторки во второй раз (теперь с кнопкой «вернуть как было»)
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
+    btn?.classList.remove("is-tour-pressed");
+    openSuggestSheet(dIso, n);
+  }, 5550);
+
+  // 8. Подсветка кнопки «вернуть как было»
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const revertBtn = document.querySelector("#suggest-backdrop [data-suggest-pick=\"revert\"]");
+    revertBtn?.classList.add("is-tour-picked");
+  }, 6800);
+
+  // 9. Клик по «вернуть как было» -> шторка закрывается, пара восстановлена
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_SWAP) return;
+    const revertBtn = document.querySelector("#suggest-backdrop [data-suggest-pick=\"revert\"]");
+    if (revertBtn) {
+      revertBtn.click();
+    } else {
+      basicsTourSwapOverride = null;
+      closeSuggestSheet();
+      render();
+      updateBasicsTourSpotlight();
+    }
+  }, 7100);
+
+  // 10. Повтор цикла
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     startBasicsTourSwapDemo();
-  }, 5600);
+  }, 9500);
 }
 
 function finishBasicsTour() {
@@ -3330,7 +3395,7 @@ function renderBasicsTour() {
     ? target.querySelector(".sched-trigger-avatar") || target
     : target;
   const rect = visualTarget.getBoundingClientRect();
-  const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : 3;
+  const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
   const left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
   const top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
   const width = basicsTourStep === TOUR_STEP_STRIP
@@ -3342,7 +3407,7 @@ function renderBasicsTour() {
 
   const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 12;
+  const spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : basicsTourStep === TOUR_STEP_SWAP ? 14 : 12;
 
   let spotlight = host.querySelector(".sched-tour-spotlight");
   let copy = host.querySelector(".sched-tour-copy");
@@ -4232,13 +4297,23 @@ function suggestEntry(dIso, n, patch) {
 }
 
 function suggestSend(dIso, n, patch) {
+  if (typeof basicsTourStep !== "undefined" && basicsTourStep === TOUR_STEP_SWAP) {
+    if (patch && patch.cancelled) {
+      basicsTourSwapOverride = { [swapKey(dIso, n)]: { cancelled: true, updatedAt: Date.now() } };
+    } else {
+      basicsTourSwapOverride = null;
+    }
+    closeSuggestSheet();
+    render();
+    updateBasicsTourSpotlight();
+    return;
+  }
   const ok = patch === null
     ? revertSwapOperation(dIso, n)
     : setSwap(dIso, n, suggestEntry(dIso, n, patch));
   if (!ok) return;
   closeSuggestSheet();
   render();
-  /* Изменение сразу видно в строке дня, поэтому ничего снизу не показываем. */
 }
 
 function openSuggestSheet(dIso, n) {

@@ -228,6 +228,27 @@
   }
 }
 
+body.is-tour-active .sched-replace-backdrop {
+  z-index: 550 !important;
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+body.is-tour-active .sched-replace-sheet {
+  pointer-events: auto !important;
+  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45) !important;
+}
+
+body.is-tour-active .sched-tour-copy {
+  z-index: 650 !important;
+}
+
+body.is-tour-active .sched-move-target.is-tour-picked {
+  background: var(--sched-fill) !important;
+  transform: scale(0.96) !important;
+  transition: transform 0.14s ease, background 0.14s ease !important;
+}
+
 .sched-tour-copy .sched-tour-accent {
   display: inline;
   font-weight: 600;
