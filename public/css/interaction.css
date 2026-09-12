@@ -1212,3 +1212,67 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 /* Атрибут hidden проигрывал `display:flex` из layout.css, поэтому служебные строки
    настроек (заявки и редакторы, отчёты об ошибках) видели все. */
 :root .sched-settings-row[hidden] { display: none !important; }
+
+/* У круглой кнопки обновления есть ::after для расширения зоны нажатия, но fixes.css
+   ставит ей position: static — и этот ::after с inset: -2px привязывался не к кнопке,
+   а к далёкому родителю и накрывал полэкрана кликабельным слоем. */
+:root .sched-schedule-footer #refresh-btn { position: relative !important; }
+:root .sched-refresh-btn::after,
+:root .sched-schedule-footer #refresh-btn::after {
+  inset: -2px !important;
+  pointer-events: none !important;
+}
+
+/* ---------- плавающая шторка переноса («время сдвинули») ----------
+   Пару не держат пальцем: она просто выбрана и ездит за курсором, поэтому
+   решение принимает круглая панель снизу — сохранить или отменить. */
+:root .sched-pick-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 2147483001;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 10px 14px 12px;
+  border: 1px solid var(--sched-separator);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sched-surface) 92%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 2px 8px #0000001a, 0 18px 40px #00000026;
+  transform: translate(-50%, 14px);
+  opacity: 0;
+  transition: transform 180ms cubic-bezier(.2,.86,.24,1), opacity 180ms ease;
+}
+:root .sched-pick-bar.is-open { transform: translate(-50%, 0); opacity: 1; }
+:root .sched-pick-hint {
+  margin: 0;
+  padding: 0 6px;
+  color: var(--sched-secondary);
+  font: 500 13px/1.3 Inter, system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+:root .sched-pick-actions { display: flex; gap: 8px; }
+:root .sched-pick-btn {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  font: 600 15px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+:root .sched-pick-btn.is-cancel { background: var(--sched-fill); color: var(--sched-text); }
+:root .sched-pick-btn.is-save { background: var(--sched-blue, #1673c7); color: #fff; }
+:root .sched-pick-btn:disabled { opacity: .45; cursor: default; }
+:root .sched-pick-btn:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }
+/* Подсказку для скринридера прячем под шторку, чтобы не было двух панелей. */
+body.is-dragging-pair .sched-pick-bar ~ .sched-drag-status { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root .sched-pick-bar { transition: none; }
+}

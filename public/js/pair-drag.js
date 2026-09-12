@@ -121,7 +121,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (!d.scope.isConnected) { finish(false); return; }
     const viewport = d.scroller === document.scrollingElement ? { top: 0, bottom: innerHeight } : d.scroller.getBoundingClientRect();
     const edge = 64;
-    const speed = !d.moved ? 0 : d.y < viewport.top + edge ? -Math.min(13, (viewport.top + edge - d.y) / 5)
+    const speed = !d.moved || (d.pick && !d.holding) ? 0 : d.y < viewport.top + edge ? -Math.min(13, (viewport.top + edge - d.y) / 5)
       : d.y > viewport.bottom - edge ? Math.min(13, (d.y - viewport.bottom + edge) / 5) : 0;
     if (speed) {
       d.scroller.scrollTop += speed;
@@ -192,7 +192,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     clearPending(); removeListeners(); cancelAnimationFrame(frame); frame = null;
     if (!drag) return;
     const d = drag;
-    if (commit && d.moved) updateTarget();
+    /* В режиме выбора место уже зафиксировано тапом по доске, а курсор в этот
+       момент стоит на плавающей кнопке — пересчёт цели сбросил бы выбор. */
+    if (commit && d.moved && !d.pick) updateTarget();
     const target = d.targetN;
     drag = null;
     d.cleanup?.();
@@ -283,8 +285,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) finish(false); });
   /* Тот же перенос, но запущенный из кода, а не удержанием: доска с окнами
-     появляется сразу, карточка ездит за курсором и магнитится к местам, а кладётся
-     обычным нажатием. Так перенос работает и без долгого удержания пальца. */
+     появляется сразу, карточка спокойно стоит на своём месте, и её переносят
+     вручную — обычным перетаскиванием, без долгого удержания. Результат
+     сохраняет или отменяет плавающая шторка снизу. */
   const beginPick = (date, n) => {
     if (drag || pending) return false;
     const selector = editorMode() ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
@@ -298,23 +301,71 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     if (!drag) { clearPending(); return false; }
     drag.moved = true;
     drag.pick = true;
-    const onPickMove = event => { if (drag?.pick) move(event.clientX, event.clientY); };
+    /* Плавающая круглая шторка внизу: пара не зажата, её просто переставляют,
+       поэтому выбор нужно либо сохранить, либо отменить. */
+    const bar = document.createElement('div');
+    bar.className = 'sched-pick-bar';
+    bar.innerHTML = '<p class="sched-pick-hint">перетащи пару на новое место</p>' +
+      '<div class="sched-pick-actions">' +
+      '<button class="sched-pick-btn is-cancel" type="button" data-pick-act="cancel">отменить</button>' +
+      '<button class="sched-pick-btn is-save" type="button" data-pick-act="save">сохранить</button>' +
+      '</div>';
+    document.body.appendChild(bar);
+    const hint = bar.querySelector('.sched-pick-hint');
+    const saveBtn = bar.querySelector('[data-pick-act="save"]');
+    const syncBar = () => {
+      const d = drag;
+      if (!d) return;
+      const moved = d.targetN !== null && d.targetN !== d.fromN;
+      saveBtn.disabled = !moved;
+      hint.textContent = moved ? `новое место — ${d.targetN}-я пара` : 'перетащи пару на новое место';
+    };
+    requestAnimationFrame(() => bar.classList.add('is-open'));
+    /* Карточка не «прилипает» к курсору: она едет только пока её тянут.
+       Отпустил — осталась на выбранном месте и ждёт решения. */
+    const onPickMove = event => {
+      if (!drag?.pick || !drag.holding) return;
+      event.preventDefault();
+      move(event.clientX, event.clientY);
+      syncBar();
+    };
     const onPickDown = event => {
       if (!drag?.pick) return;
+      const action = event.target.closest('[data-pick-act]');
+      if (action) {
+        event.preventDefault(); event.stopPropagation();
+        finish(action.dataset.pickAct === 'save');
+        return;
+      }
+      if (!event.target.closest('.sched-drag-board')) return; // вне доски ничего не роняем
       event.preventDefault(); event.stopPropagation();
-      if (!event.target.closest('.sched-drag-board')) { finish(false); return; }
+      drag.holding = true;
       drag.x = event.clientX; drag.y = event.clientY;
       updateTarget();
+      syncBar();
+    };
+    const onPickUp = () => { if (drag?.pick) drag.holding = false; };
+    const onPickKey = event => {
+      if (!drag?.pick || event.key !== 'Enter' || saveBtn.disabled) return;
+      event.preventDefault();
       finish(true);
     };
-    document.addEventListener('pointermove', onPickMove, true);
+    document.addEventListener('pointermove', onPickMove, { capture: true, passive: false });
     document.addEventListener('pointerdown', onPickDown, true);
+    document.addEventListener('pointerup', onPickUp, true);
+    document.addEventListener('pointercancel', onPickUp, true);
+    document.addEventListener('keydown', onPickKey, true);
     drag.cleanup = () => {
       document.removeEventListener('pointermove', onPickMove, true);
       document.removeEventListener('pointerdown', onPickDown, true);
+      document.removeEventListener('pointerup', onPickUp, true);
+      document.removeEventListener('pointercancel', onPickUp, true);
+      document.removeEventListener('keydown', onPickKey, true);
+      bar.remove();
     };
     updateTarget();
-    announce('выбери место и нажми на него');
+    syncBar();
+    announce('перетащи пару на новое место, затем сохрани или отмени');
     return true;
   };
   return { cancel: () => finish(false), beginPick };

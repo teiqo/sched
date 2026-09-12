@@ -6960,7 +6960,7 @@ function renderDataStamp() {
     return;
   }
   el.hidden = false;
-  el.textContent = offline ? "офлайн · " + when : "проверено " + when;
+  el.textContent = offline ? "офлайн · " + when : "обновлено " + when;
 }
 
 function fmtDateTime(isoValue) {
