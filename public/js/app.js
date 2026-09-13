@@ -832,6 +832,8 @@ function renderSlotRuns(slots, live, dIso) {
 
 function addPairButtonHtml(dIso) {
   if (!dIso) return "";
+  const dt = dateFromIso(dIso);
+  if (dt && dt.getDay() === 0) return "";
   return `<div class="sched-add-pair-row"><button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button></div>`;
@@ -848,12 +850,13 @@ function dayHtml(d, withLive, future) {
   const sub = count
     ? `${count} ${plural(count, "пара", "пары", "пар")} · ${parityLabel(parityOf(d))} неделя`
     : `${parityLabel(parityOf(d))} неделя`;
+  const isSunday = d.getDay() === 0;
 
   let body;
   if (!count && (!state.windows || !rows.length)) {
-    body = emptyDayHtml(d);
+    body = emptyDayHtml(d) + (!isSunday ? addPairButtonHtml(dIso) : "");
   } else if (!today || !withLive || future) {
-    body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}</div>` : "";
+    body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}${addPairButtonHtml(dIso)}</div>` : "";
   } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
     const liveN = live.slot.n;
     const earlier = rows.filter((s) => s.n < liveN);
@@ -861,16 +864,16 @@ function dayHtml(d, withLive, future) {
     const earlierHtml = renderSlotRuns(earlier, live, dIso);
     const liveHost = `<div id="live-host">${liveCardHtml(live, dIso)}</div>`;
     const laterHtml = later.length
-      ? `<div class="agenda-list">${withBreaksHtml(later, live, dIso)}</div>`
-      : "";
+      ? `<div class="agenda-list">${withBreaksHtml(later, live, dIso)}${addPairButtonHtml(dIso)}</div>`
+      : `<div class="agenda-list">${addPairButtonHtml(dIso)}</div>`;
     body = `${earlierHtml}${liveHost}${laterHtml}`;
   } else {
     const earlierHtml = renderSlotRuns(rows, live, dIso);
     const liveHost = withLive && live ? `<div id="live-host">${liveCardHtml(live, dIso)}</div>` : "";
-    body = `${earlierHtml}${liveHost}`;
+    body = `${earlierHtml}${liveHost}<div class="agenda-list">${addPairButtonHtml(dIso)}</div>`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}${addPairButtonHtml(dIso)}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}</div>`;
 }
 
 function weekHtml() {
@@ -897,7 +900,7 @@ function weekHtml() {
       </div>
       ${
         lessons.length || (state.windows && rows.length)
-          ? `<div class="agenda-list">${withBreaksHtml(rows, null, iso(d))}</div>`
+          ? `<div class="agenda-list">${withBreaksHtml(rows, null, iso(d))}${addPairButtonHtml(iso(d))}</div>`
           : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>${
               isSummer(d) ? "каникулы" : d.getDay() === 0 ? "выходной" : "пар нет"
             }</strong></div>`
@@ -2097,6 +2100,11 @@ function bindEvents() {
   arrow($("#next-week"), 7);
 
   $("#today-btn").addEventListener("click", () => {
+    try {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (_) {
+      window.scrollTo(0, 0);
+    }
     const d = startOfDay(currentDate());
     const dir = d > state.selected ? "forward" : d < state.selected ? "backward" : null;
     selectDate(d, dir);
@@ -4258,6 +4266,47 @@ function closeSheetAnimated(elOrId, onComplete, immediate = false) {
   setTimeout(finish, 240);
 }
 
+function bindSheetKeyboard(backdrop, sheet) {
+  if (!backdrop || !sheet) return;
+  const onVv = () => {
+    if (!window.visualViewport) return;
+    const vh = window.visualViewport.height;
+    const kh = Math.max(0, window.innerHeight - vh);
+    backdrop.style.setProperty("--sched-kb-offset", `${kh}px`);
+    if (kh > 0) {
+      sheet.style.maxHeight = `${Math.max(220, vh - 20)}px`;
+    } else {
+      sheet.style.maxHeight = "";
+    }
+  };
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", onVv);
+    window.visualViewport.addEventListener("scroll", onVv);
+    onVv();
+    backdrop._cleanupVv = () => {
+      window.visualViewport?.removeEventListener("resize", onVv);
+      window.visualViewport?.removeEventListener("scroll", onVv);
+    };
+  }
+  sheet.addEventListener("focusin", (e) => {
+    const target = e.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) {
+      setTimeout(() => {
+        try {
+          target.scrollIntoView({ block: "center", behavior: "smooth" });
+        } catch (_) {
+          target.scrollIntoView();
+        }
+      }, 160);
+      setTimeout(() => {
+        try {
+          target.scrollIntoView({ block: "center", behavior: "smooth" });
+        } catch (_) {}
+      }, 350);
+    }
+  });
+}
+
 function closeMoveSheet(onComplete, immediate = false) {
   closeSheetAnimated("move-backdrop", onComplete, immediate);
 }
@@ -4405,6 +4454,7 @@ function openSuggestSheet(dIso, n) {
   backdrop.innerHTML = '<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="suggest-title"></div>';
   document.body.appendChild(backdrop);
   const sheet = backdrop.firstElementChild;
+  bindSheetKeyboard(backdrop, sheet);
   window.requestAnimationFrame(() => backdrop.classList.add("is-open"));
 
   const head = title => `<div class="sched-replace-head"><strong id="suggest-title">${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span></div>`;
@@ -4633,6 +4683,7 @@ function openAddPairSheet(dIso) {
   </div>`;
   document.body.appendChild(backdrop);
   const sheet = backdrop.firstElementChild;
+  bindSheetKeyboard(backdrop, sheet);
   requestAnimationFrame(() => backdrop.classList.add("is-open"));
 
   const picker = sheet.querySelector("#add-pair-catalog");
@@ -4658,40 +4709,6 @@ function openAddPairSheet(dIso) {
       if (roomField) roomField.value = "";
       autoFilled = false;
     }
-  });
-
-  const onVv = () => {
-    if (!window.visualViewport) return;
-    const vh = window.visualViewport.height;
-    const kh = Math.max(0, window.innerHeight - vh);
-    backdrop.style.setProperty("--sched-kb-offset", `${kh}px`);
-    if (kh > 0) {
-      sheet.style.maxHeight = `${Math.max(220, vh - 20)}px`;
-    } else {
-      sheet.style.maxHeight = "";
-    }
-  };
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", onVv);
-    window.visualViewport.addEventListener("scroll", onVv);
-    onVv();
-    backdrop._cleanupVv = () => {
-      window.visualViewport.removeEventListener("resize", onVv);
-      window.visualViewport.removeEventListener("scroll", onVv);
-    };
-  }
-
-  [custom, teacherField, roomField].forEach(input => {
-    if (!input) return;
-    input.addEventListener("focus", () => {
-      setTimeout(() => {
-        try {
-          input.scrollIntoView({ block: "center", behavior: "smooth" });
-        } catch (_) {
-          input.scrollIntoView();
-        }
-      }, 160);
-    });
   });
 
   const send = () => {
@@ -5958,6 +5975,65 @@ function botLesson(slot) {
   const meta = [value.teacher, value.room].filter(Boolean).map(botHtml).join(" · ");
   return meta ? `${subject}\n<blockquote>${meta}</blockquote>` : subject;
 }
+function buildDayTablePayload(dIso) {
+  try {
+    const d = dateFromIso(dIso);
+    if (!d) return null;
+    const dayName = dayEntry(d).name;
+    const allSlots = slotsFor(d);
+    const maxN = allSlots.reduce((max, s) => Math.max(max, s.n || 0), 0) || 4;
+    const sat = d.getDay() === 6;
+    const rows = [];
+    for (let n = 1; n <= Math.min(Math.max(maxN, 4), 7); n++) {
+      const slot = allSlots.find(s => s.n === n);
+      const times = sat ? TIMES[n]?.sat : TIMES[n]?.week;
+      const timeStr = times ? `${times[0]}–${times[1]}` : (slot?.from && slot?.to ? `${slot.from}–${slot.to}` : "");
+      if (!slot || slot.window || slot.empty) {
+        rows.push({
+          n,
+          subject: "—",
+          teacher_room: "—",
+          time: timeStr,
+        });
+      } else {
+        const trParts = [];
+        if (slot.teacher) trParts.push(slot.teacher);
+        if (slot.room) trParts.push(`ауд. ${slot.room}`);
+        rows.push({
+          n,
+          subject: slot.subject || "—",
+          teacher_room: trParts.join(", ") || "—",
+          time: timeStr,
+        });
+      }
+    }
+    return {
+      day_name: `${dayName}, ${d.getDate()} ${MONTHS[d.getMonth()]}`,
+      rows,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function formatMonospaceTable(tablePayload) {
+  if (!tablePayload || !tablePayload.rows || !tablePayload.rows.length) return "";
+  const lines = [
+    `\n<pre>`,
+    `Расписание на ${tablePayload.day_name}:`,
+    `№  Предмет          Преп. / ауд.       Время`,
+    `─`.repeat(42),
+  ];
+  for (const r of tablePayload.rows) {
+    const num = String(r.n).padEnd(2, " ");
+    const subj = (r.subject.length > 15 ? r.subject.slice(0, 14) + "…" : r.subject).padEnd(16, " ");
+    const tr = (r.teacher_room.length > 17 ? r.teacher_room.slice(0, 16) + "…" : r.teacher_room).padEnd(18, " ");
+    lines.push(`${num} ${subj} ${tr} ${r.time}`);
+  }
+  lines.push(`</pre>`);
+  return lines.join("\n");
+}
+
 function notifyCloudEvent(path, body) {
   if (LOCAL_PREVIEW || !body || !window.SCHED_NOTIFY_URL) return;
   const section = String(path).split("/")[0];
@@ -5977,15 +6053,22 @@ function notifyCloudEvent(path, body) {
   if (type === "pending") {
     verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
   } else if (body.makeWindow) verb = "сделали окном";
-  else if (body.deleted) verb = "вернули";
+  else if (body.deleted) verb = "вернули в исходное состояние";
   else if (body.cancelled) verb = "отменили";
   else if (body.moved) verb = "перенесли";
   else verb = "заменили";
 
-  const shown = body.cancelled || body.deleted ? original : body;
   let text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>`;
-  if (shown) text += `\n\n${botLesson(shown)}`;
-  queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group }).catch(reportPushError);
+  if (body.deleted) {
+    text += `\n\n${original ? `возвращено исходное расписание:\n${botLesson(original)}` : "возвращено в окно (пар нет)"}`;
+  } else if (body.cancelled) {
+    text += original ? `\n\n<s>${botLesson(original)}</s>` : "";
+  } else if (body) {
+    text += `\n\n${botLesson(body)}`;
+  }
+  const table = buildDayTablePayload(dIso);
+  if (table) text += formatMonospaceTable(table);
+  queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group, table }).catch(reportPushError);
 }
 
 /* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
@@ -6197,15 +6280,34 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       const [key, entry] = list[0];
       const group = key.split("|")[0], date = (key.split("|")[1] || "").split(":")[0];
       const pending = section === CLOUD_PATHS.pending;
+      const allDeleted = list.every(([_, v]) => v.deleted);
+      const allCancelled = list.every(([_, v]) => v.cancelled);
+      const allMoved = list.every(([_, v]) => v.moved);
+      const action = allDeleted
+        ? (pending ? "предложили вернуть пары в исходное состояние" : "вернули пары в исходное состояние")
+        : allCancelled
+          ? (pending ? "предложили отменить пары" : "отменили пары")
+          : allMoved
+            ? (pending ? "предложили перенести пары" : "перенесли пары")
+            : (pending ? "предложили изменить пары" : "изменили пары");
+
       const rows = list.map(([k, value]) => {
         const n = Number(k.split(":").at(-1)) || 0;
-        const stateLabel = value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value);
-        return `<b>${n} пара</b>\n${stateLabel}`;
+        let orig = null;
+        try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+        const desc = value.deleted
+          ? (orig ? `возвращено исходное расписание:\n${botLesson(orig)}` : "возвращено в окно (пар нет)")
+          : value.cancelled
+            ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
+            : botLesson(value);
+        return `<b>${n} пара</b>\n${desc}`;
       }).join("\n\n");
-      const action = pending ? "предложили перенести пары" : "перенесли пары";
-      const text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
+
+      const table = buildDayTablePayload(date);
+      let text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
+      if (table) text += formatMonospaceTable(table);
       queueBotEvent({ type: pending ? "pending" : "swap", format: "html", group,
-        event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text,
+        event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text, table
       }).catch(reportPushError);
     }
   }
@@ -6285,14 +6387,25 @@ async function approvePending(enc) {
   const [key, entry] = entries[0];
   const decoded = decodeSwapKey(key), group = decoded.split("|")[0];
   const date = (decoded.split("|")[1] || "").split(":")[0];
+  const allDeleted = entries.every(([_, v]) => v.deleted);
   const rows = entries.map(([k, value]) => {
     const when = decodeSwapKey(k).split("|")[1] || "";
     const n = Number(when.split(":")[1]) || 0;
-    return `<b>${n} пара</b>\n${value.deleted ? "исходное расписание" : value.cancelled ? "отменена" : botLesson(value)}`;
+    let orig = null;
+    try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+    const desc = value.deleted
+      ? (orig ? `возвращено исходное расписание:\n${botLesson(orig)}` : "возвращено в окно (пар нет)")
+      : value.cancelled
+        ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
+        : botLesson(value);
+    return `<b>${n} пара</b>\n${desc}`;
   }).join("\n\n");
+  const table = buildDayTablePayload(date);
+  let text = `<b>${botHtml(botDate(date))} ${allDeleted ? "вернули пары в исходное состояние" : "опубликовали изменения"}</b>\n\n${rows}`;
+  if (table) text += formatMonospaceTable(table);
   queueBotEvent({ type: "swap", format: "html", group,
     event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
-    text: `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`,
+    text, table
   }).catch(reportPushError);
   toast("изменения опубликованы");
 }

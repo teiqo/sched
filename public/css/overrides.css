@@ -1655,11 +1655,11 @@ html.sched-page #root::-webkit-scrollbar,
   box-shadow: inset 0 0 0 1px var(--sched-separator);
 }
 
-/* Значок остаётся адаптивным: цвет подстраивается под текущую палитру/тему. */
+/* Значок остаётся адаптивным: цвет подстраивается под текущую палитру/тему/акцент. */
 .app-loading-mark-blur,
 .app-loading-mark-surface,
 .sched-onboarding-mark {
-  background: var(--sched-blue) !important;
+  background: var(--sched-accent, var(--sched-blue)) !important;
 }
 
 /* ================= три темы, замена пары, анимации без блюра ================= */
@@ -2052,7 +2052,7 @@ body.is-dragging-pair {
   border: 1px solid var(--sched-separator);
   display: grid;
   gap: 10px;
-  max-height: calc(100dvh - 28px);
+  max-height: calc(100dvh - 28px - var(--sched-kb-offset, 0px)) !important;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -3619,7 +3619,7 @@ a.sched-settings-row.sched-settings-link strong {
 }
 #loader .app-loading-mark-blur,
 #loader .app-loading-mark-surface {
-  background: var(--sched-accent, #6578f6);
+  background: var(--sched-accent, var(--sched-blue, #6578f6)) !important;
 }
 
 /* --- кольцо аватарки следует акцентному цвету темы с зазором --- */
@@ -5005,11 +5005,25 @@ a.sched-settings-row,
   animation-delay: 0s !important;
 }
 #stage .sched-active-day-scene.is-entering .agenda-row {
-  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: 0s !important;
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both;
 }
-#stage .sched-active-day-scene.is-entering :is(.agenda-row, .agenda-row[data-row-n], .live-lesson-card, .agenda-break, .completed-lessons) {
-  animation-delay: 0s !important;
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 1);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 2);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 3);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 4);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(5) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 5);
+}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 6) {
+  animation-delay: calc(var(--duration-stagger, 40ms) * 6);
 }
 .sched-future-days {
   animation: none;
@@ -6070,46 +6084,61 @@ a.sched-settings-row,
   padding: 4px 6px;
 }
 
-/* Кнопка добавления пары: центрирована под парами внутри дня, не вылезает за пределы карточки */
+/* Кнопка добавления пары: центрирована под парами внутри плашки, без подложки, в цвет кнопки замены */
 .sched-add-pair-row {
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
-  padding: 12px 0 6px 0;
+  padding: 8px 0 10px 0;
   box-sizing: border-box;
+}
+.agenda-list .sched-add-pair-row {
+  border-top: 1px solid var(--sched-separator);
+  padding: 8px 0;
+  margin: 0;
+}
+.agenda-list .sched-add-pair-row:first-child {
+  border-top: none !important;
 }
 .sched-add-pair-btn {
   position: static !important;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: var(--sched-raised);
-  border: 1.5px dashed var(--sched-blue);
-  color: var(--sched-blue);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  width: 44px;
+  height: 36px;
+  border-radius: 10px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--sched-tertiary) !important;
+  opacity: 0.8 !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, transform 0.16s ease;
   z-index: 10;
   margin: 0 auto;
 }
-.sched-add-pair-btn:hover {
-  transform: scale(1.08);
-  background: color-mix(in srgb, var(--sched-blue) 14%, var(--sched-surface));
-  border-style: solid;
-  box-shadow: 0 4px 14px rgba(10, 132, 255, 0.25);
-}
+.sched-add-pair-btn:hover,
 .sched-add-pair-btn:active {
-  transform: scale(0.92);
+  transform: scale(1.08);
+  opacity: 1 !important;
+  background: var(--sched-fill) !important;
+  color: var(--sched-blue) !important;
 }
 .sched-add-pair-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: block;
+}
+
+/* Плавное перемещение пилюли на дату */
+:root #strip .date-strip-selection {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+:root #strip.is-swipe-linked .date-strip-selection {
+  transition: none !important;
 }
 
 /* Пунктирное выделение добавленной пары (как при «время сдвинули») */
@@ -6123,4 +6152,5 @@ a.sched-settings-row,
   0%, 100% { outline-color: var(--sched-blue); }
   50% { outline-color: color-mix(in srgb, var(--sched-blue) 45%, transparent); }
 }
+
 

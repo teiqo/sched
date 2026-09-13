@@ -42,14 +42,17 @@
               ? data.accent
               : "";
           var tint = theme === "light" ? "#F5F5F7" : "#000000";
-          if ((data.palette === "accent" || data.palette === "accent-plus") && accent) {
-            root.dataset.schedPalette = data.palette;
+          if (accent) {
             root.style.setProperty("--sched-accent", accent);
-            tint = mix(
-              accent,
-              theme === "light" ? "#ffffff" : "#05050a",
-              theme === "light" ? 0.2 : 0.18,
-            );
+            root.style.setProperty("--sched-blue", accent);
+            if (data.palette === "accent" || data.palette === "accent-plus") {
+              root.dataset.schedPalette = data.palette;
+              tint = mix(
+                accent,
+                theme === "light" ? "#ffffff" : "#05050a",
+                theme === "light" ? 0.2 : 0.18,
+              );
+            }
           }
           var meta = document.querySelector('meta[name="theme-color"]');
           if (meta) meta.setAttribute("content", tint);

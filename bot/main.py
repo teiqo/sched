@@ -34,12 +34,14 @@ from urllib.request import Request, urlopen
 if __package__:
     from .authentication import Auth, AuthError
     from .reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
+    from .table_image import render_schedule_table
 else:
     bot_dir = str(Path(__file__).resolve().parent)
     if not sys.path or sys.path[0] != bot_dir:
         sys.path.insert(0, bot_dir)
     from authentication import Auth, AuthError
     from reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
+    from table_image import render_schedule_table
 
 LOG = logging.getLogger("sched")
 GREETING = "<b>привет=)</b>"
@@ -367,6 +369,34 @@ class Telegram:
             raise TelegramError(data.get('error_code',502), data.get('parameters',{}).get('retry_after',5))
         return data.get('result')
 
+    def send_photo(self, chat_id, photo_bytes, caption='', parse_mode='HTML'):
+        boundary = 'sched-' + os.urandom(16).hex()
+        parts = []
+        fields = {'chat_id': str(chat_id)}
+        if caption:
+            fields['caption'] = caption[:1024]
+            if parse_mode:
+                fields['parse_mode'] = parse_mode
+        for field, value in fields.items():
+            parts.append(('--' + boundary + '\r\nContent-Disposition: form-data; name="' + field + '"\r\n\r\n' + value + '\r\n').encode())
+        parts.append(('--' + boundary + '\r\nContent-Disposition: form-data; name="photo"; filename="schedule.png"\r\nContent-Type: image/png\r\n\r\n').encode())
+        parts.extend([photo_bytes, ('\r\n--' + boundary + '--\r\n').encode()])
+        request = Request('https://api.telegram.org/bot' + self.token + '/sendPhoto', data=b''.join(parts),
+                          headers={'Content-Type': 'multipart/form-data; boundary=' + boundary, 'User-Agent': 'sched-bot/1.3'})
+        try:
+            with urlopen(request, timeout=60) as response:
+                data = json.load(response)
+        except HTTPError as error:
+            retry = 5
+            try: retry = json.loads(error.read(4096)).get('parameters', {}).get('retry_after', 5)
+            except Exception: pass
+            raise TelegramError(error.code, retry) from None
+        except (URLError, TimeoutError, OSError):
+            raise TelegramError(503) from None
+        if not data.get('ok'):
+            raise TelegramError(data.get('error_code', 502), data.get('parameters', {}).get('retry_after', 5))
+        return data.get('result')
+
 
 class App:
     def __init__(self, cfg, store, telegram, auth):
@@ -430,8 +460,27 @@ class App:
                 text = "[отчёт без подтверждённого входа]\n" + text
         else:
             targets = self.store.recipients(kind, group)
+        table_data = data.get("table")
+        photo_bytes = None
+        if isinstance(table_data, dict) and table_data.get("rows"):
+            try:
+                photo_bytes = render_schedule_table(
+                    str(table_data.get("day_name") or ""),
+                    table_data.get("rows") or []
+                )
+            except Exception as err:
+                LOG.warning("не удалось сгенерировать таблицу: %s", err)
+
+        method = "sendMessage"
         payload = {"parse_mode": "HTML"} if message_format == "html" else None
-        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets, payload=payload)
+        if photo_bytes:
+            method = "sendPhoto"
+            payload = {
+                "photo_b64": base64.b64encode(photo_bytes).decode("ascii"),
+                "caption": text[:1024],
+                "parse_mode": "HTML" if message_format == "html" else None
+            }
+        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets, method=method, payload=payload)
         self.wake()
         LOG.info("событие %s: %s; в очереди получателей %d", kind, "принято" if created else "дубликат", queued)
         return 202, {"ok": True, "accepted": created, "duplicate": not created, "queued": queued}
@@ -480,6 +529,14 @@ class App:
                         if row['method'] == 'sendDocument':
                             name, mime, content = self.reports.document(row['report_id'], row['part'])
                             await asyncio.to_thread(self.telegram.send_document, row['chat_id'], name, mime, content, row['text'])
+                        elif row['method'] == 'sendPhoto':
+                            payload = json.loads(row['payload'] or '{}')
+                            photo_bytes = base64.b64decode(payload.get('photo_b64', ''))
+                            caption = payload.get('caption') or row['text'][:1024]
+                            pm = payload.get('parse_mode') or 'HTML'
+                            await asyncio.to_thread(self.telegram.send_photo, row['chat_id'], photo_bytes, caption, pm)
+                            if len(row['text']) > 1024:
+                                await asyncio.to_thread(self.telegram.call, 'sendMessage', {'chat_id': row['chat_id'], 'text': row['text'], 'parse_mode': pm})
                         else:
                             payload = json.loads(row['payload'] or '{}')
                             if row['method'] == 'sendMessage':
