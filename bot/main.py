@@ -83,31 +83,46 @@ def clean_header(text: str) -> str:
     return re.sub(r"<tg-emoji[^>]*>(.*?)</tg-emoji>\s*", "", text).strip()
 
 
+def _trim_schedule_rows(rows: list[dict]) -> list[dict]:
+    first_idx = -1
+    last_idx = -1
+    for i, r in enumerate(rows):
+        subj = str(r.get("subject") or "").strip().lower()
+        is_cancelled = bool(r.get("cancelled"))
+        is_win = bool(r.get("window")) or (subj in ("окно", "—", "") and not is_cancelled)
+        if not is_win and subj:
+            if first_idx == -1:
+                first_idx = i
+            last_idx = i
+
+    if first_idx == -1 or last_idx == -1:
+        return []
+    return rows[first_idx : last_idx + 1]
+
+
 def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return ""
-    clean_rows = [r for r in rows if r.get("window") or str(r.get("subject") or "").strip() != ""]
+    clean_rows = _trim_schedule_rows(rows)
     if not clean_rows:
         return ""
     table_lines = [
         '<table bordered striped compact>',
     ]
     if day_name:
-        table_lines.append(f'  <caption>расписание на {html.escape(day_name.lower())}</caption>')
+        table_lines.append(f'  <caption>{html.escape(day_name.lower().strip())}</caption>')
     table_lines.append('  <tr>')
     table_lines.append('    <th align="center">#</th>')
     table_lines.append('    <th align="left">предмет</th>')
     table_lines.append('    <th align="left">преп. / ауд.</th>')
-    table_lines.append('    <th align="center">время</th>')
     table_lines.append('  </tr>')
 
     for r in clean_rows:
         n = str(r.get("n", "")).lower()
         subj = str(r.get("subject") or "—").lower()
         meta = str(r.get("teacher_room") or "—").lower()
-        time_str = str(r.get("time") or "").lower()
         is_cancelled = bool(r.get("cancelled"))
-        is_window = bool(r.get("window")) or subj in ("окно", "—", "")
+        is_window = bool(r.get("window")) or (subj in ("окно", "—", "") and not is_cancelled)
 
         if is_window:
             subj_html = "<i>окно</i>"
@@ -127,7 +142,6 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
         table_lines.append(f'    <td align="center">{html.escape(n)}</td>')
         table_lines.append(f'    <td align="left">{subj_html}</td>')
         table_lines.append(f'    <td align="left">{meta_html}</td>')
-        table_lines.append(f'    <td align="center">{html.escape(time_str)}</td>')
         table_lines.append('  </tr>')
 
     table_lines.append('</table>')
@@ -137,7 +151,7 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
 def format_clean_list(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
-    clean_rows = [r for r in rows if r.get("window") or str(r.get("subject") or "").strip() != ""]
+    clean_rows = _trim_schedule_rows(rows)
     if not clean_rows:
         return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
     lines = [f"<b>расписание на {html.escape(day_name.lower())}:</b>"] if day_name else []
@@ -147,7 +161,7 @@ def format_clean_list(day_name: str, rows: list[dict]) -> str:
         meta = str(r.get("teacher_room") or "—").lower()
         t = str(r.get("time") or "").lower()
         is_cancelled = bool(r.get("cancelled"))
-        is_window = bool(r.get("window")) or subj in ("окно", "—", "")
+        is_window = bool(r.get("window")) or (subj in ("окно", "—", "") and not is_cancelled)
         time_str = f" ({t})" if t else ""
         if is_window:
             lines.append(f"{n}. <i>окно</i>{time_str}")
