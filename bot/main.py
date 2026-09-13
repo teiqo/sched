@@ -110,7 +110,7 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
         '<table bordered striped compact>',
     ]
     if day_name:
-        table_lines.append(f'  <caption>расписание на {html.escape(day_name.lower())}</caption>')
+        table_lines.append(f'  <caption align="right">расписание на {html.escape(day_name.lower())}</caption>')
     table_lines.append('  <tr>')
     table_lines.append('    <th align="center">#</th>')
     table_lines.append('    <th align="left">предмет</th>')
