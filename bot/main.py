@@ -46,71 +46,50 @@ GREETING = "<b>привет=)</b>"
 MAX_BODY = 65536
 
 
-def format_text_table(day_name: str, rows: list[dict]) -> str:
+def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return ""
-    col_w_num = 3
-    col_w_subj = 15
-    col_w_meta = 14
-    col_w_time = 12
+    table_lines = [
+        '<table bordered striped compact>',
+    ]
+    if day_name:
+        table_lines.append(f'  <caption>Расписание на {html.escape(day_name)}</caption>')
+    table_lines.append('  <tr>')
+    table_lines.append('    <th align="center">#</th>')
+    table_lines.append('    <th align="left">Предмет</th>')
+    table_lines.append('    <th align="left">Преп. / ауд.</th>')
+    table_lines.append('    <th align="center">Время</th>')
+    table_lines.append('  </tr>')
 
-    def pad(s: str, w: int) -> str:
-        diff = w - len(s)
-        return s + (" " * diff) if diff > 0 else s[:w]
-
-    def wrap(text: str, w: int) -> list[str]:
-        if not text or text == "—":
-            return [text or ""]
-        words = text.split()
-        lines = []
-        cur = ""
-        for word in words:
-            test = f"{cur} {word}".strip()
-            if len(test) <= w:
-                cur = test
-            else:
-                if cur:
-                    lines.append(cur)
-                if len(word) > w:
-                    rem = word
-                    while len(rem) > w:
-                        lines.append(rem[:w-1] + "-")
-                        rem = rem[w-1:]
-                    cur = rem
-                else:
-                    cur = word
-        if cur:
-            lines.append(cur)
-        return lines or [""]
-
-    def sep(l: str, m: str, r: str) -> str:
-        return l + ("─" * col_w_num) + m + ("─" * col_w_subj) + m + ("─" * col_w_meta) + m + ("─" * col_w_time) + r
-
-    out = []
-    out.append(sep("┌", "┬", "┐"))
-    out.append("│" + pad(" #", col_w_num) + "│" + pad(" предмет", col_w_subj) + "│" + pad(" преп. / ауд.", col_w_meta) + "│" + pad(" время", col_w_time) + "│")
-    out.append(sep("├", "┼", "┤"))
-
-    for idx, r in enumerate(rows):
-        num = str(r.get("n", ""))
-        subj_lines = wrap(str(r.get("subject") or "—"), col_w_subj - 2)
-        meta_lines = wrap(str(r.get("teacher_room") or "—"), col_w_meta - 2)
+    for r in rows:
+        n = str(r.get("n", ""))
+        subj = str(r.get("subject") or "—")
+        meta = str(r.get("teacher_room") or "—")
         time_str = str(r.get("time") or "")
-        max_lines = max(len(subj_lines), len(meta_lines))
+        table_lines.append('  <tr>')
+        table_lines.append(f'    <td align="center">{html.escape(n)}</td>')
+        table_lines.append(f'    <td align="left">{html.escape(subj)}</td>')
+        table_lines.append(f'    <td align="left">{html.escape(meta)}</td>')
+        table_lines.append(f'    <td align="center">{html.escape(time_str)}</td>')
+        table_lines.append('  </tr>')
 
-        for i in range(max_lines):
-            n_cell = f" {num}" if i == 0 else ""
-            s_cell = f" {subj_lines[i]}" if i < len(subj_lines) else ""
-            m_cell = f" {meta_lines[i]}" if i < len(meta_lines) else ""
-            t_cell = f" {time_str}" if i == 0 else ""
-            out.append("│" + pad(n_cell, col_w_num) + "│" + pad(s_cell, col_w_subj) + "│" + pad(m_cell, col_w_meta) + "│" + pad(t_cell, col_w_time) + "│")
+    table_lines.append('</table>')
+    return "\n".join(table_lines)
 
-        if idx < len(rows) - 1:
-            out.append(sep("├", "┼", "┤"))
 
-    out.append(sep("└", "┴", "┘"))
-    content = "\n".join(out)
-    return f"<pre>\n{content}\n</pre>"
+def format_clean_list(day_name: str, rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    lines = [f"<b>Расписание на {html.escape(day_name)}:</b>"] if day_name else []
+    for r in rows:
+        n = str(r.get("n", ""))
+        subj = str(r.get("subject") or "—")
+        meta = str(r.get("teacher_room") or "—")
+        t = str(r.get("time") or "")
+        meta_str = f" · {meta}" if meta and meta != "—" else ""
+        time_str = f" ({t})" if t else ""
+        lines.append(f"{n}. {html.escape(subj)}{html.escape(meta_str)}{html.escape(time_str)}")
+    return "\n".join(lines)
 
 
 class Config:
@@ -526,14 +505,37 @@ class App:
         else:
             targets = self.store.recipients(kind, group)
         table_data = data.get("table")
-        if isinstance(table_data, dict) and table_data.get("rows") and "<pre>" not in text:
-            table_str = format_text_table(str(table_data.get("day_name") or ""), table_data.get("rows") or [])
-            if table_str:
-                text = f"{text}\n\n{table_str}"
-
+        rich_message_payload = None
         method = "sendMessage"
-        payload = {"parse_mode": "HTML"} if message_format == "html" else None
-        created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets, method=method, payload=payload)
+
+        if isinstance(table_data, dict) and table_data.get("rows"):
+            clean_text = re.sub(r'\s*<pre>[\s\S]*?</pre>\s*', '', text).strip()
+            day_name = str(table_data.get("day_name") or "").strip()
+            rows = table_data.get("rows") or []
+            table_html = format_rich_html_table(day_name, rows)
+            clean_list = format_clean_list(day_name, rows)
+            fallback_text = f"{clean_text}\n\n{clean_list}" if clean_list else clean_text
+
+            text_html_paragraphs = []
+            for para in clean_text.split("\n\n"):
+                para = para.strip()
+                if para:
+                    para_html = para.replace("\n", "<br>")
+                    text_html_paragraphs.append(f"<p>{para_html}</p>")
+            body_html = "".join(text_html_paragraphs)
+            if table_html:
+                rich_html = f"{body_html}\n{table_html}" if body_html else table_html
+                method = "sendRichMessage"
+                rich_message_payload = {
+                    "rich_message": {
+                        "html": rich_html
+                    }
+                }
+        else:
+            fallback_text = text
+
+        payload = rich_message_payload if method == "sendRichMessage" else ({"parse_mode": "HTML"} if message_format == "html" else None)
+        created, queued = self.store.enqueue("event:" + kind + ":" + eid, fallback_text, targets, method=method, payload=payload)
         self.wake()
         LOG.info("событие %s: %s; в очереди получателей %d", kind, "принято" if created else "дубликат", queued)
         return 202, {"ok": True, "accepted": created, "duplicate": not created, "queued": queued}
@@ -590,6 +592,21 @@ class App:
                             await asyncio.to_thread(self.telegram.send_photo, row['chat_id'], photo_bytes, caption, pm)
                             if len(row['text']) > 1024:
                                 await asyncio.to_thread(self.telegram.call, 'sendMessage', {'chat_id': row['chat_id'], 'text': row['text'], 'parse_mode': pm})
+                        elif row['method'] == 'sendRichMessage':
+                            payload = json.loads(row['payload'] or '{}')
+                            payload['chat_id'] = row['chat_id']
+                            try:
+                                await asyncio.to_thread(self.telegram.call, 'sendRichMessage', payload)
+                            except TelegramError as te:
+                                if te.code in (400, 404):
+                                    LOG.warning("sendRichMessage returned %s, falling back to sendMessage", te.code)
+                                    await asyncio.to_thread(self.telegram.call, 'sendMessage', {
+                                        'chat_id': row['chat_id'],
+                                        'text': row['text'],
+                                        'parse_mode': 'HTML'
+                                    })
+                                else:
+                                    raise
                         else:
                             payload = json.loads(row['payload'] or '{}')
                             if row['method'] == 'sendMessage':

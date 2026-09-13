@@ -132,7 +132,6 @@ var state = {
   showVacancies: true,
   showSelfStudy: true,
   editorMode: false,
-  pendingAddPair: null,
   parityMode: "auto",
   settingsOpen: false,
   nowOverride: null,
@@ -415,33 +414,6 @@ function visibleSlotsFor(d) {
       : slot)
     .filter((s) => s.cancelled || isSlotVisible(s, preferences));
 
-  if (state.pendingAddPair && state.pendingAddPair.dIso === dIso) {
-    const pending = state.pendingAddPair;
-    const existingIndex = slots.findIndex(s => s.n === pending.n);
-    const sat = d.getDay() === 6;
-    const times = sat ? TIMES[pending.n]?.sat : TIMES[pending.n]?.week;
-    const from = times ? times[0] : "08:30";
-    const to = times ? times[1] : "10:05";
-    const pendingSlot = {
-      n: pending.n,
-      from,
-      to,
-      subject: pending.subject,
-      teacher: pending.teacher || "",
-      room: pending.room || "",
-      window: false,
-      empty: false,
-      cancelled: false,
-      swapped: true,
-      pendingAdd: true,
-    };
-    if (existingIndex >= 0) {
-      slots[existingIndex] = { ...slots[existingIndex], ...pendingSlot };
-    } else {
-      slots.push(pendingSlot);
-      slots.sort((a, b) => a.n - b.n);
-    }
-  }
   return slots;
 }
 
@@ -649,7 +621,7 @@ function liveCardHtml(live, dIso) {
   </article>`;
 }
 
-function rowHtml(slot, live, dIso) {
+function rowHtml(slot, live, dIso, isLastLessonOfDay = false) {
   const isCurrent = live && live.kind === "current" && live.slot.n === slot.n && !slot.window;
   const isNext = live && live.kind === "next" && live.slot.n === slot.n && !slot.window;
   const cls = ["agenda-row"];
@@ -659,6 +631,7 @@ function rowHtml(slot, live, dIso) {
   if (slot.cancelled) cls.push("is-cancelled");
   if (slot.swapped) cls.push("is-swapped");
   if (slot.pendingAdd) cls.push("is-pending-add");
+  if (isLastLessonOfDay) cls.push("has-add-pair");
 
   const time = `<div class="agenda-row-time"><span class="agenda-row-num">${slot.n}</span><time>${slot.from}<span>${slot.to}</span></time></div>`;
 
@@ -690,7 +663,7 @@ function rowHtml(slot, live, dIso) {
     <strong>${escapeHtml(slot.subject)}${swapMark}${mark}</strong>
     <span class="lesson-meta">${metaHtml(slot)}</span>
     <small>${bellDuration(mins(slot.to) - mins(slot.from))}</small>
-  </div>${swapButtonHtml(dIso, slot.n)}${suggestButtonHtml(dIso, slot)}</div>`;
+  </div>${swapButtonHtml(dIso, slot.n)}${suggestButtonHtml(dIso, slot)}${isLastLessonOfDay ? addPairButtonHtml(dIso) : ""}</div>`;
 }
 
 /* Перерыв между парами: маленький чип, встроенный в линию-разделитель
@@ -701,7 +674,7 @@ function breakChipHtml(gap) {
 
 /* Между соседними парами вставляем чип перерыва.
    Рядом с окном не ставим — строка окна сама про разрыв говорит. */
-function withBreaksHtml(slots, live, dIso) {
+function withBreaksHtml(slots, live, dIso, lastLessonN = null) {
   const out = [];
   let prev = null;
   slots.forEach((s) => {
@@ -709,7 +682,8 @@ function withBreaksHtml(slots, live, dIso) {
       const gap = mins(s.from) - mins(prev.to);
       if (gap > 0) out.push(breakChipHtml(gap));
     }
-    out.push(rowHtml(s, live, dIso));
+    const isLast = !s.window && lastLessonN !== null && s.n === lastLessonN;
+    out.push(rowHtml(s, live, dIso, isLast));
     prev = s;
   });
   return out.join("");
@@ -799,7 +773,7 @@ function completedBlockHtml(slots, dIso) {
   </div>`;
 }
 
-function renderSlotRuns(slots, live, dIso) {
+function renderSlotRuns(slots, live, dIso, lastLessonN = null) {
   if (!slots.length) return "";
   const runs = [];
   let currentRun = [];
@@ -823,7 +797,7 @@ function renderSlotRuns(slots, live, dIso) {
   return runs
     .map((run) => {
       if (run.isWindow) {
-        return `<div class="agenda-list">${withBreaksHtml(run.items, live, dIso)}</div>`;
+        return `<div class="agenda-list">${withBreaksHtml(run.items, live, dIso, lastLessonN)}</div>`;
       }
       return completedBlockHtml(run.items, dIso);
     })
@@ -834,9 +808,9 @@ function addPairButtonHtml(dIso) {
   if (!dIso) return "";
   const dt = dateFromIso(dIso);
   if (dt && dt.getDay() === 0) return "";
-  return `<div class="sched-add-pair-row"><button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
+  return `<button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-  </button></div>`;
+  </button>`;
 }
 
 function dayHtml(d, withLive, future) {
@@ -851,26 +825,27 @@ function dayHtml(d, withLive, future) {
     ? `${count} ${plural(count, "пара", "пары", "пар")} · ${parityLabel(parityOf(d))} неделя`
     : `${parityLabel(parityOf(d))} неделя`;
   const isSunday = d.getDay() === 0;
+  const lastLessonN = (!isSunday && lessons.length) ? lessons[lessons.length - 1].n : null;
 
   let body;
   if (!count && (!state.windows || !rows.length)) {
     body = emptyDayHtml(d) + (!isSunday ? addPairButtonHtml(dIso) : "");
   } else if (!today || !withLive || future) {
-    body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso)}${addPairButtonHtml(dIso)}</div>` : "";
+    body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso, lastLessonN)}</div>` : "";
   } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
     const liveN = live.slot.n;
     const earlier = rows.filter((s) => s.n < liveN);
     const later = rows.filter((s) => s.n > liveN);
-    const earlierHtml = renderSlotRuns(earlier, live, dIso);
+    const earlierHtml = renderSlotRuns(earlier, live, dIso, lastLessonN);
     const liveHost = `<div id="live-host">${liveCardHtml(live, dIso)}</div>`;
     const laterHtml = later.length
-      ? `<div class="agenda-list">${withBreaksHtml(later, live, dIso)}${addPairButtonHtml(dIso)}</div>`
-      : `<div class="agenda-list">${addPairButtonHtml(dIso)}</div>`;
+      ? `<div class="agenda-list">${withBreaksHtml(later, live, dIso, lastLessonN)}</div>`
+      : "";
     body = `${earlierHtml}${liveHost}${laterHtml}`;
   } else {
-    const earlierHtml = renderSlotRuns(rows, live, dIso);
+    const earlierHtml = renderSlotRuns(rows, live, dIso, lastLessonN);
     const liveHost = withLive && live ? `<div id="live-host">${liveCardHtml(live, dIso)}</div>` : "";
-    body = `${earlierHtml}${liveHost}<div class="agenda-list">${addPairButtonHtml(dIso)}</div>`;
+    body = `${earlierHtml}${liveHost}`;
   }
 
   return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}</div>`;
@@ -885,6 +860,8 @@ function weekHtml() {
     const all = visibleSlotsFor(d);
     const lessons = all.filter((s) => !s.window);
     const rows = state.editorMode || state.windows ? all : lessons;
+    const isSunday = d.getDay() === 0;
+    const lastLessonN = (!isSunday && lessons.length) ? lessons[lessons.length - 1].n : null;
     days.push(`<div class="sched-day-block" data-day="${iso(d)}">
       <div class="sched-day-heading">
         <div class="sched-day-heading-copy">
@@ -900,10 +877,10 @@ function weekHtml() {
       </div>
       ${
         lessons.length || (state.windows && rows.length)
-          ? `<div class="agenda-list">${withBreaksHtml(rows, null, iso(d))}${addPairButtonHtml(iso(d))}</div>`
+          ? `<div class="agenda-list">${withBreaksHtml(rows, null, iso(d), lastLessonN)}</div>`
           : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>${
-              isSummer(d) ? "каникулы" : d.getDay() === 0 ? "выходной" : "пар нет"
-            }</strong></div>`
+              isSummer(d) ? "каникулы" : isSunday ? "выходной" : "пар нет"
+            }</strong>${!isSunday ? addPairButtonHtml(iso(d)) : ""}</div>`
       }
     </div>`);
   }
@@ -1281,7 +1258,6 @@ function render(direction) {
   sceneRevision += 1;
   daySwipeController?.invalidate?.();
   updateDayRevertBtn();
-  renderPendingAddBar();
   save();
   window.requestAnimationFrame(checkCompactHeading);
 }
@@ -4311,7 +4287,7 @@ function closeMoveSheet(onComplete, immediate = false) {
   closeSheetAnimated("move-backdrop", onComplete, immediate);
 }
 
-function openMoveSheet(dIso, n) {
+function openMoveSheet(dIso, n, opts = {}) {
   document.getElementById("sched-toast-container")?.replaceChildren();
   closeMoveSheet(null, true);
   closeSwapSheet(null, true);
@@ -4324,12 +4300,12 @@ function openMoveSheet(dIso, n) {
   backdrop.id = "move-backdrop";
   backdrop.className = "sched-replace-backdrop";
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
-    <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
+    <div class="sched-replace-head"><strong id="move-title">${opts?.isNew ? "куда поставить пару?" : "куда перенести пару?"}</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
     <p class="sched-move-help">или закрой это окно и потяни пару за кнопку справа сверху — перетащить можно руками.</p>
-    <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n ? 'disabled aria-current="true"' : ""}>
+    <div class="sched-move-targets">${slots.map(slot => `<button class="sched-move-target${slot.n === n ? " is-source" : ""}" type="button" data-move-to="${slot.n}" ${slot.n === n && !opts?.isNew ? 'disabled aria-current="true"' : ""}>
       <span class="sched-move-number">${slot.n}</span><span class="sched-move-target-copy"><strong>${escapeHtml(slot.window || slot.cancelled ? "окно" : slot.subject)}</strong>
-      <small>${slot.from}–${slot.to} · ${slot.n === n ? "текущее место" : slot.window || slot.cancelled ? "перенести сюда" : "поменять местами"}</small></span>${slot.n === n ? ICON_CHECK : ICON_CHEVRON}</button>`).join("")}</div>
+      <small>${slot.from}–${slot.to} · ${slot.n === n ? (opts?.isNew ? "оставить здесь" : "текущее место") : slot.window || slot.cancelled ? "перенести сюда" : "поменять местами"}</small></span>${slot.n === n ? ICON_CHECK : ICON_CHEVRON}</button>`).join("")}</div>
     <div class="sched-move-edges"><button type="button" data-move-edge="top" ${pairs[0]?.n === n ? "disabled" : ""}>в начало дня</button><button type="button" data-move-edge="bottom" ${pairs.at(-1)?.n === n ? "disabled" : ""}>в конец дня</button></div>
     <p class="sched-move-help">при переносе в начало или конец порядок остальных пар сдвигается, окна остаются на месте.</p>
     <div class="sched-replace-actions"><button type="button" data-move-close>отмена</button></div>
@@ -4339,16 +4315,31 @@ function openMoveSheet(dIso, n) {
   requestAnimationFrame(() => backdrop.classList.add("is-open"));
   const close = () => {
     closeMoveSheet(() => {
-      /* Вне редактора ручка другая, и старый селектор терял фокус в никуда. */
-      const handle = state.editorMode ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
-      document.querySelector(`${handle}[data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
+      if (opts?.isNew && typeof opts?.onCancel === "function") {
+        opts.onCancel();
+      } else {
+        /* Вне редактора ручка другая, и старый селектор терял фокус в никуда. */
+        const handle = state.editorMode ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
+        document.querySelector(`${handle}[data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
+      }
     });
   };
   backdrop.addEventListener("click", event => {
     const target = event.target.closest("[data-move-to]");
     const edge = event.target.closest("[data-move-edge]");
-    if (target && !target.disabled) { closeMoveSheet(); movePair(dIso, n, Number(target.dataset.moveTo)); }
-    else if (edge && !edge.disabled) { closeMoveSheet(); movePairToEdge(dIso, n, edge.dataset.moveEdge === "bottom"); }
+    if (target && !target.disabled) {
+      const toN = Number(target.dataset.moveTo);
+      closeMoveSheet();
+      if (toN !== n) {
+        movePair(dIso, n, toN);
+      }
+      if (typeof opts?.onSave === "function") opts.onSave();
+    }
+    else if (edge && !edge.disabled) {
+      closeMoveSheet();
+      movePairToEdge(dIso, n, edge.dataset.moveEdge === "bottom");
+      if (typeof opts?.onSave === "function") opts.onSave();
+    }
     else if (event.target === backdrop || event.target.closest("[data-move-close]")) close();
   });
   backdrop.addEventListener("keydown", event => {
@@ -4605,22 +4596,6 @@ function openSuggestSheet(dIso, n) {
   renderRoot();
 }
 
-function renderPendingAddBar() {
-  document.getElementById("pending-add-bar")?.remove();
-  if (!state.pendingAddPair) return;
-  const p = state.pendingAddPair;
-  const bar = document.createElement("div");
-  bar.id = "pending-add-bar";
-  bar.className = "sched-pick-bar";
-  bar.innerHTML = `<p class="sched-pick-hint">добавлена ${p.n}-я пара: ${escapeHtml(p.subject)} · подтверди или отмени</p>
-    <div class="sched-pick-actions">
-      <button class="sched-pick-btn is-cancel" type="button" data-pending-act="cancel">отменить</button>
-      <button class="sched-pick-btn is-save" type="button" data-pending-act="confirm">подтвердить</button>
-    </div>`;
-  document.body.appendChild(bar);
-  requestAnimationFrame(() => bar.classList.add("is-open"));
-}
-
 function openAddPairSheet(dIso) {
   document.getElementById("sched-toast-container")?.replaceChildren();
   closeSuggestSheet(null, true);
@@ -4629,33 +4604,18 @@ function openAddPairSheet(dIso) {
   closeSheetAnimated("add-pair-backdrop", null, true);
 
   const d = dateFromIso(dIso);
-  const slots = slotsFor(d);
   const backdrop = document.createElement("div");
   backdrop.id = "add-pair-backdrop";
   backdrop.className = "sched-replace-backdrop";
 
-  const options = ['<option value="">выбери предмет из списка</option>'].concat(subjectCatalog().map(item =>
+  const options = ['<option value="">выбери предмет</option>'].concat(subjectCatalog().map(item =>
     `<option value="${escapeHtml(item.subject)}" data-teacher="${escapeHtml(item.teacher)}" data-room="${escapeHtml(item.room)}">${escapeHtml(item.subject)}${item.teacher ? " · " + escapeHtml(item.teacher) : ""}</option>`)).join("");
-
-  const numOptions = [1, 2, 3, 4, 5, 6].map(num => {
-    const existing = slots.find(s => s.n === num);
-    const label = existing && !existing.window && !existing.cancelled
-      ? `${num} пара · занято (${existing.subject})`
-      : `${num} пара · свободно`;
-    return `<option value="${num}">${label}</option>`;
-  }).join("");
 
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="add-pair-title">
     <div class="sched-replace-head">
       <strong id="add-pair-title">добавить пару</strong>
       <span>${escapeHtml(dateLabel(d))} · ${parityLabel(parityOf(d))} неделя</span>
     </div>
-    <label class="sched-replace-field">
-      <span>номер пары</span>
-      <div class="sched-replace-select">
-        <select id="add-pair-num">${numOptions}</select>
-      </div>
-    </label>
     <label class="sched-replace-field">
       <span>предмет из расписания</span>
       <div class="sched-replace-select">
@@ -4669,15 +4629,16 @@ function openAddPairSheet(dIso) {
     <div class="sched-replace-meta-grid">
       <label class="sched-replace-field">
         <span>преподаватель</span>
-        <input id="add-pair-teacher" type="text" maxlength="120" placeholder="фамилия" />
+        <input id="add-pair-teacher" type="text" maxlength="120" placeholder="фамилия (необязательно)" />
       </label>
       <label class="sched-replace-field">
         <span>аудитория *</span>
         <input id="add-pair-room" type="text" maxlength="40" placeholder="номер" />
       </label>
     </div>
+    <p class="sched-replace-hint">выбрал из списка — преподаватель и аудитория подставятся сами; затем перенесёшь на нужное место</p>
     <div class="sched-replace-actions">
-      <button class="is-primary" type="button" data-add-pair-send>добавить</button>
+      <button class="is-primary" type="button" data-add-pair-send>выбрать</button>
       <button type="button" data-add-pair-close>отмена</button>
     </div>
   </div>`;
@@ -4712,7 +4673,6 @@ function openAddPairSheet(dIso) {
   });
 
   const send = () => {
-    const n = Number(sheet.querySelector("#add-pair-num")?.value || 1);
     const chosen = picker?.options[picker.selectedIndex];
     const subj = (custom?.value || picker?.value || "").trim().slice(0, 120);
     const teacher = (teacherField?.value || chosen?.dataset.teacher || "").trim().slice(0, 120);
@@ -4721,9 +4681,37 @@ function openAddPairSheet(dIso) {
     if (!subj) { toast("выбери или впиши предмет"); return; }
     if (!room) { toast("укажи аудиторию"); roomField?.focus(); return; }
 
-    state.pendingAddPair = { dIso, n, subject: subj, teacher, room };
+    const daySlots = slotsFor(d);
+    const freeN = [1, 2, 3, 4, 5, 6].find(num => {
+      const s = daySlots.find(slot => slot.n === num);
+      return !s || s.window || s.cancelled || s.empty;
+    }) || 1;
+
+    setSwap(dIso, freeN, { subject: subj, teacher, room, moved: true, self: true });
     render();
-    closeSheetAnimated(backdrop);
+
+    closeSheetAnimated(backdrop, () => {
+      const started = pairDragController?.beginPick(dIso, freeN, {
+        isNew: true,
+        onSave: () => toast("пара добавлена"),
+        onCancel: () => {
+          revertSwapOperation(dIso, freeN, "добавление отменено");
+          render();
+          toast("добавление отменено");
+        }
+      });
+      if (!started) {
+        openMoveSheet(dIso, freeN, {
+          isNew: true,
+          onSave: () => toast("пара добавлена"),
+          onCancel: () => {
+            revertSwapOperation(dIso, freeN, "добавление отменено");
+            render();
+            toast("добавление отменено");
+          }
+        });
+      }
+    });
   };
 
   backdrop.addEventListener("click", event => {
@@ -4743,6 +4731,8 @@ function openAddPairSheet(dIso) {
       send();
     }
   });
+
+  picker?.focus({ preventScroll: true });
 }
 
 /* Базовое расписание лежит в slotsForBase, а здесь накладываются замены. */
@@ -5211,34 +5201,6 @@ var swapDragSuppressUntil = 0;
     openSuggestSheet(button.dataset.date, Number(button.dataset.n));
   });
 })();
-
-document.addEventListener("click", e => {
-  const pendingAct = e.target.closest("[data-pending-act]");
-  if (!pendingAct) return;
-  const act = pendingAct.dataset.pendingAct;
-  if (act === "cancel") {
-    state.pendingAddPair = null;
-    const bar = document.getElementById("pending-add-bar");
-    if (bar) {
-      bar.classList.remove("is-open");
-      setTimeout(() => bar.remove(), 200);
-    }
-    render();
-  } else if (act === "confirm") {
-    if (state.pendingAddPair) {
-      const { dIso, n, subject, teacher, room } = state.pendingAddPair;
-      state.pendingAddPair = null;
-      const bar = document.getElementById("pending-add-bar");
-      if (bar) {
-        bar.classList.remove("is-open");
-        setTimeout(() => bar.remove(), 200);
-      }
-      setSwap(dIso, n, { subject, teacher, room, moved: true, self: true });
-      render();
-      toast("пара добавлена");
-    }
-  }
-});
 
 /* Shared movement controller for all lesson card types. */
 var pairDragController = bindPairDrag({
@@ -6016,76 +5978,6 @@ function buildDayTablePayload(dIso) {
   }
 }
 
-function formatMonospaceTable(tablePayload) {
-  if (!tablePayload || !tablePayload.rows || !tablePayload.rows.length) return "";
-  const col_w_num = 3;
-  const col_w_subj = 15;
-  const col_w_meta = 14;
-  const col_w_time = 12;
-
-  function pad(str, len) {
-    const diff = len - str.length;
-    return diff > 0 ? str + " ".repeat(diff) : str.slice(0, len);
-  }
-
-  function wrap(str, len) {
-    if (!str || str === "—") return [str || ""];
-    const words = str.split(" ");
-    const lines = [];
-    let cur = "";
-    for (const w of words) {
-      const test = cur ? cur + " " + w : w;
-      if (test.length <= len) {
-        cur = test;
-      } else {
-        if (cur) lines.push(cur);
-        if (w.length > len) {
-          let rem = w;
-          while (rem.length > len) {
-            lines.push(rem.slice(0, len - 1) + "-");
-            rem = rem.slice(len - 1);
-          }
-          cur = rem;
-        } else {
-          cur = w;
-        }
-      }
-    }
-    if (cur) lines.push(cur);
-    return lines.length ? lines : [""];
-  }
-
-  function sep(l, m, r) {
-    return l + "─".repeat(col_w_num) + m + "─".repeat(col_w_subj) + m + "─".repeat(col_w_meta) + m + "─".repeat(col_w_time) + r;
-  }
-
-  const out = [];
-  out.push(sep("┌", "┬", "┐"));
-  out.push("│" + pad(" #", col_w_num) + "│" + pad(" предмет", col_w_subj) + "│" + pad(" преп. / ауд.", col_w_meta) + "│" + pad(" время", col_w_time) + "│");
-  out.push(sep("├", "┼", "┤"));
-
-  tablePayload.rows.forEach((r, idx) => {
-    const num = String(r.n);
-    const subjLines = wrap(r.subject || "—", col_w_subj - 2);
-    const metaLines = wrap(r.teacher_room || "—", col_w_meta - 2);
-    const maxLines = Math.max(subjLines.length, metaLines.length);
-
-    for (let i = 0; i < maxLines; i++) {
-      const nCell = i === 0 ? " " + num : "";
-      const sCell = " " + (subjLines[i] || "");
-      const mCell = " " + (metaLines[i] || "");
-      const tCell = i === 0 ? " " + (r.time || "") : "";
-      out.push("│" + pad(nCell, col_w_num) + "│" + pad(sCell, col_w_subj) + "│" + pad(mCell, col_w_meta) + "│" + pad(tCell, col_w_time) + "│");
-    }
-    if (idx < tablePayload.rows.length - 1) {
-      out.push(sep("├", "┼", "┤"));
-    }
-  });
-
-  out.push(sep("└", "┴", "┘"));
-  return `\n\n<pre>\n${out.join("\n")}\n</pre>`;
-}
-
 function notifyCloudEvent(path, body) {
   if (LOCAL_PREVIEW || !body || !window.SCHED_NOTIFY_URL) return;
   const section = String(path).split("/")[0];
@@ -6119,7 +6011,6 @@ function notifyCloudEvent(path, body) {
     text += `\n\n${botLesson(body)}`;
   }
   const table = buildDayTablePayload(dIso);
-  if (table) text += formatMonospaceTable(table);
   queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group, table }).catch(reportPushError);
 }
 
@@ -6357,7 +6248,6 @@ async function publishSwapBatch(entries, label = "изменены пары") {
 
       const table = buildDayTablePayload(date);
       let text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
-      if (table) text += formatMonospaceTable(table);
       queueBotEvent({ type: pending ? "pending" : "swap", format: "html", group,
         event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text, table
       }).catch(reportPushError);
@@ -6454,7 +6344,6 @@ async function approvePending(enc) {
   }).join("\n\n");
   const table = buildDayTablePayload(date);
   let text = `<b>${botHtml(botDate(date))} ${allDeleted ? "вернули пары в исходное состояние" : "опубликовали изменения"}</b>\n\n${rows}`;
-  if (table) text += formatMonospaceTable(table);
   queueBotEvent({ type: "swap", format: "html", group,
     event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
     text, table

@@ -6084,53 +6084,65 @@ a.sched-settings-row,
   padding: 4px 6px;
 }
 
-/* Кнопка добавления пары: центрирована под парами внутри плашки, без подложки, в цвет кнопки замены */
-.sched-add-pair-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  padding: 8px 0 10px 0;
-  box-sizing: border-box;
+/* Кнопка добавления пары: размещается под кнопкой замены у крайней нижней пары дня */
+:root .agenda-row.has-add-pair {
+  min-height: 98px;
+  padding-right: 52px;
 }
-.agenda-list .sched-add-pair-row {
-  border-top: 1px solid var(--sched-separator);
-  padding: 8px 0;
-  margin: 0;
-}
-.agenda-list .sched-add-pair-row:first-child {
-  border-top: none !important;
-}
-.sched-add-pair-btn {
-  position: static !important;
+:root .agenda-row .sched-add-pair-btn {
+  position: absolute;
+  top: 50px;
+  right: 4px;
   width: 44px;
-  height: 36px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
   border-radius: 10px;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   color: var(--sched-tertiary) !important;
   opacity: 0.8 !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
   transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, transform 0.16s ease;
-  z-index: 10;
-  margin: 0 auto;
+  z-index: 5;
 }
-.sched-add-pair-btn:hover,
-.sched-add-pair-btn:active {
+:root .agenda-row .sched-add-pair-btn:hover,
+:root .agenda-row .sched-add-pair-btn:active {
   transform: scale(1.08);
   opacity: 1 !important;
   background: var(--sched-fill) !important;
   color: var(--sched-blue) !important;
 }
-.sched-add-pair-btn svg {
-  width: 20px;
-  height: 20px;
-  display: block;
+:root .agenda-row .sched-add-pair-btn svg {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+:root[data-editor-mode="true"] .sched-add-pair-btn {
+  display: none !important;
+}
+:root .agenda-row.is-drag-float .sched-add-pair-btn,
+:root .sched-drag-board .sched-add-pair-btn {
+  display: none !important;
+}
+.sched-empty-day .sched-add-pair-btn {
+  position: static;
+  margin: 12px auto 0;
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  background: transparent !important;
+  color: var(--sched-tertiary) !important;
+  opacity: 0.8 !important;
+  border: none !important;
 }
 
 /* Плавное перемещение пилюли на дату */

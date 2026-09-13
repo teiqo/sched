@@ -106,15 +106,22 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const d = drag;
     if (!d) return;
     d.clone.classList.remove('is-magnetized');
-    d.clone.style.left = clampLeft(d.x - d.grabX, d.clone.offsetWidth) + 'px';
-    d.clone.style.top = d.y - d.grabY + 'px';
+    const boardRect = d.board.getBoundingClientRect();
+    d.clone.style.left = boardRect.left + 'px';
+    d.clone.style.width = boardRect.width + 'px';
+    const minY = boardRect.top;
+    const maxY = Math.max(minY, boardRect.bottom - d.clone.offsetHeight);
+    const rawY = d.y - d.grabY;
+    d.clone.style.top = Math.min(Math.max(rawY, minY), maxY) + 'px';
   };
   const centerCloneOnPlaceholder = () => {
     const d = drag, placeholder = d?.items.get(d.fromN);
     if (!placeholder?.isConnected) return;
+    const boardRect = d.board.getBoundingClientRect();
     const targetRect = placeholder.getBoundingClientRect();
-    d.clone.style.left = clampLeft(targetRect.left + (targetRect.width - d.clone.offsetWidth) / 2, d.clone.offsetWidth) + 'px';
-    d.clone.style.top = targetRect.top + (targetRect.height - d.clone.offsetHeight) / 2 + 'px';
+    d.clone.style.left = boardRect.left + 'px';
+    d.clone.style.width = boardRect.width + 'px';
+    d.clone.style.top = targetRect.top + 'px';
   };
   const updateTarget = () => {
     const d = drag;
@@ -179,8 +186,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     clone.classList.add('is-drag-float');
     clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
     clone.setAttribute('aria-hidden', 'true'); clone.inert = true;
-    const cloneW = cloneWidth(rect.width);
-    Object.assign(clone.style, { width: cloneW + 'px', height: rect.height + 'px', left: clampLeft(rect.left, cloneW) + 'px', top: rect.top + 'px' });
+    Object.assign(clone.style, { width: rect.width + 'px', height: rect.height + 'px', left: rect.left + 'px', top: rect.top + 'px' });
     document.body.appendChild(clone);
     const status = document.createElement('div');
     status.className = 'sched-drag-status is-sr-only'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -233,6 +239,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
        момент стоит на плавающей кнопке — пересчёт цели сбросил бы выбор. */
     if (commit && d.moved && !d.pick) updateTarget();
     const target = d.targetN;
+    const onCancel = d.onCancel;
+    const onSave = d.onSave;
     drag = null;
     d.cleanup?.();
     try { if (scene.hasPointerCapture(d.pointerId)) scene.releasePointerCapture(d.pointerId); } catch (_) {}
@@ -242,10 +250,15 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     d.scroller.style.scrollBehavior = d.oldScrollBehavior;
     suppressUntil = Date.now() + 450;
     onActiveChange(false);
-    if (commit && d.moved && target !== null && target !== d.fromN) {
-      const to = d.slots.find(slot => slot.n === target);
-      if (to.window || to.cancelled) onSwap(d.date, d.fromN, target);
-      else onReorder(d.date, d.fromN, target);
+    if (commit) {
+      if (d.moved && target !== null && target !== d.fromN) {
+        const to = d.slots.find(slot => slot.n === target);
+        if (to && (to.window || to.cancelled)) onSwap(d.date, d.fromN, target);
+        else onReorder(d.date, d.fromN, target);
+      }
+      onSave?.(d.date, (d.moved && target !== null) ? target : d.fromN);
+    } else {
+      onCancel?.(d.date, d.fromN);
     }
     onFinish?.();
   };
@@ -332,7 +345,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
      появляется сразу, карточка спокойно стоит на своём месте, и её переносят
      вручную — обычным перетаскиванием, без долгого удержания. Результат
      сохраняет или отменяет плавающая шторка снизу. */
-  const beginPick = (date, n) => {
+  const beginPick = (date, n, opts = {}) => {
     if (drag || pending) return false;
     const selector = editorMode() ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
     const button = scene?.querySelector(`${selector}[data-date="${date}"][data-n="${n}"]`);
@@ -344,6 +357,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     start();
     if (!drag) { clearPending(); return false; }
     drag.pick = true;
+    drag.isNew = Boolean(opts?.isNew);
+    drag.onCancel = opts?.onCancel;
+    drag.onSave = opts?.onSave;
     drag.moved = false;
     drag.targetN = drag.fromN;
     drag.previewN = drag.fromN;
@@ -360,7 +376,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
        поэтому выбор нужно либо сохранить, либо отменить. */
     const bar = document.createElement('div');
     bar.className = 'sched-pick-bar';
-    bar.innerHTML = '<p class="sched-pick-hint">перетащи пару на новое место</p>' +
+    bar.innerHTML = `<p class="sched-pick-hint">${drag.isNew ? `место — ${drag.fromN}-я пара (или перетащи на другое)` : 'перетащи пару на новое место'}</p>` +
       '<div class="sched-pick-actions">' +
       '<button class="sched-pick-btn is-cancel" type="button" data-pick-act="cancel">отменить</button>' +
       '<button class="sched-pick-btn is-save" type="button" data-pick-act="save">сохранить</button>' +
@@ -372,8 +388,12 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       const d = drag;
       if (!d) return;
       const moved = d.targetN !== null && d.targetN !== d.fromN;
-      saveBtn.disabled = !moved;
-      hint.textContent = moved ? `новое место — ${d.targetN}-я пара` : 'перетащи пару на новое место';
+      saveBtn.disabled = !d.isNew && !moved;
+      hint.textContent = (d.isNew && (!moved || d.targetN === d.fromN))
+        ? `место — ${d.fromN}-я пара (или перетащи на другое)`
+        : moved
+          ? `новое место — ${d.targetN}-я пара`
+          : 'перетащи пару на новое место';
     };
     requestAnimationFrame(() => bar.classList.add('is-open'));
     /* Карточка не «прилипает» к курсору: она едет только пока её тянут.

@@ -239,6 +239,8 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
        момент стоит на плавающей кнопке — пересчёт цели сбросил бы выбор. */
     if (commit && d.moved && !d.pick) updateTarget();
     const target = d.targetN;
+    const onCancel = d.onCancel;
+    const onSave = d.onSave;
     drag = null;
     d.cleanup?.();
     try { if (scene.hasPointerCapture(d.pointerId)) scene.releasePointerCapture(d.pointerId); } catch (_) {}
@@ -248,10 +250,15 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     d.scroller.style.scrollBehavior = d.oldScrollBehavior;
     suppressUntil = Date.now() + 450;
     onActiveChange(false);
-    if (commit && d.moved && target !== null && target !== d.fromN) {
-      const to = d.slots.find(slot => slot.n === target);
-      if (to.window || to.cancelled) onSwap(d.date, d.fromN, target);
-      else onReorder(d.date, d.fromN, target);
+    if (commit) {
+      if (d.moved && target !== null && target !== d.fromN) {
+        const to = d.slots.find(slot => slot.n === target);
+        if (to && (to.window || to.cancelled)) onSwap(d.date, d.fromN, target);
+        else onReorder(d.date, d.fromN, target);
+      }
+      onSave?.(d.date, (d.moved && target !== null) ? target : d.fromN);
+    } else {
+      onCancel?.(d.date, d.fromN);
     }
     onFinish?.();
   };
@@ -338,7 +345,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
      появляется сразу, карточка спокойно стоит на своём месте, и её переносят
      вручную — обычным перетаскиванием, без долгого удержания. Результат
      сохраняет или отменяет плавающая шторка снизу. */
-  const beginPick = (date, n) => {
+  const beginPick = (date, n, opts = {}) => {
     if (drag || pending) return false;
     const selector = editorMode() ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
     const button = scene?.querySelector(`${selector}[data-date="${date}"][data-n="${n}"]`);
@@ -350,6 +357,9 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     start();
     if (!drag) { clearPending(); return false; }
     drag.pick = true;
+    drag.isNew = Boolean(opts?.isNew);
+    drag.onCancel = opts?.onCancel;
+    drag.onSave = opts?.onSave;
     drag.moved = false;
     drag.targetN = drag.fromN;
     drag.previewN = drag.fromN;
@@ -366,7 +376,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
        поэтому выбор нужно либо сохранить, либо отменить. */
     const bar = document.createElement('div');
     bar.className = 'sched-pick-bar';
-    bar.innerHTML = '<p class="sched-pick-hint">перетащи пару на новое место</p>' +
+    bar.innerHTML = `<p class="sched-pick-hint">${drag.isNew ? `место — ${drag.fromN}-я пара (или перетащи на другое)` : 'перетащи пару на новое место'}</p>` +
       '<div class="sched-pick-actions">' +
       '<button class="sched-pick-btn is-cancel" type="button" data-pick-act="cancel">отменить</button>' +
       '<button class="sched-pick-btn is-save" type="button" data-pick-act="save">сохранить</button>' +
@@ -378,8 +388,12 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
       const d = drag;
       if (!d) return;
       const moved = d.targetN !== null && d.targetN !== d.fromN;
-      saveBtn.disabled = !moved;
-      hint.textContent = moved ? `новое место — ${d.targetN}-я пара` : 'перетащи пару на новое место';
+      saveBtn.disabled = !d.isNew && !moved;
+      hint.textContent = (d.isNew && (!moved || d.targetN === d.fromN))
+        ? `место — ${d.fromN}-я пара (или перетащи на другое)`
+        : moved
+          ? `новое место — ${d.targetN}-я пара`
+          : 'перетащи пару на новое место';
     };
     requestAnimationFrame(() => bar.classList.add('is-open'));
     /* Карточка не «прилипает» к курсору: она едет только пока её тянут.
