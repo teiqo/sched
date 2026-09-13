@@ -987,181 +987,9 @@ function bellsHtml() {
   </div>`;
 }
 
-/* ---------- декодирование текста из случайных символов ---------- */
-
-const SCRAMBLE_CHARS = "абвгдежзийклмнопрстуфхцчшщ0123456789§#%&*+=/~";
-const PRESERVED_REGEX = /[\s.,:;–—\-/\\()0-9№#]/;
-
-let activeScrambleRaf = null;
-let activeScrambleNodes = [];
-
-function cancelActiveScramble() {
-  if (activeScrambleRaf !== null) {
-    cancelAnimationFrame(activeScrambleRaf);
-    activeScrambleRaf = null;
-  }
-  if (activeScrambleNodes.length > 0) {
-    for (let i = 0; i < activeScrambleNodes.length; i++) {
-      const item = activeScrambleNodes[i];
-      try {
-        if (item.node && item.node.isConnected) {
-          item.node.textContent = item.original;
-        }
-      } catch (_) {}
-    }
-    activeScrambleNodes = [];
-  }
-}
-
-function extractScrambleNodes(el) {
-  const nodes = [];
-  if (!el) return nodes;
-  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
-  let n;
-  while ((n = walk.nextNode())) {
-    if (n.parentElement && n.parentElement.closest(".lesson-origin-mark, .lesson-swap-btn, .sched-add-pair-btn, svg")) continue;
-    const txt = n.textContent;
-    if (txt && txt.trim().length > 0) {
-      nodes.push({ node: n, original: txt, settled: false });
-    }
-  }
-  return nodes;
-}
-
-function runTextScramble(sceneNode) {
-  cancelActiveScramble();
-  if (!sceneNode) return;
-
-  const dayBlocks = sceneNode.querySelectorAll(".sched-day-block");
-  if (!dayBlocks.length) return;
-
-  const items = [];
-
-  dayBlocks.forEach((block, dayIdx) => {
-    // Анимируем только видимые блоки (активный день и первый последующий), экономя ресурсы
-    if (dayIdx > 1) return;
-
-    const baseHeadingDelay = dayIdx === 0 ? 20 : 200;
-    const baseRowDelay = dayIdx === 0 ? 60 : 240;
-    const rowStep = dayIdx === 0 ? 95 : 85;
-
-    // 1. Заголовок дня
-    const headingEl = block.querySelector(".sched-day-heading h2");
-    if (headingEl) {
-      extractScrambleNodes(headingEl).forEach((nObj, nodeIdx) => {
-        items.push({
-          ...nObj,
-          startAt: baseHeadingDelay + nodeIdx * 60,
-          duration: 380,
-        });
-      });
-    }
-
-    // 2. Строки расписания, перерывы, карточки и заглушки
-    const rows = block.querySelectorAll(".agenda-row, .agenda-break, #live-host, .sched-empty-day");
-    rows.forEach((row) => {
-      const rowI = parseInt(row.style.getPropertyValue("--row-i") || "0", 10);
-      const rowDelay = baseRowDelay + rowI * rowStep;
-
-      const titleEl = row.querySelector(".agenda-row-content strong, h3, strong");
-      if (titleEl) {
-        extractScrambleNodes(titleEl).forEach((nObj) => {
-          items.push({
-            ...nObj,
-            startAt: rowDelay,
-            duration: 380,
-          });
-        });
-      }
-
-      const metaEl = row.querySelector(".lesson-meta");
-      if (metaEl) {
-        extractScrambleNodes(metaEl).forEach((nObj) => {
-          items.push({
-            ...nObj,
-            startAt: rowDelay + 30,
-            duration: 350,
-          });
-        });
-      }
-
-      const chipEl = row.querySelector(".agenda-break-chip");
-      if (chipEl) {
-        extractScrambleNodes(chipEl).forEach((nObj) => {
-          items.push({
-            ...nObj,
-            startAt: rowDelay,
-            duration: 320,
-          });
-        });
-      }
-    });
-  });
-
-  if (!items.length) return;
-
-  activeScrambleNodes = items;
-  const startTime = performance.now();
-  let lastRandomize = 0;
-  let randomPool = "";
-  for (let k = 0; k < 64; k++) {
-    randomPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
-  }
-
-  function step(now) {
-    const elapsed = now - startTime;
-    let allDone = true;
-
-    // Пул случайных символов обновляется ~30 раз/сек для мягкого мерцания без стробоскопа
-    if (now - lastRandomize > 32) {
-      lastRandomize = now;
-      let newPool = "";
-      for (let k = 0; k < 64; k++) {
-        newPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
-      }
-      randomPool = newPool;
-    }
-
-    for (let j = 0; j < items.length; j++) {
-      const item = items[j];
-      if (!item.node.isConnected) continue;
-
-      if (elapsed < item.startAt) {
-        allDone = false;
-        continue;
-      }
-
-      const p = Math.min(1, (elapsed - item.startAt) / item.duration);
-      if (p < 1) {
-        allDone = false;
-        const orig = item.original;
-        const len = orig.length;
-        let out = "";
-        for (let i = 0; i < len; i++) {
-          const ch = orig[i];
-          if (PRESERVED_REGEX.test(ch) || p >= i / len) {
-            out += ch;
-          } else {
-            out += randomPool[(i + j * 7) % randomPool.length];
-          }
-        }
-        item.node.textContent = out;
-      } else if (!item.settled) {
-        item.settled = true;
-        item.node.textContent = item.original;
-      }
-    }
-
-    if (!allDone) {
-      activeScrambleRaf = requestAnimationFrame(step);
-    } else {
-      activeScrambleRaf = null;
-      activeScrambleNodes = [];
-    }
-  }
-
-  activeScrambleRaf = requestAnimationFrame(step);
-}
+/* ---------- заглушки скремблера для совместимости ---------- */
+function cancelActiveScramble() {}
+function runTextScramble(sceneNode) {}
 
 /* ---------- рендер ---------- */
 
@@ -1475,6 +1303,17 @@ function tick() {
 
 /* ---------- тема и палитра ---------- */
 
+let themeTransitionTimer = null;
+function triggerThemeTransition() {
+  const root = document.documentElement;
+  root.classList.add("sched-theme-transitioning");
+  if (themeTransitionTimer !== null) clearTimeout(themeTransitionTimer);
+  themeTransitionTimer = setTimeout(() => {
+    root.classList.remove("sched-theme-transitioning");
+    themeTransitionTimer = null;
+  }, 380);
+}
+
 function applyTheme() {
   const root = document.documentElement;
   root.dataset.theme = state.theme;
@@ -1530,6 +1369,8 @@ function applyTheme() {
   if (darkRow) darkRow.disabled = false;
   const modes = $("#theme-modes");
   if (modes) {
+    const idx = state.palette === "accent" ? 1 : state.palette === "accent-plus" ? 2 : 0;
+    modes.style.setProperty("--theme-mode-index", String(idx));
     modes.querySelectorAll("button[data-mode]").forEach((btn) => {
       const on = btn.dataset.mode === state.palette;
       btn.classList.toggle("is-active", on);
@@ -2284,6 +2125,7 @@ function bindEvents() {
   $("#dark-switch").addEventListener("click", () => {
     state.theme = state.theme === "dark" ? "light" : "dark";
     state.themeManual = true; /* ручной выбор — больше не следуем системе */
+    triggerThemeTransition();
     applyTheme();
     renderHeader();
     save();
@@ -2306,6 +2148,7 @@ function bindEvents() {
       const mode = btn.dataset.mode;
       if (!PALETTES.includes(mode) || mode === state.palette) return;
       state.palette = mode;
+      triggerThemeTransition();
       applyTheme();
       renderHeader();
       save();
@@ -2318,7 +2161,10 @@ function bindEvents() {
       const value = e.target.value;
       if (!/^#[0-9a-f]{6}$/i.test(value)) return;
       state.accent = value;
-      if (state.palette !== "accent" && state.palette !== "accent-plus") state.palette = "accent";
+      if (state.palette !== "accent" && state.palette !== "accent-plus") {
+        state.palette = "accent";
+        triggerThemeTransition();
+      }
       applyTheme();
       renderHeader();
       save();
