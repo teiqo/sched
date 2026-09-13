@@ -100,6 +100,29 @@ def _trim_schedule_rows(rows: list[dict]) -> list[dict]:
     return rows[first_idx : last_idx + 1]
 
 
+def format_teacher_room_cell(meta: str, is_cancelled: bool) -> str:
+    if not meta or meta == "—":
+        return "—"
+    parts = [p.strip() for p in re.split(r'(?:,\s*|\s+·\s+)', meta) if p.strip()]
+    if len(parts) >= 2:
+        escaped_parts = [html.escape(p) for p in parts]
+        if is_cancelled:
+            escaped_parts = [f"<s>{p}</s>" for p in escaped_parts]
+        return "<br>".join(escaped_parts)
+    else:
+        escaped = html.escape(meta)
+        return f"<s>{escaped}</s>" if is_cancelled else escaped
+
+
+def format_time_cell(time_str: str) -> str:
+    if not time_str or time_str == "—":
+        return "—"
+    parts = [p.strip() for p in re.split(r'[–—\-]', time_str) if p.strip()]
+    if len(parts) == 2:
+        return f"{html.escape(parts[0])}<br>{html.escape(parts[1])}"
+    return html.escape(time_str)
+
+
 def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return ""
@@ -114,34 +137,40 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     table_lines.append('  <tr>')
     table_lines.append('    <th align="center">#</th>')
     table_lines.append('    <th align="left">предмет</th>')
-    table_lines.append('    <th align="left">преп. / ауд.</th>')
+    table_lines.append('    <th align="left">преп.<br>ауд.</th>')
+    table_lines.append('    <th align="center">время</th>')
     table_lines.append('  </tr>')
 
     for r in clean_rows:
         n = str(r.get("n", "")).lower()
         subj = str(r.get("subject") or "—").lower()
         meta = str(r.get("teacher_room") or "—").lower()
+        t = str(r.get("time") or "").lower()
         is_cancelled = bool(r.get("cancelled"))
         is_window = bool(r.get("window")) or (subj in ("окно", "—", "") and not is_cancelled)
 
         if is_window:
             subj_html = "<i>окно</i>"
             meta_html = "—"
+            time_html = format_time_cell(t)
         elif is_cancelled:
             subj_clean = re.sub(r'^(отменена:\s*)+', '', subj).strip()
             if subj_clean in ("пара отменена", "отменена"):
                 subj_html = "<i>пара отменена</i>"
             else:
                 subj_html = f"<s>{html.escape(subj_clean)}</s> (отменена)"
-            meta_html = f"<s>{html.escape(meta)}</s>" if meta != "—" else "—"
+            meta_html = format_teacher_room_cell(meta, is_cancelled=True)
+            time_html = format_time_cell(t)
         else:
             subj_html = html.escape(subj)
-            meta_html = html.escape(meta)
+            meta_html = format_teacher_room_cell(meta, is_cancelled=False)
+            time_html = format_time_cell(t)
 
         table_lines.append('  <tr>')
         table_lines.append(f'    <td align="center">{html.escape(n)}</td>')
         table_lines.append(f'    <td align="left">{subj_html}</td>')
         table_lines.append(f'    <td align="left">{meta_html}</td>')
+        table_lines.append(f'    <td align="center">{time_html}</td>')
         table_lines.append('  </tr>')
 
     table_lines.append('</table>')
