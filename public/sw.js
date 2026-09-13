@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v107-pair-area-reveal-smooth-theme";
+const CACHE = CACHE_PREFIX + "2026-09-14-v108-clean-card-text-decode";
 const ASSETS = [
   "./",
   "./index.html",

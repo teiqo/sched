@@ -2296,31 +2296,18 @@ body.is-dragging-pair {
   transform: none !important;
 }
 
-/* ВО ВРЕМЯ АНИМАЦИИ ВХОДА:
-   Каждая пара представляет собой самостоятельную прямоугольную область
-   (со своим фоном var(--sched-surface), бейджем, временем и текстом),
-   которая полностью прорисовывается градиентным фейдом слева направо.
-   Общий контейнер .agenda-list не закрашивает всё разом. */
+/* Сама серая подложка карточки плавно проявляется единым целым блоком */
 #stage .sched-active-day-scene.is-entering .agenda-list {
-  background: transparent !important;
-  border-color: var(--sched-separator) !important;
-  animation: none !important;
+  animation: sched-list-fade 0.35s ease both !important;
+  animation-delay: 30ms !important;
 }
-
-#stage .sched-active-day-scene.is-entering .agenda-row {
-  background: var(--sched-surface) !important;
-  position: relative;
-  z-index: 2;
-}
-
-#stage .sched-active-day-scene.is-entering .agenda-row:first-of-type {
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
-}
-
-#stage .sched-active-day-scene.is-entering .agenda-row:last-of-type {
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+@keyframes sched-list-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ПЕРЕРЫВ МЕЖДУ ПАРАМИ:

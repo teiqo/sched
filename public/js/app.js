@@ -987,9 +987,171 @@ function bellsHtml() {
   </div>`;
 }
 
-/* ---------- заглушки скремблера для совместимости ---------- */
-function cancelActiveScramble() {}
-function runTextScramble(sceneNode) {}
+/* ---------- дешифровка текста из случайных символов ---------- */
+
+const SCRAMBLE_CHARS = "абвгдежзийклмнопрстуфхцчшщ0123456789§#%&*+=/~";
+const PRESERVED_REGEX = /[\s.,:;–—\-/\\()0-9№#]/;
+
+let activeScrambleRaf = null;
+let activeScrambleNodes = [];
+
+function cancelActiveScramble() {
+  if (activeScrambleRaf !== null) {
+    cancelAnimationFrame(activeScrambleRaf);
+    activeScrambleRaf = null;
+  }
+  if (activeScrambleNodes.length > 0) {
+    for (let i = 0; i < activeScrambleNodes.length; i++) {
+      const item = activeScrambleNodes[i];
+      try {
+        if (item.node && item.node.isConnected) {
+          item.node.textContent = item.original;
+        }
+      } catch (_) {}
+    }
+    activeScrambleNodes = [];
+  }
+}
+
+function extractScrambleNodes(el) {
+  const nodes = [];
+  if (!el) return nodes;
+  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+  let n;
+  while ((n = walk.nextNode())) {
+    if (n.parentElement && n.parentElement.closest(".lesson-origin-mark, .lesson-swap-btn, .sched-add-pair-btn, svg, .agenda-break-chip")) continue;
+    const txt = n.textContent;
+    if (txt && txt.trim().length > 0) {
+      nodes.push({ node: n, original: txt, settled: false });
+    }
+  }
+  return nodes;
+}
+
+function runTextScramble(sceneNode) {
+  cancelActiveScramble();
+  if (!sceneNode) return;
+
+  const dayBlocks = sceneNode.querySelectorAll(".sched-day-block");
+  if (!dayBlocks.length) return;
+
+  const items = [];
+
+  dayBlocks.forEach((block, dayIdx) => {
+    // Анимируем только видимые блоки (активный день и первый последующий), экономя ресурсы
+    if (dayIdx > 1) return;
+
+    const baseHeadingDelay = dayIdx === 0 ? 20 : 200;
+    const baseRowDelay = dayIdx === 0 ? 60 : 240;
+    const rowStep = dayIdx === 0 ? 95 : 85;
+
+    // 1. Дешифровка заголовка дня
+    const headingEl = block.querySelector(".sched-day-heading h2");
+    if (headingEl) {
+      extractScrambleNodes(headingEl).forEach((nObj, nodeIdx) => {
+        items.push({
+          ...nObj,
+          startAt: baseHeadingDelay + nodeIdx * 60,
+          duration: 380,
+        });
+      });
+    }
+
+    // 2. Дешифровка строк пар (название предмета, кабинет, преподаватель)
+    // ВАЖНО: .agenda-break и его чип полностью исключены!
+    const rows = block.querySelectorAll(".agenda-row, #live-host, .sched-empty-day");
+    rows.forEach((row) => {
+      const rowI = parseInt(row.style.getPropertyValue("--row-i") || "0", 10);
+      const rowDelay = baseRowDelay + rowI * rowStep;
+
+      const titleEl = row.querySelector(".agenda-row-content strong, h3, strong");
+      if (titleEl) {
+        extractScrambleNodes(titleEl).forEach((nObj) => {
+          items.push({
+            ...nObj,
+            startAt: rowDelay,
+            duration: 380,
+          });
+        });
+      }
+
+      const metaEl = row.querySelector(".lesson-meta");
+      if (metaEl) {
+        extractScrambleNodes(metaEl).forEach((nObj) => {
+          items.push({
+            ...nObj,
+            startAt: rowDelay + 30,
+            duration: 350,
+          });
+        });
+      }
+    });
+  });
+
+  if (!items.length) return;
+
+  activeScrambleNodes = items;
+  const startTime = performance.now();
+  let lastRandomize = 0;
+  let randomPool = "";
+  for (let k = 0; k < 64; k++) {
+    randomPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+  }
+
+  function step(now) {
+    const elapsed = now - startTime;
+    let allDone = true;
+
+    // Пул случайных символов обновляется ~30 раз/сек для мягкого мерцания без стробоскопа
+    if (now - lastRandomize > 32) {
+      lastRandomize = now;
+      let newPool = "";
+      for (let k = 0; k < 64; k++) {
+        newPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+      }
+      randomPool = newPool;
+    }
+
+    for (let j = 0; j < items.length; j++) {
+      const item = items[j];
+      if (!item.node.isConnected) continue;
+
+      if (elapsed < item.startAt) {
+        allDone = false;
+        continue;
+      }
+
+      const p = Math.min(1, (elapsed - item.startAt) / item.duration);
+      if (p < 1) {
+        allDone = false;
+        const orig = item.original;
+        const len = orig.length;
+        let out = "";
+        for (let i = 0; i < len; i++) {
+          const ch = orig[i];
+          if (PRESERVED_REGEX.test(ch) || p >= i / len) {
+            out += ch;
+          } else {
+            out += randomPool[(i + j * 7) % randomPool.length];
+          }
+        }
+        item.node.textContent = out;
+      } else if (!item.settled) {
+        item.settled = true;
+        item.node.textContent = item.original;
+      }
+    }
+
+    if (!allDone) {
+      activeScrambleRaf = requestAnimationFrame(step);
+    } else {
+      activeScrambleRaf = null;
+      activeScrambleNodes = [];
+    }
+  }
+
+  activeScrambleRaf = requestAnimationFrame(step);
+}
 
 /* ---------- рендер ---------- */
 
