@@ -705,7 +705,7 @@ html.sched-page #root::-webkit-scrollbar,
 #stage .sched-active-day-scene.is-entering .live-lesson-card {
   animation: t-row-in var(--duration-fast, 0.4s)
     var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
-  animation-delay: var(--duration-stagger, 70ms) !important;
+  animation-delay: 0s !important;
   will-change: transform, opacity;
 }
 
@@ -2048,11 +2048,20 @@ body.is-dragging-pair {
   border: 1px solid var(--sched-separator);
   display: grid;
   gap: 10px;
-  transform: translate3d(0, 12px, 0);
-  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translate3d(0, calc(100% + 24px), 0);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sched-replace-backdrop.is-open .sched-replace-sheet {
   transform: translate3d(0, 0, 0);
+}
+.sched-replace-backdrop.is-closing {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.2s ease !important;
+}
+.sched-replace-backdrop.is-closing .sched-replace-sheet {
+  transform: translate3d(0, calc(100% + 32px), 0) !important;
+  transition: transform 0.22s cubic-bezier(0.32, 0, 0.67, 0) !important;
 }
 .sched-replace-head {
   display: grid;
@@ -3876,16 +3885,15 @@ a.sched-settings-row.sched-settings-link strong {
 
 /* --- интерактивные строки окон --- */
 .agenda-row.is-window-row {
-  cursor: pointer;
+  cursor: default !important;
   user-select: none;
   -webkit-user-select: none;
   transition: background 0.16s ease;
 }
-.agenda-row.is-window-row:hover {
-  background: color-mix(in srgb, var(--sched-blue, #0a84ff) 7%, transparent);
-}
+.agenda-row.is-window-row:hover,
 .agenda-row.is-window-row:active {
-  background: color-mix(in srgb, var(--sched-blue, #0a84ff) 12%, transparent);
+  background: transparent !important;
+  cursor: default !important;
 }
 .agenda-row.is-window-row:hover .lesson-swap-btn {
   opacity: 1;
@@ -4934,25 +4942,14 @@ a.sched-settings-row,
 }
 #stage .sched-active-day-scene.is-entering .live-lesson-card {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: var(--duration-stagger, 70ms) !important;
+  animation-delay: 0s !important;
 }
 #stage .sched-active-day-scene.is-entering .agenda-row {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: 0s !important;
 }
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) {
-  animation-delay: calc(var(--duration-stagger, 70ms) * 2);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) {
-  animation-delay: calc(var(--duration-stagger, 70ms) * 3);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) {
-  animation-delay: calc(var(--duration-stagger, 70ms) * 4);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) {
-  animation-delay: calc(var(--duration-stagger, 70ms) * 5);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 5) {
-  animation-delay: calc(var(--duration-stagger, 70ms) * 6);
+#stage .sched-active-day-scene.is-entering :is(.agenda-row, .agenda-row[data-row-n], .live-lesson-card, .agenda-break, .completed-lessons) {
+  animation-delay: 0s !important;
 }
 .sched-future-days {
   animation: none;
@@ -5044,7 +5041,7 @@ a.sched-settings-row,
 }
 :root #stage .agenda-row.is-window-row:hover,
 :root #stage .agenda-row.is-window-row:focus-visible {
-  background: var(--sched-window-hover) !important;
+  background: transparent !important;
 }
 .agenda-row.is-window-row:focus-visible,
 #brand:focus-visible,
@@ -5644,7 +5641,7 @@ a.sched-settings-row,
 /* Завершённые пары сегодня при входе в день — лёгкое появление блока */
 #stage .sched-active-day-scene.is-entering .completed-lessons {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: calc(var(--duration-stagger, 70ms) * 1) !important;
+  animation-delay: 0s !important;
 }
 #stage .sched-active-day-scene.is-entering .completed-lessons:not(.is-expanding) .agenda-row {
   animation: none !important;
@@ -6011,5 +6008,91 @@ a.sched-settings-row,
   font-size: 11px;
   color: var(--sched-secondary, #8e8e93);
   padding: 4px 6px;
+}
+
+/* Кнопка добавления пары снизу справа дня */
+.sched-day-block {
+  position: relative;
+}
+.sched-add-pair-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sched-surface);
+  border: 1px solid var(--sched-separator);
+  color: var(--sched-blue);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  z-index: 15;
+}
+.sched-add-pair-btn:hover {
+  transform: scale(1.08);
+  background: color-mix(in srgb, var(--sched-blue) 10%, var(--sched-surface));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.sched-add-pair-btn:active {
+  transform: scale(0.94);
+}
+.sched-add-pair-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Пунктирное выделение добавленной пары (как при «время сдвинули») */
+:root .agenda-row.is-pending-add {
+  outline: 3px dashed var(--sched-blue) !important;
+  outline-offset: 4px !important;
+  border-radius: 12px !important;
+  animation: sched-pulse-pending 2s ease-in-out infinite;
+}
+@keyframes sched-pulse-pending {
+  0%, 100% { outline-color: var(--sched-blue); }
+  50% { outline-color: color-mix(in srgb, var(--sched-blue) 45%, transparent); }
+}
+
+/* Превью понедельника в субботу и воскресенье */
+.sched-weekend-monday-preview {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--sched-separator);
+  display: grid;
+  gap: 12px;
+}
+.sched-weekend-monday-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+}
+.sched-weekend-monday-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sched-text);
+  font-size: 14px;
+}
+.sched-weekend-monday-title strong {
+  font-weight: 600;
+}
+.sched-weekend-monday-title span {
+  color: var(--sched-secondary);
+  font-size: 12px;
+}
+.sched-weekend-monday-count {
+  font-size: 12px;
+  color: var(--sched-secondary);
+  background: var(--sched-surface);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--sched-separator);
 }
 

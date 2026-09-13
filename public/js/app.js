@@ -132,6 +132,7 @@ var state = {
   showVacancies: true,
   showSelfStudy: true,
   editorMode: false,
+  pendingAddPair: null,
   parityMode: "auto",
   settingsOpen: false,
   nowOverride: null,
@@ -407,14 +408,41 @@ function visibleSlotsFor(d) {
   const preferences = state.editorMode
     ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
     : state;
-  /* У редактора отменённая пара — свободное место, поэтому рисуется окном.
-     Всем остальным показываем саму пару зачёркнутой и серой: видно, что именно
-     отменили, и есть за что нажать, чтобы вернуть как было. */
-  return slotsFor(d)
+  const dIso = iso(d);
+  let slots = slotsFor(d)
     .map((slot) => slot.cancelled && state.editorMode
       ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
       : slot)
     .filter((s) => s.cancelled || isSlotVisible(s, preferences));
+
+  if (state.pendingAddPair && state.pendingAddPair.dIso === dIso) {
+    const pending = state.pendingAddPair;
+    const existingIndex = slots.findIndex(s => s.n === pending.n);
+    const sat = d.getDay() === 6;
+    const times = sat ? TIMES[pending.n]?.sat : TIMES[pending.n]?.week;
+    const from = times ? times[0] : "08:30";
+    const to = times ? times[1] : "10:05";
+    const pendingSlot = {
+      n: pending.n,
+      from,
+      to,
+      subject: pending.subject,
+      teacher: pending.teacher || "",
+      room: pending.room || "",
+      window: false,
+      empty: false,
+      cancelled: false,
+      swapped: true,
+      pendingAdd: true,
+    };
+    if (existingIndex >= 0) {
+      slots[existingIndex] = { ...slots[existingIndex], ...pendingSlot };
+    } else {
+      slots.push(pendingSlot);
+      slots.sort((a, b) => a.n - b.n);
+    }
+  }
+  return slots;
 }
 
 /* Набор мест для переноса. Собирается так же, как у редактора: окна, вакансии и
@@ -630,6 +658,7 @@ function rowHtml(slot, live, dIso) {
   if (slot.tag) cls.push("is-subgroup-row");
   if (slot.cancelled) cls.push("is-cancelled");
   if (slot.swapped) cls.push("is-swapped");
+  if (slot.pendingAdd) cls.push("is-pending-add");
 
   const time = `<div class="agenda-row-time"><span class="agenda-row-num">${slot.n}</span><time>${slot.from}<span>${slot.to}</span></time></div>`;
 
@@ -651,9 +680,11 @@ function rowHtml(slot, live, dIso) {
 
   const swapMark = slot.cancelled
     ? `<span class="lesson-origin-mark is-swap">отменена</span>`
-    : slot.swapped
-      ? `<span class="lesson-origin-mark is-swap">${changeLabel(slot)}</span>`
-      : "";
+    : slot.pendingAdd
+      ? `<span class="lesson-origin-mark is-swap">новая пара</span>`
+      : slot.swapped
+        ? `<span class="lesson-origin-mark is-swap">${changeLabel(slot)}</span>`
+        : "";
 
   return `<div class="${cls.join(" ")}" data-row-n="${slot.n}">${time}<div class="agenda-row-content">
     <strong>${escapeHtml(slot.subject)}${swapMark}${mark}</strong>
@@ -799,11 +830,43 @@ function renderSlotRuns(slots, live, dIso) {
     .join("");
 }
 
+function addPairButtonHtml(dIso) {
+  if (!dIso) return "";
+  return `<button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>`;
+}
+
+function mondayPreviewHtml(d) {
+  const isWeekend = d.getDay() === 6 || d.getDay() === 0;
+  if (!isWeekend) return "";
+  const nextMonday = addDays(d, d.getDay() === 6 ? 2 : 1);
+  const monIso = iso(nextMonday);
+  const monSlots = visibleSlotsFor(nextMonday);
+  const monLessons = monSlots.filter(s => !s.window);
+  const monRows = state.windows ? monSlots : monLessons;
+  const p = parityLabel(parityOf(nextMonday));
+  return `<div class="sched-weekend-monday-preview">
+    <div class="sched-weekend-monday-head">
+      <div class="sched-weekend-monday-title">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <strong>пары на понедельник</strong>
+        <span>${nextMonday.getDate()} ${MONTHS[nextMonday.getMonth()]} · ${p} неделя</span>
+      </div>
+      <span class="sched-weekend-monday-count">${monLessons.length ? `${monLessons.length} ${plural(monLessons.length, "пара", "пары", "пар")}` : "пар нет"}</span>
+    </div>
+    ${monLessons.length || (state.windows && monRows.length)
+      ? `<div class="agenda-list">${withBreaksHtml(monRows, null, monIso)}</div>`
+      : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>в понедельник пар нет</strong></div>`
+    }
+  </div>`;
+}
+
 function dayHtml(d, withLive, future) {
   const dIso = iso(d);
   const all = visibleSlotsFor(d);
   const lessons = all.filter((s) => !s.window);
-  const rows = state.editorMode || state.windows ? all : lessons;
+  const rows = state.windows ? all : lessons;
   const live = withLive ? liveState(d) : null;
   const count = lessons.length;
   const today = sameDay(d, startOfDay(currentDate()));
@@ -832,7 +895,7 @@ function dayHtml(d, withLive, future) {
     body = `${earlierHtml}${liveHost}`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${withLive && !future ? editorToolbarHtml(dIso) : ""}${body}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}${mondayPreviewHtml(d)}${addPairButtonHtml(dIso)}</div>`;
 }
 
 function weekHtml() {
@@ -1212,14 +1275,12 @@ function renderTab() {
     strip.style.display = "none";
     auxView.hidden = false;
     auxView.innerHTML = bellsHtml();
-    $("#editor-btn")?.classList.add("is-hidden-tab");
   } else {
     state.tab = "schedule";
     scheduleView.style.display = "";
     strip.style.display = "";
     auxView.hidden = true;
     auxView.innerHTML = "";
-    $("#editor-btn")?.classList.remove("is-hidden-tab");
   }
   applyFlags();
 }
@@ -1242,6 +1303,7 @@ function render(direction) {
   sceneRevision += 1;
   daySwipeController?.invalidate?.();
   updateDayRevertBtn();
+  renderPendingAddBar();
   save();
   window.requestAnimationFrame(checkCompactHeading);
 }
@@ -2060,7 +2122,7 @@ function bindEvents() {
   arrow($("#next-week"), 7);
 
   $("#today-btn").addEventListener("click", () => {
-    const d = defaultSelectedDate();
+    const d = startOfDay(currentDate());
     const dir = d > state.selected ? "forward" : d < state.selected ? "backward" : null;
     selectDate(d, dir);
   });
@@ -2141,10 +2203,6 @@ function bindEvents() {
       save();
       render();
     });
-  });
-  $("#editor-btn")?.addEventListener("click", () => {
-    if (state.editorMode) cancelEditorMode();
-    else startEditorMode();
   });
 
   $("#settings-trigger").addEventListener("click", (e) => {
@@ -2346,12 +2404,6 @@ function applyFlags() {
   if (ss) ss.setAttribute("aria-pressed", state.scope === "week" ? "true" : "false");
   $("#vacancies-switch")?.setAttribute("aria-pressed", String(state.showVacancies));
   $("#self-study-switch")?.setAttribute("aria-pressed", String(state.showSelfStudy));
-  const editorButton = $("#editor-btn");
-  if (editorButton) {
-    editorButton.setAttribute("aria-pressed", String(state.editorMode));
-    editorButton.classList.toggle("is-active", state.editorMode);
-    editorButton.title = state.editorMode ? "выйти из редактора" : "режим редактора";
-  }
   const li = $("#light-hint");
   if (li) li.textContent = state.light ? "плоские и компактные пары" : "обычные карточки";
   const sh = $("#scope-hint");
@@ -4194,21 +4246,47 @@ function dayRevertHtml(dIso) {
     </button>`;
 }
 
-function closeMoveSheet() {
-  document.getElementById("move-backdrop")?.remove();
+function closeSheetAnimated(elOrId, onComplete, immediate = false) {
+  const backdrop = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
+  if (!backdrop) {
+    if (onComplete) onComplete();
+    return;
+  }
+  if (immediate) {
+    backdrop.remove();
+    if (onComplete) onComplete();
+    return;
+  }
+  if (backdrop.classList.contains("is-closing")) return;
+  backdrop.classList.add("is-closing");
+  backdrop.classList.remove("is-open");
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    backdrop.remove();
+    if (onComplete) onComplete();
+  };
+  backdrop.addEventListener("transitionend", finish, { once: true });
+  setTimeout(finish, 240);
+}
+
+function closeMoveSheet(onComplete, immediate = false) {
+  closeSheetAnimated("move-backdrop", onComplete, immediate);
 }
 
 function openMoveSheet(dIso, n) {
   document.getElementById("sched-toast-container")?.replaceChildren();
-  closeMoveSheet();
-  closeSwapSheet();
+  closeMoveSheet(null, true);
+  closeSwapSheet(null, true);
+  closeSuggestSheet(null, true);
   const slots = slotsFor(dateFromIso(dIso));
   const source = slots.find(slot => slot.n === n);
   if (!source || source.window || source.cancelled) return;
   const pairs = slots.filter(slot => !slot.window && !slot.cancelled);
   const backdrop = document.createElement("div");
   backdrop.id = "move-backdrop";
-  backdrop.className = "sched-replace-backdrop is-open";
+  backdrop.className = "sched-replace-backdrop";
   backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="move-title">
     <div class="sched-replace-head"><strong id="move-title">куда перенести пару?</strong><span>${escapeHtml(source.subject)} · ${n} пара · ${escapeHtml(dateLabel(dateFromIso(dIso)))}</span></div>
     <p class="sched-move-help">выбери время. в окне пара займёт свободное место; занятые пары поменяются местами.</p>
@@ -4222,11 +4300,13 @@ function openMoveSheet(dIso, n) {
     ${swapAccessHint()}
   </div>`;
   document.body.appendChild(backdrop);
+  requestAnimationFrame(() => backdrop.classList.add("is-open"));
   const close = () => {
-    closeMoveSheet();
-    /* Вне редактора ручка другая, и старый селектор терял фокус в никуда. */
-    const handle = state.editorMode ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
-    document.querySelector(`${handle}[data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
+    closeMoveSheet(() => {
+      /* Вне редактора ручка другая, и старый селектор терял фокус в никуда. */
+      const handle = state.editorMode ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
+      document.querySelector(`${handle}[data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
+    });
   };
   backdrop.addEventListener("click", event => {
     const target = event.target.closest("[data-move-to]");
@@ -4258,8 +4338,8 @@ var SUGGEST_OPTIONS = [
   { id: "move", mark: "🕐", title: "время сдвинули", hint: "пара идёт на другом месте в дне" },
 ];
 
-function closeSuggestSheet() {
-  document.getElementById("suggest-backdrop")?.remove();
+function closeSuggestSheet(onComplete, immediate = false) {
+  closeSheetAnimated("suggest-backdrop", onComplete, immediate);
 }
 
 /* Вход в предложку — отдельная кнопка, а не вся строка: тап по строке
@@ -4268,7 +4348,7 @@ function closeSuggestSheet() {
 function suggestButtonHtml(dIso, slot) {
   if (!dIso || state.editorMode) return "";
   const isEmpty = Boolean(slot.window || slot.empty);
-  /* В пус��ом окне предлагать нечего — кнопка нужна только чтобы откатить изменение. */
+  /* В пустом окне предлагать нечего — кнопка нужна только чтобы откатить изменение. */
   if (isEmpty && !swapFor(dIso, slot.n)) return "";
   const label = isEmpty
     ? "изменение на " + slot.n + " паре, нажми, чтобы вернуть как было"
@@ -4303,24 +4383,25 @@ function suggestSend(dIso, n, patch) {
     } else {
       basicsTourSwapOverride = null;
     }
-    closeSuggestSheet();
     render();
-    updateBasicsTourSpotlight();
+    closeSuggestSheet(() => {
+      updateBasicsTourSpotlight();
+    });
     return;
   }
   const ok = patch === null
     ? revertSwapOperation(dIso, n)
     : setSwap(dIso, n, suggestEntry(dIso, n, patch));
   if (!ok) return;
-  closeSuggestSheet();
   render();
+  closeSuggestSheet();
 }
 
 function openSuggestSheet(dIso, n) {
   document.getElementById("sched-toast-container")?.replaceChildren();
-  closeSuggestSheet();
-  closeSwapSheet();
-  closeMoveSheet();
+  closeSuggestSheet(null, true);
+  closeSwapSheet(null, true);
+  closeMoveSheet(null, true);
   const d = dateFromIso(dIso);
   const slot = slotsFor(d).find(item => item.n === n);
   if (!slot) return;
@@ -4457,8 +4538,9 @@ function openSuggestSheet(dIso, n) {
       /* «время сдвинули» — сразу та же доска с окнами, что в редакторе.
          Списком мест подстраховываемся, если строки на экране нет. */
       else if (id === "move") {
-        closeSuggestSheet();
-        if (!pairDragController?.beginPick(dIso, n)) openMoveSheet(dIso, n);
+        closeSuggestSheet(() => {
+          if (!pairDragController?.beginPick(dIso, n)) openMoveSheet(dIso, n);
+        });
       }
       else if (id === "subject") renderSubject();
       else renderField(id);
@@ -4487,21 +4569,181 @@ function openSuggestSheet(dIso, n) {
   renderRoot();
 }
 
+function renderPendingAddBar() {
+  document.getElementById("pending-add-bar")?.remove();
+  if (!state.pendingAddPair) return;
+  const p = state.pendingAddPair;
+  const bar = document.createElement("div");
+  bar.id = "pending-add-bar";
+  bar.className = "sched-pick-bar";
+  bar.innerHTML = `<p class="sched-pick-hint">добавлена ${p.n}-я пара: ${escapeHtml(p.subject)} · подтверди или отмени</p>
+    <div class="sched-pick-actions">
+      <button class="sched-pick-btn is-cancel" type="button" data-pending-act="cancel">отменить</button>
+      <button class="sched-pick-btn is-save" type="button" data-pending-act="confirm">подтвердить</button>
+    </div>`;
+  document.body.appendChild(bar);
+  requestAnimationFrame(() => bar.classList.add("is-open"));
+}
+
+function openAddPairSheet(dIso) {
+  document.getElementById("sched-toast-container")?.replaceChildren();
+  closeSuggestSheet(null, true);
+  closeSwapSheet(null, true);
+  closeMoveSheet(null, true);
+  closeSheetAnimated("add-pair-backdrop", null, true);
+
+  const d = dateFromIso(dIso);
+  const slots = slotsFor(d);
+  const backdrop = document.createElement("div");
+  backdrop.id = "add-pair-backdrop";
+  backdrop.className = "sched-replace-backdrop";
+
+  const options = ['<option value="">выбери предмет из списка</option>'].concat(subjectCatalog().map(item =>
+    `<option value="${escapeHtml(item.subject)}" data-teacher="${escapeHtml(item.teacher)}" data-room="${escapeHtml(item.room)}">${escapeHtml(item.subject)}${item.teacher ? " · " + escapeHtml(item.teacher) : ""}</option>`)).join("");
+
+  const numOptions = [1, 2, 3, 4, 5, 6].map(num => {
+    const existing = slots.find(s => s.n === num);
+    const label = existing && !existing.window && !existing.cancelled
+      ? `${num} пара · занято (${existing.subject})`
+      : `${num} пара · свободно`;
+    return `<option value="${num}">${label}</option>`;
+  }).join("");
+
+  backdrop.innerHTML = `<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="add-pair-title">
+    <div class="sched-replace-head">
+      <strong id="add-pair-title">добавить пару</strong>
+      <span>${escapeHtml(dateLabel(d))} · ${parityLabel(parityOf(d))} неделя</span>
+    </div>
+    <label class="sched-replace-field">
+      <span>номер пары</span>
+      <div class="sched-replace-select">
+        <select id="add-pair-num">${numOptions}</select>
+      </div>
+    </label>
+    <label class="sched-replace-field">
+      <span>предмет из расписания</span>
+      <div class="sched-replace-select">
+        <select id="add-pair-catalog">${options}</select>
+      </div>
+    </label>
+    <label class="sched-replace-field">
+      <span>или свой предмет</span>
+      <input id="add-pair-custom" type="text" maxlength="120" placeholder="название предмета" />
+    </label>
+    <div class="sched-replace-meta-grid">
+      <label class="sched-replace-field">
+        <span>преподаватель</span>
+        <input id="add-pair-teacher" type="text" maxlength="120" placeholder="фамилия" />
+      </label>
+      <label class="sched-replace-field">
+        <span>аудитория *</span>
+        <input id="add-pair-room" type="text" maxlength="40" placeholder="номер" />
+      </label>
+    </div>
+    <div class="sched-replace-actions">
+      <button class="is-primary" type="button" data-add-pair-send>добавить</button>
+      <button type="button" data-add-pair-close>отмена</button>
+    </div>
+  </div>`;
+  document.body.appendChild(backdrop);
+  const sheet = backdrop.firstElementChild;
+  requestAnimationFrame(() => backdrop.classList.add("is-open"));
+
+  const picker = sheet.querySelector("#add-pair-catalog");
+  const custom = sheet.querySelector("#add-pair-custom");
+  const teacherField = sheet.querySelector("#add-pair-teacher");
+  const roomField = sheet.querySelector("#add-pair-room");
+
+  let autoFilled = false;
+  picker?.addEventListener("change", () => {
+    const chosen = picker.options[picker.selectedIndex];
+    if (!picker.value || !chosen) return;
+    if (custom) custom.value = "";
+    if (teacherField) teacherField.value = chosen.dataset.teacher || "";
+    if (roomField) roomField.value = chosen.dataset.room || "";
+    autoFilled = true;
+  });
+
+  custom?.addEventListener("input", () => {
+    if (!custom.value.trim()) return;
+    if (picker?.value) picker.value = "";
+    if (autoFilled) {
+      if (teacherField) teacherField.value = "";
+      if (roomField) roomField.value = "";
+      autoFilled = false;
+    }
+  });
+
+  const send = () => {
+    const n = Number(sheet.querySelector("#add-pair-num")?.value || 1);
+    const chosen = picker?.options[picker.selectedIndex];
+    const subj = (custom?.value || picker?.value || "").trim().slice(0, 120);
+    const teacher = (teacherField?.value || chosen?.dataset.teacher || "").trim().slice(0, 120);
+    const room = (roomField?.value || chosen?.dataset.room || "").trim().slice(0, 40);
+
+    if (!subj) { toast("выбери или впиши предмет"); return; }
+    if (!room) { toast("укажи аудиторию"); roomField?.focus(); return; }
+
+    state.pendingAddPair = { dIso, n, subject: subj, teacher, room };
+    render();
+    closeSheetAnimated(backdrop);
+  };
+
+  backdrop.addEventListener("click", event => {
+    if (event.target === backdrop || event.target.closest("[data-add-pair-close]")) {
+      closeSheetAnimated(backdrop);
+      return;
+    }
+    if (event.target.closest("[data-add-pair-send]")) {
+      send();
+    }
+  });
+
+  backdrop.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.stopPropagation(); closeSheetAnimated(backdrop); return; }
+    if (event.key === "Enter" && event.target.matches("input")) {
+      event.preventDefault();
+      send();
+    }
+  });
+}
+
 /* Базовое расписание лежит в slotsForBase, а здесь накладываются замены. */
 function slotsFor(d) {
-  const list = slotsForBase(d);
-  if (!list.length) return list;
+  const list = slotsForBase(d).slice();
   const map = activeSwapMap();
   const dIso = iso(d);
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   let hasAny = false;
   for (const key in map) {
-    if (key.indexOf(prefix) === 0) {
+    if (key.indexOf(prefix) === 0 && map[key] && !map[key].deleted) {
       hasAny = true;
       break;
     }
   }
   if (!hasAny) return list;
+  const sat = d.getDay() === 6;
+  const occupiedNums = new Set(list.map(s => s.n));
+  for (let num = 1; num <= 6; num++) {
+    if (!occupiedNums.has(num)) {
+      const sw = map[swapKey(dIso, num)];
+      if (sw && !sw.deleted) {
+        const times = sat ? TIMES[num]?.sat : TIMES[num]?.week;
+        list.push({
+          n: num,
+          from: times ? times[0] : "08:30",
+          to: times ? times[1] : "10:05",
+          subject: "",
+          self: false,
+          window: true,
+          empty: true,
+          teacher: null,
+          room: null,
+        });
+      }
+    }
+  }
+  list.sort((a, b) => a.n - b.n);
   return list.map((slot) => {
     const sw = map[swapKey(dIso, slot.n)];
     if (!sw || sw.deleted) return slot;
@@ -4617,11 +4859,8 @@ function dateFromIso(dIso) {
   return startOfDay(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
 }
 
-function closeSwapSheet() {
-  const backdrop = document.getElementById("swap-backdrop");
-  if (!backdrop) return;
-  backdrop.classList.remove("is-open");
-  backdrop.remove();
+function closeSwapSheet(onComplete, immediate = false) {
+  closeSheetAnimated("swap-backdrop", onComplete, immediate);
 }
 
 /* Каталог предметов группы: предмет + самые частые преподаватель и аудитория. */
@@ -4660,7 +4899,9 @@ function subjectCatalog() {
 
 function openSwapSheet(dIso, n) {
   document.getElementById("sched-toast-container")?.replaceChildren();
-  closeSwapSheet();
+  closeSwapSheet(null, true);
+  closeSuggestSheet(null, true);
+  closeMoveSheet(null, true);
   const d = dateFromIso(dIso);
   const slot = slotsFor(d).find((s) => s.n === n) || null;
   const sw = swapFor(dIso, n) || {};
@@ -4918,7 +5159,14 @@ var swapDragSuppressUntil = 0;
   const scene = document.getElementById("scene");
   if (!scene) return;
   scene.addEventListener("click", e => {
-    if (state.editorMode || pairDragActive || Date.now() < swapDragSuppressUntil) return;
+    if (pairDragActive || Date.now() < swapDragSuppressUntil) return;
+    const addBtn = e.target.closest('.sched-add-pair-btn[data-act="add-pair"]');
+    if (addBtn && addBtn.dataset.date) {
+      e.preventDefault();
+      e.stopPropagation();
+      openAddPairSheet(addBtn.dataset.date);
+      return;
+    }
     const button = e.target.closest('.lesson-suggest-btn[data-act="suggest"]');
     if (!button || !button.dataset.date) return;
     e.preventDefault();
@@ -4926,6 +5174,34 @@ var swapDragSuppressUntil = 0;
     openSuggestSheet(button.dataset.date, Number(button.dataset.n));
   });
 })();
+
+document.addEventListener("click", e => {
+  const pendingAct = e.target.closest("[data-pending-act]");
+  if (!pendingAct) return;
+  const act = pendingAct.dataset.pendingAct;
+  if (act === "cancel") {
+    state.pendingAddPair = null;
+    const bar = document.getElementById("pending-add-bar");
+    if (bar) {
+      bar.classList.remove("is-open");
+      setTimeout(() => bar.remove(), 200);
+    }
+    render();
+  } else if (act === "confirm") {
+    if (state.pendingAddPair) {
+      const { dIso, n, subject, teacher, room } = state.pendingAddPair;
+      state.pendingAddPair = null;
+      const bar = document.getElementById("pending-add-bar");
+      if (bar) {
+        bar.classList.remove("is-open");
+        setTimeout(() => bar.remove(), 200);
+      }
+      setSwap(dIso, n, { subject, teacher, room, moved: true, self: true });
+      render();
+      toast("пара добавлена");
+    }
+  }
+});
 
 /* Shared movement controller for all lesson card types. */
 var pairDragController = bindPairDrag({

@@ -57,10 +57,10 @@
 :root .sched-drag-board .lesson-swap-btn { visibility: hidden; }
 :root .is-drag-float.agenda-row, :root .is-drag-float.live-lesson-card {
   position: fixed !important; z-index: 900; box-sizing: border-box; margin: 0 !important;
-  pointer-events: none; visibility: visible; opacity: 1; transform: scale(.975) !important;
+  pointer-events: none; visibility: visible; opacity: 1; transform: none !important;
   transform-origin: center center !important;
   animation: none !important; transition: none !important; max-width: 100vw;
-  border-radius: 12px; box-shadow: 0 2px 6px #0001, 0 12px 30px #0002;
+  border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
 }
 :root .is-drag-float .lesson-swap-btn { display: grid !important; opacity: .7; }
 :root .is-drag-float .agenda-row-content { padding-right: 38px; }
@@ -277,12 +277,15 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 #stage .sched-active-day-scene.is-entering .agenda-row[data-row-n] {
   animation: sched-pair-down-in var(--duration-fast,.4s) var(--ease-smooth-out) both !important;
 }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="1"] { animation-delay: 50ms !important; }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="2"] { animation-delay: 110ms !important; }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="3"] { animation-delay: 170ms !important; }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="4"] { animation-delay: 230ms !important; }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="5"] { animation-delay: 290ms !important; }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n="6"] { animation-delay: 350ms !important; }
+#stage .sched-active-day-scene.is-entering :is(.agenda-row, .agenda-row[data-row-n], .live-lesson-card, .agenda-break) {
+  animation-delay: 0s !important;
+}
+
+/* При перемещении по рулетке или скраббинге задержки полностью отключаются */
+:is(.is-date-scrubbing, .is-date-settling, #strip.is-scrubbing, #scene.is-date-scrubbing, body.is-scrubbing) #stage .sched-active-day-scene.is-entering :is(.agenda-row, .live-lesson-card, .agenda-break, .t-stagger-line) {
+  animation-delay: 0s !important;
+  animation-duration: 0.16s !important;
+}
 #stage .sched-active-day-scene.is-entering .agenda-break {
   animation: sched-break-fade-in .22s ease-out both !important;
 }
@@ -863,7 +866,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
    ========================================================================== */
 #stage .sched-active-day-scene.is-entering
   .sched-day-block > .agenda-list > .agenda-row:first-child {
-  animation-delay: 50ms !important;
+  animation-delay: 0s !important;
 }
 
 /* Карточка «далее»: fixes.css оставлял кнопке flex-basis:44px и отрицательный
