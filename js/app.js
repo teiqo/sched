@@ -4472,6 +4472,8 @@ function openSuggestSheet(dIso, n) {
   const d = dateFromIso(dIso);
   const slot = slotsFor(d).find(item => item.n === n);
   if (!slot) return;
+  const baseSlot = slotsForBase(d).find(item => item.n === n);
+  const isBaseWindow = !baseSlot || baseSlot.window || baseSlot.empty || !baseSlot.subject;
   const hasSwap = Boolean(swapFor(dIso, n));
   const isEmptySlot = Boolean(slot.window || slot.empty);
   /* В пустом окне без замен предлагать нечего. */
@@ -4496,7 +4498,10 @@ function openSuggestSheet(dIso, n) {
   const renderRoot = () => {
     const currentSwap = swapFor(dIso, n);
     const isCancelledOnce = Boolean(currentSwap && currentSwap.cancelled && !currentSwap.hidden);
-    const list = isEmptySlot ? [] : SUGGEST_OPTIONS.map(item => {
+    const list = isEmptySlot ? [] : SUGGEST_OPTIONS.filter(item => {
+      if (item.id === "cancelled" && isBaseWindow) return false;
+      return true;
+    }).map(item => {
       if (item.id === "cancelled" && isCancelledOnce) {
         return {
           ...item,
@@ -4996,8 +5001,10 @@ function openSwapSheet(dIso, n) {
   closeMoveSheet(null, true);
   const d = dateFromIso(dIso);
   const slot = slotsFor(d).find((s) => s.n === n) || null;
+  const baseSlot = slotsForBase(d).find((s) => s.n === n) || null;
+  const isBaseWindow = !baseSlot || baseSlot.window || baseSlot.empty || !baseSlot.subject;
   const sw = swapFor(dIso, n) || {};
-  const isWindowSlot = Boolean(slot && (slot.window || slot.empty));
+  const isWindowSlot = Boolean(slot && (slot.window || slot.empty)) || isBaseWindow;
   const sheetTitle = isWindowSlot && !sw.subject ? "добавить пару в окно" : "замена пары";
   const subject = sw.subject || (slot && !slot.window ? slot.subject || "" : "");
   const teacher = sw.teacher !== undefined ? sw.teacher : (slot && slot.teacher) || "";
@@ -5977,6 +5984,7 @@ function decodeSwapEntries(data) {
 function pushSessionToken() { return tgSessionVerified && tgSession?.session_token || ""; }
 var pushDeliveryChain = Promise.resolve();
 function queueBotEvent(event) {
+  if (typeof window !== "undefined" && window.__testOnBotEvent) window.__testOnBotEvent(event);
   const identity = tgSession?.id;
   const task = pushDeliveryChain.then(async () => {
     if (LOCAL_PREVIEW) return false;
@@ -6009,10 +6017,11 @@ function botDate(dIso) {
 }
 function botLesson(slot) {
   const value = slot || {};
-  if (value.makeWindow || value.window || value.empty) return "окно";
-  const subject = botHtml(value.subject || "пара без названия");
-  const meta = [value.teacher, value.room].filter(Boolean).map(botHtml).join(" · ");
-  return meta ? `${subject}\n<blockquote>${meta}</blockquote>` : subject;
+  if (value.makeWindow || value.window || value.empty || !value.subject) return "";
+  const subject = botHtml(value.subject);
+  const metaParts = [value.teacher, value.room ? `ауд. ${value.room}` : ""].filter(Boolean);
+  const meta = metaParts.map(botHtml).join(" · ");
+  return meta ? `${subject} · ${meta}` : subject;
 }
 function buildDayTablePayload(dIso) {
   try {
@@ -6020,19 +6029,34 @@ function buildDayTablePayload(dIso) {
     if (!d) return null;
     const dayName = dayEntry(d).name.toLowerCase();
     const allSlots = slotsFor(d);
-    const maxN = allSlots.reduce((max, s) => Math.max(max, s.n || 0), 0) || 4;
     const sat = d.getDay() === 6;
+
+    // Релевантные пары дня: реальные уроки или отменённые уроки (без скрытых!)
+    const activeSlots = allSlots.filter(s => !s.hidden && (!s.window || s.cancelled) && !s.empty && s.subject);
+    if (!activeSlots.length) {
+      return {
+        day_name: `${dayName}, ${d.getDate()} ${MONTHS[d.getMonth()]}`,
+        rows: [],
+      };
+    }
+
+    const minN = Math.min(...activeSlots.map(s => s.n));
+    const maxN = Math.max(...activeSlots.map(s => s.n));
     const rows = [];
-    for (let n = 1; n <= Math.min(Math.max(maxN, 4), 7); n++) {
+
+    for (let n = minN; n <= maxN; n++) {
       const slot = allSlots.find(s => s.n === n);
       const times = sat ? TIMES[n]?.sat : TIMES[n]?.week;
       const timeStr = times ? `${times[0]}–${times[1]}` : (slot?.from && slot?.to ? `${slot.from}–${slot.to}` : "");
+
       if (!slot || slot.window || slot.empty || slot.hidden) {
+        // Окно между парами (например, между 2-й и 4-й парой)
         rows.push({
           n,
-          subject: "—",
+          subject: "окно",
           teacher_room: "—",
           time: timeStr,
+          window: true,
         });
       } else {
         const trParts = [];
@@ -6043,9 +6067,11 @@ function buildDayTablePayload(dIso) {
           subject: slot.subject || "—",
           teacher_room: trParts.join(", ") || "—",
           time: timeStr,
+          cancelled: Boolean(slot.cancelled),
         });
       }
     }
+
     return {
       day_name: `${dayName}, ${d.getDate()} ${MONTHS[d.getMonth()]}`,
       rows,
@@ -6056,10 +6082,14 @@ function buildDayTablePayload(dIso) {
 }
 
 function notifyCloudEvent(path, body) {
-  if (LOCAL_PREVIEW || !body || !window.SCHED_NOTIFY_URL) return;
+  if ((LOCAL_PREVIEW && !window.__FORCE_NOTIFY_FOR_TEST__) || !body || !window.SCHED_NOTIFY_URL) return;
   const section = String(path).split("/")[0];
   const type = section === CLOUD_PATHS.swaps ? "swap" : section === CLOUD_PATHS.pending ? "pending" : null;
   if (!type) return;
+
+  // Не спамить при скрытии пары (пользователь запросил не писать про то, что пару скрыли)
+  if (body.hidden) return;
+
   const key = decodeSwapKey(String(path).slice(section.length + 1));
   const stamp = body.updatedAt || body.createdAt || 0;
   const parts = key.split("|");
@@ -6069,30 +6099,70 @@ function notifyCloudEvent(path, body) {
   const n = Number(when[1]) || 0;
   let original = null;
   try { original = slotsForBase(dateFromIso(dIso)).find(slot => slot.n === n) || null; } catch (_) {}
+  const origLesson = original && !original.window && !original.empty && original.subject ? original : null;
 
   let verb;
   if (type === "pending") {
-    verb = body.hidden ? "предложили скрыть" : body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
+    verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : body.deleted ? "предложили откатить изменения" : (!origLesson ? "предложили добавить" : "предложили заменить");
   } else if (body.makeWindow) verb = "сделали окном";
   else if (body.deleted) verb = "откатили изменения";
-  else if (body.hidden) verb = "скрыли";
   else if (body.cancelled) verb = "отменили";
   else if (body.moved) verb = "перенесли";
-  else verb = "заменили";
+  else verb = !origLesson ? "добавили" : "заменили";
 
   let text;
   if (body.deleted) {
-    text = `<b>${botHtml(botDate(dIso))} откатили изменения (${n} пара)</b>`;
+    const action = type === "pending" ? "предложили откатить изменения" : "откатили изменения";
+    text = `<b>${botHtml(botDate(dIso))} ${action} (${n} пара)</b>`;
+  } else if (body.cancelled) {
+    if (origLesson) {
+      const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+      const metaStr = origMeta ? ` · ${origMeta}` : "";
+      const action = type === "pending" ? "предложили отменить" : "отменили";
+      text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n<s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+    } else {
+      // Исходно в этом слоте пары не было (окно) — не пишем «отменили окно» и не шлём уведомление!
+      return;
+    }
+  } else if (body.makeWindow) {
+    if (origLesson) {
+      const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+      const metaStr = origMeta ? ` · ${origMeta}` : "";
+      text = `<b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\nбыло: <s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+    } else {
+      return;
+    }
+  } else if (body.moved) {
+    const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
+    const newStr = newMeta ? ` · ${newMeta}` : "";
+    const moveFromStr = body.movedFrom ? ` (с ${body.movedFrom} пары)` : "";
+    const action = type === "pending" ? "предложили перенести" : "перенесли";
+    text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
   } else {
-    text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>`;
-    if (body.cancelled) {
-      text += original ? `\n\n<s>${botLesson(original)}</s>` : "";
-    } else if (body) {
-      text += `\n\n${botLesson(body)}`;
+    // Замена или добавление пары
+    const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
+    const newStr = newMeta ? ` · ${newMeta}` : "";
+    if (origLesson && origLesson.subject !== body.subject) {
+      const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+      const origStr = origMeta ? ` · ${origMeta}` : "";
+      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\nвместо: <s>${botHtml(origLesson.subject)}${botHtml(origStr)}</s>\nстало: ${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+    } else {
+      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
     }
   }
   const table = buildDayTablePayload(dIso);
   queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group, table }).catch(reportPushError);
+}
+
+if (typeof window !== "undefined") {
+  window.buildDayTablePayload = buildDayTablePayload;
+  window.notifyCloudEvent = notifyCloudEvent;
+  window.queueBotEvent = queueBotEvent;
+  window.openSwapSheet = openSwapSheet;
+  window.openSuggestSheet = openSuggestSheet;
+  window.closeSwapSheet = closeSwapSheet;
+  window.closeSuggestSheet = closeSuggestSheet;
+  window.encodeSwapKey = encodeSwapKey;
 }
 
 /* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
@@ -6295,43 +6365,42 @@ async function publishSwapBatch(entries, label = "изменены пары") {
   saveSwaps();
   if (ok && !anonymous) {
     const list = Object.entries(entries);
-    if (list.length === 1) {
-      const [key, entry] = list[0];
+    const visibleList = list.filter(([_, v]) => !v.hidden);
+    if (visibleList.length === 1) {
+      const [key, entry] = visibleList[0];
       notifyCloudEvent(section + "/" + encodeSwapKey(key), {
         ...entry, by: identity, byName: tgDisplayName(tgSession),
       });
-    } else {
-      const [key, entry] = list[0];
+    } else if (visibleList.length > 1) {
+      const [key, entry] = visibleList[0];
       const group = key.split("|")[0], date = (key.split("|")[1] || "").split(":")[0];
       const pending = section === CLOUD_PATHS.pending;
-      const allDeleted = list.every(([_, v]) => v.deleted);
-      const allHidden = list.every(([_, v]) => v.hidden);
-      const allCancelled = list.every(([_, v]) => v.cancelled);
-      const allMoved = list.every(([_, v]) => v.moved);
+      const allDeleted = visibleList.every(([_, v]) => v.deleted);
+      const allCancelled = visibleList.every(([_, v]) => v.cancelled);
+      const allMoved = visibleList.every(([_, v]) => v.moved);
       const action = allDeleted
         ? (pending ? "предложили откатить изменения" : "откатили изменения")
-        : allHidden
-          ? (pending ? "предложили скрыть пары" : "скрыли пары")
-          : allCancelled
-            ? (pending ? "предложили отменить пары" : "отменили пары")
-            : allMoved
-              ? (pending ? "предложили перенести пары" : "перенесли пары")
-              : (pending ? "предложили изменить пары" : "изменили пары");
+        : allCancelled
+          ? (pending ? "предложили отменить пары" : "отменили пары")
+          : allMoved
+            ? (pending ? "предложили перенести пары" : "перенесли пары")
+            : (pending ? "предложили изменить пары" : "изменили пары");
 
       let text;
       if (allDeleted) {
-        const pairNums = list.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
+        const pairNums = visibleList.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
         const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
         text = `<b>${botHtml(botDate(date))} ${action} (${pairsLabel})</b>`;
       } else {
-        const rows = list.map(([k, value]) => {
+        const rows = visibleList.map(([k, value]) => {
           const n = Number(k.split(":").at(-1)) || 0;
           let orig = null;
           try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+          const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
           const desc = value.deleted
             ? "откатили изменения"
             : value.cancelled
-              ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
+              ? (origLesson ? `отменена:\n<s>${botLesson(origLesson)}</s>` : "отменена")
               : botLesson(value);
           return `<b>${n} пара</b>\n${desc}`;
         }).join("\n\n");
@@ -6420,35 +6489,39 @@ async function approvePending(enc) {
   const [key, entry] = entries[0];
   const decoded = decodeSwapKey(key), group = decoded.split("|")[0];
   const date = (decoded.split("|")[1] || "").split(":")[0];
-  const allDeleted = entries.every(([_, v]) => v.deleted);
-  let text;
-  if (allDeleted) {
-    const pairNums = entries.map(([k]) => {
-      const when = decodeSwapKey(k).split("|")[1] || "";
-      return Number(when.split(":")[1]) || 0;
-    }).filter(Boolean);
-    const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-    text = `<b>${botHtml(botDate(date))} откатили изменения (${pairsLabel})</b>`;
-  } else {
-    const rows = entries.map(([k, value]) => {
-      const when = decodeSwapKey(k).split("|")[1] || "";
-      const n = Number(when.split(":")[1]) || 0;
-      let orig = null;
-      try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
-      const desc = value.deleted
-        ? "откатили изменения"
-        : value.cancelled
-          ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
-          : botLesson(value);
-      return `<b>${n} пара</b>\n${desc}`;
-    }).join("\n\n");
-    text = `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;
+  const visibleEntries = entries.filter(([_, v]) => !v.hidden);
+  if (visibleEntries.length) {
+    const allDeleted = visibleEntries.every(([_, v]) => v.deleted);
+    let text;
+    if (allDeleted) {
+      const pairNums = visibleEntries.map(([k]) => {
+        const when = decodeSwapKey(k).split("|")[1] || "";
+        return Number(when.split(":")[1]) || 0;
+      }).filter(Boolean);
+      const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
+      text = `<b>${botHtml(botDate(date))} откатили изменения (${pairsLabel})</b>`;
+    } else {
+      const rows = visibleEntries.map(([k, value]) => {
+        const when = decodeSwapKey(k).split("|")[1] || "";
+        const n = Number(when.split(":")[1]) || 0;
+        let orig = null;
+        try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+        const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
+        const desc = value.deleted
+          ? "откатили изменения"
+          : value.cancelled
+            ? (origLesson ? `отменена:\n<s>${botLesson(origLesson)}</s>` : "отменена")
+            : botLesson(value);
+        return `<b>${n} пара</b>\n${desc}`;
+      }).join("\n\n");
+      text = `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;
+    }
+    const table = buildDayTablePayload(date);
+    queueBotEvent({ type: "swap", format: "html", group,
+      event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
+      text, table
+    }).catch(reportPushError);
   }
-  const table = buildDayTablePayload(date);
-  queueBotEvent({ type: "swap", format: "html", group,
-    event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
-    text, table
-  }).catch(reportPushError);
   toast("изменения опубликованы");
 }
 async function rejectPending(enc) {

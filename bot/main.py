@@ -49,6 +49,9 @@ MAX_BODY = 65536
 def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return ""
+    clean_rows = [r for r in rows if (str(r.get("subject") or "").strip() not in ("", "—")) or r.get("window")]
+    if not clean_rows:
+        return ""
     table_lines = [
         '<table bordered striped compact>',
     ]
@@ -61,15 +64,32 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     table_lines.append('    <th align="center">время</th>')
     table_lines.append('  </tr>')
 
-    for r in rows:
+    for r in clean_rows:
         n = str(r.get("n", "")).lower()
         subj = str(r.get("subject") or "—").lower()
         meta = str(r.get("teacher_room") or "—").lower()
         time_str = str(r.get("time") or "").lower()
+        is_cancelled = bool(r.get("cancelled"))
+        is_window = bool(r.get("window"))
+
+        if is_window:
+            subj_html = "<i>окно</i>"
+            meta_html = "—"
+        elif is_cancelled:
+            subj_clean = re.sub(r'^(отменена:\s*)+', '', subj).strip()
+            if subj_clean in ("пара отменена", "отменена"):
+                subj_html = "<i>пара отменена</i>"
+            else:
+                subj_html = f"<s>{html.escape(subj_clean)}</s> (отменена)"
+            meta_html = f"<s>{html.escape(meta)}</s>" if meta != "—" else "—"
+        else:
+            subj_html = html.escape(subj)
+            meta_html = html.escape(meta)
+
         table_lines.append('  <tr>')
         table_lines.append(f'    <td align="center">{html.escape(n)}</td>')
-        table_lines.append(f'    <td align="left">{html.escape(subj)}</td>')
-        table_lines.append(f'    <td align="left">{html.escape(meta)}</td>')
+        table_lines.append(f'    <td align="left">{subj_html}</td>')
+        table_lines.append(f'    <td align="left">{meta_html}</td>')
         table_lines.append(f'    <td align="center">{html.escape(time_str)}</td>')
         table_lines.append('  </tr>')
 
@@ -78,17 +98,31 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
 
 
 def format_clean_list(day_name: str, rows: list[dict]) -> str:
-    if not rows:
-        return ""
+    clean_rows = [r for r in rows if (str(r.get("subject") or "").strip() not in ("", "—")) or r.get("window")]
+    if not clean_rows:
+        return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
     lines = [f"<b>расписание на {html.escape(day_name.lower())}:</b>"] if day_name else []
-    for r in rows:
+    for r in clean_rows:
         n = str(r.get("n", "")).lower()
         subj = str(r.get("subject") or "—").lower()
         meta = str(r.get("teacher_room") or "—").lower()
         t = str(r.get("time") or "").lower()
-        meta_str = f" · {meta}" if meta and meta != "—" else ""
+        is_cancelled = bool(r.get("cancelled"))
+        is_window = bool(r.get("window"))
         time_str = f" ({t})" if t else ""
-        lines.append(f"{n}. {html.escape(subj)}{html.escape(meta_str)}{html.escape(time_str)}")
+        if is_window:
+            lines.append(f"{n}. <i>окно</i>{time_str}")
+        elif is_cancelled:
+            subj_clean = re.sub(r'^(отменена:\s*)+', '', subj).strip()
+            if subj_clean in ("пара отменена", "отменена"):
+                subj_display = "пара отменена"
+            else:
+                subj_display = f"<s>{html.escape(subj_clean)}</s> (отменена)"
+            meta_str = f" · <s>{html.escape(meta)}</s>" if meta and meta != "—" else ""
+            lines.append(f"{n}. {subj_display}{meta_str}{time_str}")
+        else:
+            meta_str = f" · {html.escape(meta)}" if meta and meta != "—" else ""
+            lines.append(f"{n}. {html.escape(subj)}{meta_str}{time_str}")
     return "\n".join(lines)
 
 
@@ -509,6 +543,21 @@ class App:
         method = "sendMessage"
 
         clean_text = re.sub(r'\s*<pre>[\s\S]*?</pre>\s*', '', text).strip()
+
+        # Не спамить при скрытии пар (пользователь запросил не писать про то, что пару скрыли)
+        if "скрыли" in clean_text.lower():
+            LOG.info("Пропуск уведомления о скрытии пары: %s", clean_text)
+            return 200, {"ok": True, "skipped": "hidden_pair"}
+
+        # Убираем <s>окно</s> и ложные отмены окон
+        if "отменили окно" in clean_text.lower() or "отменили 0 пару" in clean_text.lower():
+            LOG.info("Пропуск ложной отмены окна: %s", clean_text)
+            return 200, {"ok": True, "skipped": "cancelled_window"}
+        clean_text = re.sub(r'<s>\s*окно\s*</s>', '', clean_text, flags=re.IGNORECASE)
+        clean_text = re.sub(r'\n\s*\n\s*\n+', '\n\n', clean_text).strip()
+        if "отменили" in clean_text.lower() and "окно" in clean_text.lower():
+            clean_text = re.sub(r'<s>.*?</s>', '', clean_text).strip()
+
         if "возвращено исходное расписание" in clean_text or "вернули в исходное состояние" in clean_text or "вернули пары в исходное состояние" in clean_text:
             date_m = re.search(r'<b>(.*?)</b>', clean_text)
             date_part = date_m.group(1) if date_m else ""
