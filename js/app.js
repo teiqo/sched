@@ -6791,6 +6791,16 @@ function renderAccountRow() {
     if (canBroadcast) bcastBtn.removeAttribute("tabindex");
     else bcastBtn.setAttribute("tabindex", "-1");
   }
+
+  const maintBtn = document.getElementById("toggle-maintenance");
+  if (maintBtn) {
+    const isOwner = role === "owner";
+    maintBtn.hidden = !isOwner;
+    maintBtn.setAttribute("aria-hidden", String(!isOwner));
+    if (isOwner) maintBtn.removeAttribute("tabindex");
+    else maintBtn.setAttribute("tabindex", "-1");
+  }
+  updateMaintenanceUI(maintenanceActive);
 }
 
 function closeTgSheet() {
@@ -8300,6 +8310,77 @@ function renderBroadcastSheetBody() {
   }
 }
 
+/* ---------- режим технического перерыва ---------- */
+let maintenanceActive = false;
+let maintenanceLoading = false;
+
+function updateMaintenanceUI(active) {
+  maintenanceActive = !!active;
+  const role = myRole();
+  const isOwner = role === "owner";
+
+  const badge = document.getElementById("settings-maintenance-badge");
+  const hint = document.getElementById("settings-maintenance-hint");
+  if (badge) {
+    badge.textContent = maintenanceActive ? "вкл" : "выкл";
+    badge.classList.toggle("is-active", maintenanceActive);
+  }
+  if (hint) {
+    hint.textContent = maintenanceActive ? "включён (только для вас)" : "только для вас";
+  }
+
+  const ownerBanner = document.getElementById("owner-maintenance-banner");
+  if (ownerBanner) {
+    ownerBanner.hidden = !(isOwner && maintenanceActive);
+  }
+
+  const overlay = document.getElementById("maintenance-overlay");
+  if (overlay) {
+    overlay.hidden = !(!isOwner && maintenanceActive);
+  }
+}
+
+async function refreshMaintenanceStatus() {
+  if (LOCAL_PREVIEW) return;
+  try {
+    const res = await botRequest("maintenance/status", {}, "", { timeout: 4000 });
+    if (res && typeof res.maintenance === "boolean") {
+      updateMaintenanceUI(res.maintenance);
+    }
+  } catch (_) {
+    // Fail-open: offline / error does not block schedule
+  }
+}
+
+async function toggleMaintenanceMode(targetState) {
+  if (maintenanceLoading) return;
+  const role = myRole();
+  if (role !== "owner") {
+    toast("только владелец может управлять техническим перерывом");
+    return;
+  }
+  const next = targetState !== undefined ? targetState : !maintenanceActive;
+  maintenanceLoading = true;
+  const badge = document.getElementById("settings-maintenance-badge");
+  if (badge) badge.textContent = "…";
+  try {
+    const session = await ensurePushSession();
+    const res = await botRequest("maintenance", { active: next }, session);
+    if (res && res.ok) {
+      updateMaintenanceUI(res.maintenance);
+      toast(res.maintenance ? "Технический перерыв включён" : "Технический перерыв выключен");
+    } else {
+      toast(res?.error || "не удалось переключить режим");
+      updateMaintenanceUI(maintenanceActive);
+    }
+  } catch (err) {
+    toast(err?.message || "ошибка сети или доступа");
+    updateMaintenanceUI(maintenanceActive);
+  } finally {
+    maintenanceLoading = false;
+  }
+}
+
 (function initUpdates() {
   const btn = document.getElementById("go-updates");
   if (btn) btn.addEventListener("click", openUpdatesSheet);
@@ -8366,15 +8447,37 @@ function renderBroadcastSheetBody() {
     bcastBtn.addEventListener("click", () => {
       openBroadcastSheet();
     });
+  const maintBtn = document.getElementById("toggle-maintenance");
+  if (maintBtn)
+    maintBtn.addEventListener("click", () => {
+      toggleMaintenanceMode();
+    });
+  const ownerMaintOff = document.getElementById("owner-maintenance-off");
+  if (ownerMaintOff)
+    ownerMaintOff.addEventListener("click", () => {
+      toggleMaintenanceMode(false);
+    });
+  const maintLogin = document.getElementById("maintenance-login-btn");
+  if (maintLogin)
+    maintLogin.addEventListener("click", () => {
+      openProfile();
+    });
   renderAccountRow();
+  refreshMaintenanceStatus();
 })();
 
 (function startSharedSwaps() {
   if (!sharedSwapsEnabled()) return;
   window.setTimeout(pullSharedSwaps, 1200);
-  sharedSync.poll = window.setInterval(pullSharedSwaps, 45000);
+  sharedSync.poll = window.setInterval(() => {
+    pullSharedSwaps();
+    refreshMaintenanceStatus();
+  }, 45000);
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) pullSharedSwaps();
+    if (!document.hidden) {
+      pullSharedSwaps();
+      refreshMaintenanceStatus();
+    }
   });
 })();
 

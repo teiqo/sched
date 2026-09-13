@@ -251,7 +251,8 @@ class Config:
 
 class Store:
     """Durable queue. Every accepted event is stored before an HTTP success response."""
-    def __init__(self, path):
+    def __init__(self, path, cfg=None):
+        self.cfg = cfg
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -264,6 +265,9 @@ class Store:
         self.db.executescript("""
           PRAGMA journal_mode=DELETE;
           PRAGMA busy_timeout=5000;
+          CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY, value TEXT
+          );
           CREATE TABLE IF NOT EXISTS chats (
             id TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 0,
             swaps INTEGER NOT NULL DEFAULT 1, schedule INTEGER NOT NULL DEFAULT 1,
@@ -327,7 +331,25 @@ class Store:
                     'telegram':bool(row and row['active']), 'swaps':bool(row['swaps']) if row else True,
                     'schedule':bool(row['schedule']) if row else True, 'pending':bool(row['pending']) if row else True}}
 
+    def is_maintenance(self) -> bool:
+        with self.lock:
+            row = self.db.execute("SELECT value FROM settings WHERE key='maintenance_mode'").fetchone()
+            return bool(row and row["value"] == "1")
+
+    def set_maintenance(self, active: bool) -> bool:
+        with self.lock, self.db:
+            self.db.execute(
+                "INSERT INTO settings(key, value) VALUES ('maintenance_mode', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                ("1" if active else "0",)
+            )
+        return active
+
     def delivery_allowed(self, row):
+        if self.is_maintenance() and self.cfg:
+            is_owner = row['chat_id'] == self.cfg.owner or row['chat_id'] in self.cfg.admins
+            if not is_owner:
+                return False
         with self.lock:
             current = self.db.execute('SELECT state FROM outbox WHERE event_id=? AND chat_id=?', (row['event_id'],row['chat_id'])).fetchone()
             if not current or current['state'] != 'pending': return False
@@ -338,6 +360,8 @@ class Store:
         return True
 
     def recipients(self, kind, group=""):
+        if self.is_maintenance() and self.cfg:
+            return [self.cfg.owner] if self.cfg.owner else []
         column = 'pending' if kind == 'pending' else "schedule" if kind == "schedule" else "swaps"
         with self.lock:
             rows = self.db.execute(f"SELECT id,group_name FROM chats WHERE active=1 AND started=1 AND {column}=1").fetchall()
@@ -599,6 +623,11 @@ class App:
                 text = "[отчёт без подтверждённого входа]\n" + text
         else:
             targets = self.store.recipients(kind, group)
+
+        if self.store.is_maintenance():
+            targets = [t for t in targets if t == self.cfg.owner or t in self.cfg.admins]
+            if not targets and self.cfg.owner:
+                targets = [self.cfg.owner]
         table_data = data.get("table")
         rich_message_payload = None
         method = "sendMessage"
@@ -707,6 +736,25 @@ class App:
             elif (cid == self.cfg.owner or cid in self.cfg.admins) and command in ("/subscribers", "/users"):
                 sub_count = len(self.store.all_subscribers())
                 reply = f"активных подписчиков бота: <b>{sub_count}</b>"
+            elif (cid == self.cfg.owner or cid in self.cfg.admins) and command in ("/maintenance", "/techbreak", "/break"):
+                parts = text.strip().split(maxsplit=1)
+                sub_cmd = parts[1].strip().lower() if len(parts) > 1 else ""
+                if sub_cmd in ("on", "1", "true", "вкл"):
+                    self.store.set_maintenance(True)
+                    reply = "🛠 <b>Технический перерыв ВКЛЮЧЁН</b>.\n\nУведомления об изменениях расписания теперь приходят только вам. Обычным пользователям уведомления не отправляются, а на сайте выводится сообщение о техработах."
+                elif sub_cmd in ("off", "0", "false", "выкл"):
+                    self.store.set_maintenance(False)
+                    reply = "✅ <b>Технический перерыв ВЫКЛЮЧЕН</b>.\n\nСервис и бот работают в обычном режиме для всех пользователей."
+                else:
+                    is_on = self.store.is_maintenance()
+                    reply = (
+                        f"🛠 Режим технического перерыва: <b>{'ВКЛЮЧЁН (только для вас)' if is_on else 'ВЫКЛЮЧЕН (для всех)'}</b>.\n\n"
+                        f"Используйте:\n"
+                        f"• <code>/maintenance on</code> — включить\n"
+                        f"• <code>/maintenance off</code> — выключить"
+                    )
+            elif self.store.is_maintenance() and cid != self.cfg.owner and cid not in self.cfg.admins:
+                reply = "🛠 <b>Ведутся технические работы.</b>\n\nБот временно находится на техническом перерыве. Скоро всё заработает!"
             else:
                 reply = GREETING
             self.store.enqueue(event, reply, [cid], payload={"parse_mode": "HTML"})
@@ -784,6 +832,7 @@ class App:
                     await asyncio.sleep(0.05)  # At most 20 outgoing requests/second.
 
 
+MAINTENANCE_ROUTES = ("/maintenance", "/maintenance/status")
 BROADCAST_ROUTES = ("/broadcast", "/broadcast/status")
 REPORT_ROUTES = ("/reports", "/reports/list", "/reports/file", "/reports/delete")
 STATS_ROUTES = ("/stats", "/stats/visit")
@@ -848,22 +897,17 @@ def handler_for(app):
                 target = json.dumps(origin)
                 script = ("<script>const o=" + target + ";"
                           "if(window.opener){window.opener.postMessage({type:'sched-oidc-complete'},o);setTimeout(()=>window.close(),250)}"
-                          "else{setTimeout(()=>location.replace(o),800)}</script>")
-            body = ("<!doctype html><html lang='ru'><meta charset='utf-8'>"
-                    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                    "<title>" + escape(title) + "</title><style>html{color-scheme:light dark}body{font:16px system-ui;"
-                    "display:grid;place-content:center;min-height:100vh;margin:0;text-align:center}main{padding:24px}"
-                    "h1{font-size:22px}p{opacity:.7}</style><main><h1>" + escape(title) + "</h1><p>" + escape(message) + "</p></main>" + script)
-            data = body.encode()
+                          "else{location.replace(o)}</script>")
+            body = (f"<!doctype html><meta charset=utf-8><title>{html.escape(title)}</title>"
+                    f"<style>body{{font:16px sans-serif;display:flex;align-items:center;justify-content:center;"
+                    f"height:100vh;margin:0;background:#0d1117;color:#c9d1d9}}div{{text-align:center}}</style>"
+                    f"<div><h2>{html.escape(title)}</h2><p>{html.escape(message)}</p></div>{script}").encode()
             self.send_response(200 if ok else 400)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+            self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            self.wfile.write(data)
+            self.wfile.write(body)
 
         def do_GET(self):
             path = self.route()
@@ -871,6 +915,8 @@ def handler_for(app):
                 self.respond(200, {"ok": True, "app": "sched", "mode": "push", "auth_version": 4,
                     "build": "2026-09-08.7", "report_attachments": True,
                     "login_methods": ["oidc_authorization_code_pkce"]})
+            elif path == "/maintenance/status":
+                self.respond(200, {"ok": True, "maintenance": app.store.is_maintenance()})
             elif path == "/auth/callback":
                 query = {key: values[-1] for key, values in parse_qs(urlsplit(self.path).query, keep_blank_values=True).items()}
                 self.respond_auth_page(query)
@@ -879,7 +925,7 @@ def handler_for(app):
 
         def do_OPTIONS(self):
             origin = self.headers.get("Origin", "")
-            if self.route() not in ("/notify", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES, *BROADCAST_ROUTES):
+            if self.route() not in ("/notify", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES, *BROADCAST_ROUTES, *MAINTENANCE_ROUTES):
                 self.respond(404, {"ok": False})
                 return
             if origin and not self.is_origin_allowed(origin):
@@ -890,7 +936,7 @@ def handler_for(app):
 
         def do_POST(self):
             route = self.route()
-            if route not in ("/notify", "/telegram", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES, *BROADCAST_ROUTES):
+            if route not in ("/notify", "/telegram", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES, *BROADCAST_ROUTES, *MAINTENANCE_ROUTES):
                 self.respond(404, {"ok": False})
                 return
             if route == "/telegram":
@@ -1020,6 +1066,19 @@ def handler_for(app):
                                 created, queued = app.store.enqueue(event_id, text, targets, method="sendMessage", payload={"parse_mode": "HTML"})
                                 app.wake()
                                 status, result = 200, {"ok": True, "queued": queued, "target": target}
+                    elif route in MAINTENANCE_ROUTES:
+                        if route == "/maintenance/status":
+                            status, result = 200, {"ok": True, "maintenance": app.store.is_maintenance()}
+                        else:
+                            if not who or (who != "server" and who != app.cfg.owner and who not in app.cfg.admins):
+                                status, result = 403, {"ok": False, "error": "только владелец может переключать технический перерыв."}
+                            else:
+                                if "active" in data:
+                                    active = bool(data.get("active"))
+                                else:
+                                    active = not app.store.is_maintenance()
+                                app.store.set_maintenance(active)
+                                status, result = 200, {"ok": True, "maintenance": active}
                     else:
                         status, result = app.notify(data, who)
             except ReportError as e:
@@ -1105,7 +1164,7 @@ def main():
             tg.call("sendMessage", {"chat_id": cfg.owner, "text": "sched: тестовое сообщение. канал telegram доступен."})
             LOG.info("тест отправлен владельцу.")
             return 0
-        store = Store(cfg.data_dir / "sched.sqlite3")
+        store = Store(cfg.data_dir / "sched.sqlite3", cfg=cfg)
         try:
             auth = Auth(cfg, store)
             asyncio.run(run(cfg, store, tg, auth))
