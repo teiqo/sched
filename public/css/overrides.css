@@ -1681,37 +1681,37 @@ html.sched-page #root::-webkit-scrollbar,
 @keyframes t-row-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, -10px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
-    transform: translateZ(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 @keyframes t-stagger-line-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, -8px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
-    transform: translateZ(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 @keyframes sched-completed-row-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, -8px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
-    transform: translateZ(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 @keyframes sched-live-card-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, -10px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
@@ -1721,7 +1721,7 @@ html.sched-page #root::-webkit-scrollbar,
 @keyframes sched-day-in-forward {
   0% {
     opacity: 0;
-    transform: translate3d(0, -10px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
@@ -1731,7 +1731,7 @@ html.sched-page #root::-webkit-scrollbar,
 @keyframes sched-day-in-backward {
   0% {
     opacity: 0;
-    transform: translate3d(0, -10px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
@@ -1745,7 +1745,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 0;
-    transform: translate3d(0, 6px, 0);
+    transform: translate3d(-16px, 12px, 0);
   }
 }
 @keyframes sched-day-out-backward {
@@ -1755,7 +1755,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 0;
-    transform: translate3d(0, 6px, 0);
+    transform: translate3d(-16px, 12px, 0);
   }
 }
 
@@ -2204,46 +2204,69 @@ body.is-dragging-pair {
 
 /* ===== плавные следующие дни, ровная полоска, акцент и неон ===== */
 
-/* ---------- 1. следующие дни проявляются плавно и поэтапно ---------- */
-@keyframes sched-future-in {
+/* ---------- 1. появление дней: плавный фейд сверху вниз и справа налево, поэтапно сверху вниз ---------- */
+@keyframes sched-day-enter {
   0% {
     opacity: 0;
-    transform: translate3d(0, 16px, 0);
+    transform: translate3d(24px, -16px, 0);
   }
   100% {
     opacity: 1;
     transform: translate3d(0, 0, 0);
   }
 }
+
+/* Активный верхний день появляется первым */
+#stage .sched-active-day-scene.is-entering > .sched-day-block {
+  animation: sched-day-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0ms !important;
+  will-change: opacity, transform;
+}
+
+/* Строки внутри активного дня двигаются единым блоком вместе с карточкой дня */
+#stage .sched-active-day-scene.is-entering > .sched-day-block .agenda-row,
+#stage .sched-active-day-scene.is-entering > .sched-day-block .agenda-break,
+#stage .sched-active-day-scene.is-entering > .sched-day-block :is(#live-host, .live-lesson-card),
+#stage .sched-active-day-scene.is-entering > .sched-day-block .completed-lessons {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Последующие дни появляются каскадом сверху вниз */
 .sched-future-days {
   animation: none;
 }
 .sched-future-days > .sched-day-block {
-  animation: sched-future-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sched-day-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity, transform;
 }
 .sched-future-days > .sched-day-block:nth-of-type(1) {
-  animation-delay: 50ms !important;
+  animation-delay: 60ms !important;
 }
 .sched-future-days > .sched-day-block:nth-of-type(2) {
-  animation-delay: 110ms !important;
+  animation-delay: 120ms !important;
 }
 .sched-future-days > .sched-day-block:nth-of-type(3) {
-  animation-delay: 170ms !important;
+  animation-delay: 180ms !important;
 }
 .sched-future-days > .sched-day-block:nth-of-type(4) {
-  animation-delay: 230ms !important;
+  animation-delay: 240ms !important;
 }
 .sched-future-days > .sched-day-block:nth-of-type(5) {
-  animation-delay: 290ms !important;
+  animation-delay: 300ms !important;
 }
 .sched-future-days > .sched-day-block:nth-of-type(n + 6) {
-  animation-delay: 350ms !important;
+  animation-delay: 360ms !important;
 }
+
 @media (prefers-reduced-motion: reduce) {
+  #stage .sched-active-day-scene.is-entering > .sched-day-block,
   .sched-future-days,
   .sched-future-days > .sched-day-block {
     animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
   }
 }
 

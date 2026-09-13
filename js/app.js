@@ -1081,63 +1081,35 @@ function setScene(html, direction) {
   stage.appendChild(next);
   setupLazyDays();
 
-  const dist = cssVar("--page-slide-distance", "8px");
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = cssTimeMs("--page-slide-dur", 250);
-  const outX =
-    direction === "forward"
-      ? `translate3d(calc(${dist} * -1), 0, 0)`
-      : `translate3d(${dist}, 0, 0)`;
-  const inX =
-    direction === "forward"
-      ? `translate3d(${dist}, 0, 0)`
-      : `translate3d(calc(${dist} * -1), 0, 0)`;
+  const dur = 160;
 
   const outAnim = old.animate(
     [
-      { opacity: from.opacity, transform: from.transform },
-      { opacity: 0, transform: outX },
+      { opacity: from.opacity },
+      { opacity: 0, transform: "translate3d(-14px, 10px, 0)" },
     ],
     { duration: dur, easing: ease, fill: "forwards" },
   );
-  const inAnim = next.animate(
-    [
-      { opacity: 0, transform: inX },
-      { opacity: 1, transform: "translate3d(0, 0, 0)" },
-    ],
-    { duration: dur, easing: ease, fill: "both" },
-  );
 
-  /* Каскадные анимации строк длятся дольше смены подложки: раньше таймер
-     обрывал их через dur, и при скролле/быстром листании пары моргали.
-     Ждём полного каскада и трогаем только свои WAAPI-анимации. */
-  const rowDur = cssTimeMs("--duration-fast", 320);
-  const rowStep = cssTimeMs("--duration-stagger", 55);
-  const total = Math.max(dur + 80, rowDur + rowStep * 10 + 120);
-
-  /* Уходящая неделя больше не остаётся в дереве весь каскад входящих строк. */
+  /* Уходящий день быстро и плавно растворяется, освобождая место новому */
   sceneOutTimer = window.setTimeout(() => {
     old.remove();
-    outAnim.cancel();
+    try {
+      outAnim.cancel();
+    } catch (_) {}
     sceneOutTimer = null;
   }, dur);
   sceneTimer = window.setTimeout(() => {
     old.remove();
     next.classList.remove("is-entering");
     next.removeAttribute("data-direction");
-    [outAnim, inAnim].forEach((a) => {
-      try {
-        a.cancel();
-      } catch (err) {
-        /* ignore */
-      }
-    });
-    /* Чистим только animation: inline-стили transform/opacity/filter
-       не трогаем — commitStyles + их сброс вызывали микро-сдвиг плашки
-       аудитории на пару пикселей примерно через секунду после смены дня. */
+    try {
+      outAnim.cancel();
+    } catch (_) {}
     next.style.animation = "";
     sceneTimer = null;
-  }, total);
+  }, 450);
 }
 
 function renderStrip() {
@@ -1514,13 +1486,10 @@ function selectDate(d, direction, options) {
     renderHeader();
     if (state.tab === "schedule") {
       if (options.preview) {
-        /* Во время вождения по рулетке сцена следует за пилюлей сразу,
-           но дёшево: без анимации смены и без блока «следующих дней» —
-           их дорисует полный рендер при отпускании. */
         scrubPendingRender = false;
         quietMotion = true;
         setScene(
-          dayHtml(state.selected, true),
+          dayHtml(state.selected, true) + futureDaysHtml(),
           options.animated ? scrubDir : null,
         );
         quietMotion = false;
@@ -1659,13 +1628,14 @@ function scrubFrameStep(now) {
     paintScrub();
   }
 
-  /* Во время перетаскивания: мгновенная смена сцены без тяжелых анимаций */
+  /* Во время перетаскивания: смена сцены с плавной анимацией появления */
   if (scrub.isDragging && scrub.renderedIndex !== scrub.targetIndex) {
+    const scrubDir = scrub.targetIndex > scrub.renderedIndex ? "forward" : "backward";
     scrub.renderedIndex = scrub.targetIndex;
-    selectDate(addDays(scrub.week, scrub.targetIndex), null, {
+    selectDate(addDays(scrub.week, scrub.targetIndex), scrubDir, {
       silent: true,
       preview: true,
-      animated: false,
+      animated: true,
     });
   }
 
@@ -1684,11 +1654,12 @@ function moveScrub(clientX) {
     scrub.position = scrub.target;
     paintScrub();
     if (scrub.renderedIndex !== scrub.targetIndex) {
+      const scrubDir = scrub.targetIndex > scrub.renderedIndex ? "forward" : "backward";
       scrub.renderedIndex = scrub.targetIndex;
-      selectDate(addDays(scrub.week, scrub.targetIndex), null, {
+      selectDate(addDays(scrub.week, scrub.targetIndex), scrubDir, {
         silent: true,
         preview: true,
-        animated: false,
+        animated: true,
       });
     }
   }
@@ -1911,11 +1882,12 @@ function bindStrip() {
           scene.classList.add("is-date-scrubbing");
         }
         if (scrub.renderedIndex !== scrub.targetIndex) {
+          const scrubDir = scrub.targetIndex > scrub.renderedIndex ? "forward" : "backward";
           scrub.renderedIndex = scrub.targetIndex;
-          selectDate(addDays(scrub.week, scrub.targetIndex), null, {
+          selectDate(addDays(scrub.week, scrub.targetIndex), scrubDir, {
             silent: true,
             preview: true,
-            animated: false,
+            animated: true,
           });
         }
       }
