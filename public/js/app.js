@@ -6082,17 +6082,6 @@ function buildDayTablePayload(dIso) {
   }
 }
 
-const CAT_EMOJIS = {
-  wave: '<tg-emoji emoji-id="5316885400361387337">👋</tg-emoji>',
-  cat: '<tg-emoji emoji-id="5316832933040898464">🐱</tg-emoji>',
-  sad: '<tg-emoji emoji-id="5316651878694534428">😢</tg-emoji>',
-  cool: '<tg-emoji emoji-id="5316555220455539890">😎</tg-emoji>',
-  happy: '<tg-emoji emoji-id="5317021237292057676">🥰</tg-emoji>',
-  angel: '<tg-emoji emoji-id="5316583610189367227">😇</tg-emoji>',
-  sleep: '<tg-emoji emoji-id="5316559597027212494">😴</tg-emoji>',
-  ok: '<tg-emoji emoji-id="5316667465130851458">👌</tg-emoji>',
-};
-
 function notifyCloudEvent(path, body) {
   if ((LOCAL_PREVIEW && !window.__FORCE_NOTIFY_FOR_TEST__) || !body || !window.SCHED_NOTIFY_URL) return;
   const section = String(path).split("/")[0];
@@ -6125,13 +6114,13 @@ function notifyCloudEvent(path, body) {
   let text;
   if (body.deleted) {
     const action = type === "pending" ? "предложили откатить изменения" : "откатили изменения";
-    text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(dIso))} ${action} (${n} пара)</b>`;
+    text = `<b>${botHtml(botDate(dIso))} ${action} (${n} пара)</b>`;
   } else if (body.cancelled) {
     if (origLesson) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
       const metaStr = origMeta ? ` · ${origMeta}` : "";
       const action = type === "pending" ? "предложили отменить" : "отменили";
-      text = `${CAT_EMOJIS.sad} <b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n<s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+      text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n<s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
     } else {
       // Исходно в этом слоте пары не было (окно) — не пишем «отменили окно» и не шлём уведомление!
       return;
@@ -6140,7 +6129,7 @@ function notifyCloudEvent(path, body) {
     if (origLesson) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
       const metaStr = origMeta ? ` · ${origMeta}` : "";
-      text = `${CAT_EMOJIS.sleep} <b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\nбыло: <s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+      text = `<b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\nбыло: <s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
     } else {
       return;
     }
@@ -6149,7 +6138,7 @@ function notifyCloudEvent(path, body) {
     const newStr = newMeta ? ` · ${newMeta}` : "";
     const moveFromStr = body.movedFrom ? ` (с ${body.movedFrom} пары)` : "";
     const action = type === "pending" ? "предложили перенести" : "перенесли";
-    text = `${CAT_EMOJIS.wave} <b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+    text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
   } else {
     // Замена или добавление пары
     const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
@@ -6157,10 +6146,9 @@ function notifyCloudEvent(path, body) {
     if (origLesson && origLesson.subject !== body.subject) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
       const origStr = origMeta ? ` · ${origMeta}` : "";
-      text = `${CAT_EMOJIS.cool} <b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\nвместо: <s>${botHtml(origLesson.subject)}${botHtml(origStr)}</s>\nстало: ${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\nвместо: <s>${botHtml(origLesson.subject)}${botHtml(origStr)}</s>\nстало: ${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
     } else {
-      const actionEmoji = (verb === "добавили" || verb === "предложили добавить" || !origLesson) ? CAT_EMOJIS.happy : CAT_EMOJIS.cool;
-      text = `${actionEmoji} <b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
     }
   }
   const table = buildDayTablePayload(dIso);
