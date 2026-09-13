@@ -754,7 +754,7 @@ class App:
                         f"• <code>/maintenance off</code> — выключить"
                     )
             elif self.store.is_maintenance() and cid != self.cfg.owner and cid not in self.cfg.admins:
-                reply = "🛠 <b>ведутся технические шоколадки.</b>\n\nбот временно находится на техническом перерыве. скоро всё заработает!"
+                reply = "🐱 <b>ведутся технические шоколадки.</b>\n\nбот временно находится на техническом перерыве. скоро всё заработает!"
             else:
                 reply = GREETING
             self.store.enqueue(event, reply, [cid], payload={"parse_mode": "HTML"})

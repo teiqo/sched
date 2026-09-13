@@ -6381,6 +6381,9 @@ html.sched-page body {
     sans-serif;
 }
 
+.sched-maintenance-overlay[hidden] {
+  display: none !important;
+}
 .sched-maintenance-overlay,
 .sched-maintenance-overlay * {
   box-sizing: border-box;
@@ -6407,9 +6410,10 @@ html.sched-page body {
   -moz-osx-font-smoothing: grayscale;
 }
 .sched-maintenance-card {
+  position: relative;
   max-width: 360px;
   width: 100%;
-  padding: 36px 28px;
+  padding: 38px 28px 34px;
   background: var(--sched-surface, #fff);
   border: 1px solid var(--sched-separator, rgba(0, 0, 0, 0.08));
   border-radius: 24px;
@@ -6429,13 +6433,72 @@ html.sched-page body {
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
+.sched-maintenance-border {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  overflow: visible;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+.sched-maintenance-border rect {
+  x: 1px;
+  y: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  rx: 24px;
+  ry: 24px;
+  fill: none;
+  stroke: color-mix(in srgb, var(--sched-blue, #0a84ff) 88%, white 12%);
+  stroke-width: 2.5px;
+  stroke-dasharray: 7 8;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  animation: sched-maintenance-dashes 1.2s linear infinite;
+}
+:root[data-theme="dark"] .sched-maintenance-border rect {
+  stroke: color-mix(in srgb, var(--sched-blue, #0a84ff) 92%, white 8%);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--sched-blue, #0a84ff) 50%, transparent));
+}
+@keyframes sched-maintenance-dashes {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -30px;
+  }
+}
 .sched-maintenance-icon {
-  font-size: 42px;
+  position: relative;
+  z-index: 2;
+  font-size: 52px;
   line-height: 1;
   margin-bottom: 14px;
+  display: inline-block;
+  user-select: none;
+  transform-origin: bottom center;
+  animation: sched-cat-bounce 2.6s ease-in-out infinite;
+}
+@keyframes sched-cat-bounce {
+  0%, 100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) scale(1.06) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-3px) scale(1.04) rotate(3deg);
+  }
 }
 .sched-maintenance-card h2,
 .sched-maintenance-title {
+  position: relative;
+  z-index: 2;
   margin: 0 0 8px;
   font-size: 20px;
   font-weight: 600;
@@ -6451,6 +6514,8 @@ html.sched-page body {
 }
 .sched-maintenance-card p,
 .sched-maintenance-text {
+  position: relative;
+  z-index: 2;
   margin: 0;
   font-size: 15px;
   line-height: 1.45;
@@ -6463,6 +6528,12 @@ html.sched-page body {
     "SF Pro Text",
     "Segoe UI",
     sans-serif;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sched-maintenance-border rect,
+  .sched-maintenance-icon {
+    animation: none !important;
+  }
 }
 
 
