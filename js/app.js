@@ -832,34 +832,9 @@ function renderSlotRuns(slots, live, dIso) {
 
 function addPairButtonHtml(dIso) {
   if (!dIso) return "";
-  return `<button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
+  return `<div class="sched-add-pair-row"><button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-  </button>`;
-}
-
-function mondayPreviewHtml(d) {
-  const isWeekend = d.getDay() === 6 || d.getDay() === 0;
-  if (!isWeekend) return "";
-  const nextMonday = addDays(d, d.getDay() === 6 ? 2 : 1);
-  const monIso = iso(nextMonday);
-  const monSlots = visibleSlotsFor(nextMonday);
-  const monLessons = monSlots.filter(s => !s.window);
-  const monRows = state.windows ? monSlots : monLessons;
-  const p = parityLabel(parityOf(nextMonday));
-  return `<div class="sched-weekend-monday-preview">
-    <div class="sched-weekend-monday-head">
-      <div class="sched-weekend-monday-title">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <strong>пары на понедельник</strong>
-        <span>${nextMonday.getDate()} ${MONTHS[nextMonday.getMonth()]} · ${p} неделя</span>
-      </div>
-      <span class="sched-weekend-monday-count">${monLessons.length ? `${monLessons.length} ${plural(monLessons.length, "пара", "пары", "пар")}` : "пар нет"}</span>
-    </div>
-    ${monLessons.length || (state.windows && monRows.length)
-      ? `<div class="agenda-list">${withBreaksHtml(monRows, null, monIso)}</div>`
-      : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>в понедельник пар нет</strong></div>`
-    }
-  </div>`;
+  </button></div>`;
 }
 
 function dayHtml(d, withLive, future) {
@@ -895,7 +870,7 @@ function dayHtml(d, withLive, future) {
     body = `${earlierHtml}${liveHost}`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}${mondayPreviewHtml(d)}${addPairButtonHtml(dIso)}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}${addPairButtonHtml(dIso)}</div>`;
 }
 
 function weekHtml() {
@@ -2421,16 +2396,24 @@ function dotsHtml(d) {
 }
 
 function futureDaysHtml() {
-  if (state.scope !== "week") return "";
+  const isWeekend = state.selected.getDay() === 6 || state.selected.getDay() === 0;
+  if (state.scope !== "week" && !isWeekend) return "";
   const ws = weekStart(state.selected);
   const days = [];
-  for (let i = 0; i < 6; i += 1) {
-    const d = addDays(ws, i);
-    if (d <= state.selected) continue;
-    days.push(d);
+  if (state.scope === "week") {
+    for (let i = 0; i < 6; i += 1) {
+      const d = addDays(ws, i);
+      if (d <= state.selected) continue;
+      days.push(d);
+    }
   }
-  /* На субботе неделя заканчивается — показываем понедельник следующей. */
-  if (!days.length) days.push(addDays(ws, 7));
+  /* На субботе и воскресенье показываем понедельник следующей недели как обычный день */
+  if (isWeekend || !days.length) {
+    const nextMon = addDays(ws, 7);
+    if (!days.some((d) => sameDay(d, nextMon))) {
+      days.push(nextMon);
+    }
+  }
   /* На телефоне раньше ближайший день рендерили сразу, а остальные — лениво
      через IntersectionObserver. Заполнение плейсхолдера реальной вёрсткой
      давало скачок высоты (мин-height считался по числу пар, а реальная
@@ -4252,6 +4235,10 @@ function closeSheetAnimated(elOrId, onComplete, immediate = false) {
     if (onComplete) onComplete();
     return;
   }
+  if (typeof backdrop._cleanupVv === "function") {
+    try { backdrop._cleanupVv(); } catch (_) {}
+    backdrop._cleanupVv = null;
+  }
   if (immediate) {
     backdrop.remove();
     if (onComplete) onComplete();
@@ -4428,7 +4415,6 @@ function openSuggestSheet(dIso, n) {
   const renderRoot = () => {
     const list = isEmptySlot ? [] : SUGGEST_OPTIONS;
     sheet.innerHTML = head("что изменилось?") +
-      '<p class="sched-move-help">выбери, что именно поменялось — редакторы проверят и подтвердят.</p>' +
       '<div class="sched-move-targets">' +
       list.map(item => option(item.mark, item.title, item.hint, `data-suggest-pick="${item.id}"`)).join("") +
       (hasSwap ? option("↺", "вернуть как было", "убрать это изменение из расписания", 'data-suggest-pick="revert"') : "") +
@@ -4672,6 +4658,40 @@ function openAddPairSheet(dIso) {
       if (roomField) roomField.value = "";
       autoFilled = false;
     }
+  });
+
+  const onVv = () => {
+    if (!window.visualViewport) return;
+    const vh = window.visualViewport.height;
+    const kh = Math.max(0, window.innerHeight - vh);
+    backdrop.style.setProperty("--sched-kb-offset", `${kh}px`);
+    if (kh > 0) {
+      sheet.style.maxHeight = `${Math.max(220, vh - 20)}px`;
+    } else {
+      sheet.style.maxHeight = "";
+    }
+  };
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", onVv);
+    window.visualViewport.addEventListener("scroll", onVv);
+    onVv();
+    backdrop._cleanupVv = () => {
+      window.visualViewport.removeEventListener("resize", onVv);
+      window.visualViewport.removeEventListener("scroll", onVv);
+    };
+  }
+
+  [custom, teacherField, roomField].forEach(input => {
+    if (!input) return;
+    input.addEventListener("focus", () => {
+      setTimeout(() => {
+        try {
+          input.scrollIntoView({ block: "center", behavior: "smooth" });
+        } catch (_) {
+          input.scrollIntoView();
+        }
+      }, 160);
+    });
   });
 
   const send = () => {

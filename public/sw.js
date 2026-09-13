@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v71-instant-pairs-anim";
+const CACHE = CACHE_PREFIX + "2026-09-13-v73-monday-normal-day-and-text-cleanup";
 const ASSETS = [
   "./",
   "./index.html",

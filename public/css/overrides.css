@@ -2039,17 +2039,77 @@ body.is-dragging-pair {
 .sched-replace-backdrop.is-open {
   opacity: 1;
 }
+.sched-replace-backdrop {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--sched-kb-offset, 0px)) !important;
+  box-sizing: border-box !important;
+}
 .sched-replace-sheet {
-  width: min(440px, 100%);
-  margin: 12px;
+  width: min(440px, calc(100% - 24px));
+  margin: 12px auto;
   padding: 16px;
   border-radius: 20px;
   background: var(--sched-surface);
   border: 1px solid var(--sched-separator);
   display: grid;
   gap: 10px;
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box !important;
   transform: translate3d(0, calc(100% + 24px), 0);
   transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sched-replace-sheet,
+.sched-replace-sheet * {
+  box-sizing: border-box !important;
+}
+.sched-replace-sheet input,
+.sched-replace-sheet select {
+  font-family: inherit !important;
+  font-size: 16px !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  display: block !important;
+  color: var(--sched-text) !important;
+  caret-color: var(--sched-blue) !important;
+  background: var(--sched-raised) !important;
+  border: 1px solid var(--sched-separator) !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+}
+.sched-replace-sheet input:focus,
+.sched-replace-sheet select:focus {
+  outline: none !important;
+  border-color: var(--sched-blue) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sched-blue) 25%, transparent) !important;
+}
+.sched-replace-sheet .sched-replace-meta-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr) !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  align-items: end !important;
+}
+.sched-replace-sheet .sched-replace-meta-grid > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.sched-replace-sheet .sched-replace-meta-grid input {
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+@media (max-width: 360px) {
+  .sched-replace-sheet .sched-replace-meta-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 .sched-replace-backdrop.is-open .sched-replace-sheet {
   transform: translate3d(0, 0, 0);
@@ -6010,40 +6070,46 @@ a.sched-settings-row,
   padding: 4px 6px;
 }
 
-/* Кнопка добавления пары снизу справа дня */
-.sched-day-block {
-  position: relative;
+/* Кнопка добавления пары: центрирована под парами внутри дня, не вылезает за пределы карточки */
+.sched-add-pair-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 12px 0 6px 0;
+  box-sizing: border-box;
 }
 .sched-add-pair-btn {
-  position: absolute;
-  right: 12px;
-  bottom: 8px;
-  width: 36px;
-  height: 36px;
+  position: static !important;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: var(--sched-surface);
-  border: 1px solid var(--sched-separator);
+  background: var(--sched-raised);
+  border: 1.5px dashed var(--sched-blue);
   color: var(--sched-blue);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-  display: flex;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-  z-index: 15;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  z-index: 10;
+  margin: 0 auto;
 }
 .sched-add-pair-btn:hover {
   transform: scale(1.08);
-  background: color-mix(in srgb, var(--sched-blue) 10%, var(--sched-surface));
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  background: color-mix(in srgb, var(--sched-blue) 14%, var(--sched-surface));
+  border-style: solid;
+  box-shadow: 0 4px 14px rgba(10, 132, 255, 0.25);
 }
 .sched-add-pair-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 .sched-add-pair-btn svg {
   width: 18px;
   height: 18px;
+  display: block;
 }
 
 /* Пунктирное выделение добавленной пары (как при «время сдвинули») */
@@ -6056,43 +6122,5 @@ a.sched-settings-row,
 @keyframes sched-pulse-pending {
   0%, 100% { outline-color: var(--sched-blue); }
   50% { outline-color: color-mix(in srgb, var(--sched-blue) 45%, transparent); }
-}
-
-/* Превью понедельника в субботу и воскресенье */
-.sched-weekend-monday-preview {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px dashed var(--sched-separator);
-  display: grid;
-  gap: 12px;
-}
-.sched-weekend-monday-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 4px;
-}
-.sched-weekend-monday-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--sched-text);
-  font-size: 14px;
-}
-.sched-weekend-monday-title strong {
-  font-weight: 600;
-}
-.sched-weekend-monday-title span {
-  color: var(--sched-secondary);
-  font-size: 12px;
-}
-.sched-weekend-monday-count {
-  font-size: 12px;
-  color: var(--sched-secondary);
-  background: var(--sched-surface);
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--sched-separator);
 }
 
