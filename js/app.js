@@ -6030,27 +6030,28 @@ function buildDayTablePayload(dIso) {
     const dayName = dayEntry(d).name.toLowerCase();
     const allSlots = slotsFor(d);
     const sat = d.getDay() === 6;
+    const isSunday = d.getDay() === 0;
 
     // Релевантные пары дня: реальные уроки или отменённые уроки (без скрытых!)
     const activeSlots = allSlots.filter(s => !s.hidden && (!s.window || s.cancelled) && !s.empty && s.subject);
-    if (!activeSlots.length) {
+    if (isSunday || !activeSlots.length) {
       return {
         day_name: `${dayName}, ${d.getDate()} ${MONTHS[d.getMonth()]}`,
         rows: [],
       };
     }
 
-    const minN = Math.min(...activeSlots.map(s => s.n));
-    const maxN = Math.max(...activeSlots.map(s => s.n));
+    // Окна в таблице расписаний в боте должны быть (пары 1..6)
+    const maxN = Math.max(6, ...allSlots.map(s => s.n || 0));
     const rows = [];
 
-    for (let n = minN; n <= maxN; n++) {
+    for (let n = 1; n <= maxN; n++) {
       const slot = allSlots.find(s => s.n === n);
       const times = sat ? TIMES[n]?.sat : TIMES[n]?.week;
       const timeStr = times ? `${times[0]}–${times[1]}` : (slot?.from && slot?.to ? `${slot.from}–${slot.to}` : "");
 
       if (!slot || slot.window || slot.empty || slot.hidden) {
-        // Окно между парами (например, между 2-й и 4-й парой)
+        // Окно в расписании (пользователь запросил: «окна в таблице расписаний в боте должны быть»)
         rows.push({
           n,
           subject: "окно",
@@ -6080,6 +6081,17 @@ function buildDayTablePayload(dIso) {
     return null;
   }
 }
+
+const CAT_EMOJIS = {
+  wave: '<tg-emoji emoji-id="5316885400361387337">👋</tg-emoji>',
+  cat: '<tg-emoji emoji-id="5316832933040898464">🐱</tg-emoji>',
+  sad: '<tg-emoji emoji-id="5316651878694534428">😿</tg-emoji>',
+  cool: '<tg-emoji emoji-id="5316555220455539890">😎</tg-emoji>',
+  happy: '<tg-emoji emoji-id="5317021237292057676">🥰</tg-emoji>',
+  angel: '<tg-emoji emoji-id="5316583610189367227">😇</tg-emoji>',
+  sleep: '<tg-emoji emoji-id="5316559597027212494">😴</tg-emoji>',
+  ok: '<tg-emoji emoji-id="5316667465130851458">👌</tg-emoji>',
+};
 
 function notifyCloudEvent(path, body) {
   if ((LOCAL_PREVIEW && !window.__FORCE_NOTIFY_FOR_TEST__) || !body || !window.SCHED_NOTIFY_URL) return;
@@ -6113,13 +6125,13 @@ function notifyCloudEvent(path, body) {
   let text;
   if (body.deleted) {
     const action = type === "pending" ? "предложили откатить изменения" : "откатили изменения";
-    text = `<b>${botHtml(botDate(dIso))} ${action} (${n} пара)</b>`;
+    text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(dIso))} ${action} (${n} пара)</b>`;
   } else if (body.cancelled) {
     if (origLesson) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
       const metaStr = origMeta ? ` · ${origMeta}` : "";
       const action = type === "pending" ? "предложили отменить" : "отменили";
-      text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n<s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+      text = `${CAT_EMOJIS.sad} <b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n<s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
     } else {
       // Исходно в этом слоте пары не было (окно) — не пишем «отменили окно» и не шлём уведомление!
       return;
@@ -6128,7 +6140,7 @@ function notifyCloudEvent(path, body) {
     if (origLesson) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
       const metaStr = origMeta ? ` · ${origMeta}` : "";
-      text = `<b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\nбыло: <s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+      text = `${CAT_EMOJIS.sleep} <b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\nбыло: <s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
     } else {
       return;
     }
@@ -6137,7 +6149,7 @@ function notifyCloudEvent(path, body) {
     const newStr = newMeta ? ` · ${newMeta}` : "";
     const moveFromStr = body.movedFrom ? ` (с ${body.movedFrom} пары)` : "";
     const action = type === "pending" ? "предложили перенести" : "перенесли";
-    text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+    text = `${CAT_EMOJIS.wave} <b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
   } else {
     // Замена или добавление пары
     const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
@@ -6145,9 +6157,10 @@ function notifyCloudEvent(path, body) {
     if (origLesson && origLesson.subject !== body.subject) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
       const origStr = origMeta ? ` · ${origMeta}` : "";
-      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\nвместо: <s>${botHtml(origLesson.subject)}${botHtml(origStr)}</s>\nстало: ${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+      text = `${CAT_EMOJIS.cool} <b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\nвместо: <s>${botHtml(origLesson.subject)}${botHtml(origStr)}</s>\nстало: ${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
     } else {
-      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+      const actionEmoji = (verb === "добавили" || verb === "предложили добавить" || !origLesson) ? CAT_EMOJIS.happy : CAT_EMOJIS.cool;
+      text = `${actionEmoji} <b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
     }
   }
   const table = buildDayTablePayload(dIso);
@@ -6390,7 +6403,7 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       if (allDeleted) {
         const pairNums = visibleList.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
         const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-        text = `<b>${botHtml(botDate(date))} ${action} (${pairsLabel})</b>`;
+        text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))} ${action} (${pairsLabel})</b>`;
       } else {
         const rows = visibleList.map(([k, value]) => {
           const n = Number(k.split(":").at(-1)) || 0;
@@ -6404,7 +6417,8 @@ async function publishSwapBatch(entries, label = "изменены пары") {
               : botLesson(value);
           return `<b>${n} пара</b>\n${desc}`;
         }).join("\n\n");
-        text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
+        const batchEmoji = allCancelled ? CAT_EMOJIS.sad : allMoved ? CAT_EMOJIS.wave : CAT_EMOJIS.cool;
+        text = `${batchEmoji} <b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
       }
 
       const table = buildDayTablePayload(date);
@@ -6499,7 +6513,7 @@ async function approvePending(enc) {
         return Number(when.split(":")[1]) || 0;
       }).filter(Boolean);
       const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-      text = `<b>${botHtml(botDate(date))} откатили изменения (${pairsLabel})</b>`;
+      text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))} откатили изменения (${pairsLabel})</b>`;
     } else {
       const rows = visibleEntries.map(([k, value]) => {
         const when = decodeSwapKey(k).split("|")[1] || "";
@@ -6514,7 +6528,7 @@ async function approvePending(enc) {
             : botLesson(value);
         return `<b>${n} пара</b>\n${desc}`;
       }).join("\n\n");
-      text = `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;
+      text = `${CAT_EMOJIS.ok} <b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;
     }
     const table = buildDayTablePayload(date);
     queueBotEvent({ type: "swap", format: "html", group,

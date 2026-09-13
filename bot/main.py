@@ -42,14 +42,49 @@ else:
     from reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
 
 LOG = logging.getLogger("sched")
-GREETING = "<b>привет=)</b>"
+
+CAT_EMOJIS = {
+    "wave": '<tg-emoji emoji-id="5316885400361387337">👋</tg-emoji>',
+    "cat": '<tg-emoji emoji-id="5316832933040898464">🐱</tg-emoji>',
+    "sad": '<tg-emoji emoji-id="5316651878694534428">😿</tg-emoji>',
+    "cool": '<tg-emoji emoji-id="5316555220455539890">😎</tg-emoji>',
+    "happy": '<tg-emoji emoji-id="5317021237292057676">🥰</tg-emoji>',
+    "angel": '<tg-emoji emoji-id="5316583610189367227">😇</tg-emoji>',
+    "sleep": '<tg-emoji emoji-id="5316559597027212494">😴</tg-emoji>',
+    "ok": '<tg-emoji emoji-id="5316667465130851458">👌</tg-emoji>',
+}
+
+GREETING = f"{CAT_EMOJIS['wave']} <b>привет=)</b>"
 MAX_BODY = 65536
+
+
+def decorate_cat_header(text: str) -> str:
+    if "<tg-emoji" in text:
+        return text
+    lower = text.lower()
+    if "отменили" in lower or "отменить" in lower:
+        emoji = CAT_EMOJIS["sad"]
+    elif "сделали окном" in lower:
+        emoji = CAT_EMOJIS["sleep"]
+    elif "перенесли" in lower or "перенести" in lower:
+        emoji = CAT_EMOJIS["wave"]
+    elif "откатили" in lower or "откатить" in lower:
+        emoji = CAT_EMOJIS["angel"]
+    elif "добавили" in lower or "добавить" in lower:
+        emoji = CAT_EMOJIS["happy"]
+    elif "заменили" in lower or "заменить" in lower:
+        emoji = CAT_EMOJIS["cool"]
+    elif "опубликовали" in lower:
+        emoji = CAT_EMOJIS["ok"]
+    else:
+        return text
+    return f"{emoji} {text}"
 
 
 def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return ""
-    clean_rows = [r for r in rows if (str(r.get("subject") or "").strip() not in ("", "—")) or r.get("window")]
+    clean_rows = [r for r in rows if r.get("window") or str(r.get("subject") or "").strip() != ""]
     if not clean_rows:
         return ""
     table_lines = [
@@ -70,7 +105,7 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
         meta = str(r.get("teacher_room") or "—").lower()
         time_str = str(r.get("time") or "").lower()
         is_cancelled = bool(r.get("cancelled"))
-        is_window = bool(r.get("window"))
+        is_window = bool(r.get("window")) or subj in ("окно", "—", "")
 
         if is_window:
             subj_html = "<i>окно</i>"
@@ -98,7 +133,9 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
 
 
 def format_clean_list(day_name: str, rows: list[dict]) -> str:
-    clean_rows = [r for r in rows if (str(r.get("subject") or "").strip() not in ("", "—")) or r.get("window")]
+    if not rows:
+        return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
+    clean_rows = [r for r in rows if r.get("window") or str(r.get("subject") or "").strip() != ""]
     if not clean_rows:
         return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
     lines = [f"<b>расписание на {html.escape(day_name.lower())}:</b>"] if day_name else []
@@ -108,7 +145,7 @@ def format_clean_list(day_name: str, rows: list[dict]) -> str:
         meta = str(r.get("teacher_room") or "—").lower()
         t = str(r.get("time") or "").lower()
         is_cancelled = bool(r.get("cancelled"))
-        is_window = bool(r.get("window"))
+        is_window = bool(r.get("window")) or subj in ("окно", "—", "")
         time_str = f" ({t})" if t else ""
         if is_window:
             lines.append(f"{n}. <i>окно</i>{time_str}")
@@ -571,6 +608,7 @@ class App:
                 clean_text = f"<b>{date_clean} откатили изменения</b>"
 
         clean_text = clean_text.lower()
+        clean_text = decorate_cat_header(clean_text)
 
         if isinstance(table_data, dict) and table_data.get("rows"):
             day_name = str(table_data.get("day_name") or "").strip().lower()
@@ -622,7 +660,7 @@ class App:
             command = text.strip().split(maxsplit=1)[0].split("@")[0].lower()
             if command == "/stop":
                 self.store.subscribe(cid, False, started=True)
-                reply = "уведомления выключены — /start, чтобы включить снова"
+                reply = f"{CAT_EMOJIS['sleep']} уведомления выключены — /start, чтобы включить снова"
             else:
                 reply = GREETING
             self.store.enqueue(event, reply, [cid], payload={"parse_mode":"HTML"} if command != "/stop" else None)
