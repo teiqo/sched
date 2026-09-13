@@ -1019,7 +1019,7 @@ function setScene(html, direction) {
     sceneTimer = window.setTimeout(() => {
       first.classList.remove("is-entering");
       sceneTimer = null;
-    }, 700);
+    }, 2600);
     return;
   }
 
@@ -1078,7 +1078,7 @@ function setScene(html, direction) {
   setupLazyDays();
 
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = 130;
+  const dur = 160;
 
   const outAnim = old.animate(
     [
@@ -1105,7 +1105,7 @@ function setScene(html, direction) {
     } catch (_) {}
     next.style.animation = "";
     sceneTimer = null;
-  }, 2200);
+  }, 2600);
 }
 
 function renderStrip() {
