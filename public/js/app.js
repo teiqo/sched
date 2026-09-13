@@ -1520,7 +1520,7 @@ function selectDate(d, direction, options) {
         scrubPendingRender = false;
         quietMotion = true;
         setScene(
-          dayHtml(state.selected, true) + futureDaysHtml(),
+          dayHtml(state.selected, true),
           options.animated ? scrubDir : null,
         );
         quietMotion = false;
@@ -1645,12 +1645,9 @@ function scrubFrameStep(now) {
 
   /* Палец нажат */
   if (scrub.isDragging) {
-    /* Интерактивное ведение: плотно следует за пальцем без задержки */
-    const dt = Math.max(0.001, (now - (scrub.lastFrame || now - 16.7)) / 1000);
-    scrub.lastFrame = now;
-    const alpha = scrub.reducedMotion ? 1 : 1 - Math.exp(-52 * dt);
-    scrub.position += (scrub.target - scrub.position) * alpha;
-    scrub.position = Math.max(0, Math.min(scrub.max, scrub.position));
+    /* Интерактивное ведение: 1:1 мгновенно следует за пальцем без задержки */
+    scrub.position = scrub.target;
+    paintScrub();
   } else {
     /* Тап без движения: плавный переезд выделения к нажатому дню */
     const elapsed = Math.max(0, now - (scrub.tapStartTime || now));
@@ -1659,16 +1656,16 @@ function scrubFrameStep(now) {
     const ease = scrub.reducedMotion ? 1 : 1 - Math.pow(1 - progress, 2.8);
     scrub.position = scrub.tapStartPos + (scrub.target - scrub.tapStartPos) * ease;
     scrub.position = Math.max(0, Math.min(scrub.max, scrub.position));
+    paintScrub();
   }
-  paintScrub();
 
-  /* Во время перетаскивания: смена сцены с полноценной анимацией пар */
+  /* Во время перетаскивания: мгновенная смена сцены без тяжелых анимаций */
   if (scrub.isDragging && scrub.renderedIndex !== scrub.targetIndex) {
     scrub.renderedIndex = scrub.targetIndex;
     selectDate(addDays(scrub.week, scrub.targetIndex), null, {
       silent: true,
       preview: true,
-      animated: previewAnimated(),
+      animated: false,
     });
   }
 
@@ -1683,6 +1680,18 @@ function moveScrub(clientX) {
   if (!scrub) return;
   scrub.target = Math.max(0, Math.min(scrub.max, clientX - scrub.firstCenter - scrub.grabOffset));
   scrub.targetIndex = Math.max(0, Math.min(6, Math.round(scrub.target / scrub.step)));
+  if (scrub.isDragging) {
+    scrub.position = scrub.target;
+    paintScrub();
+    if (scrub.renderedIndex !== scrub.targetIndex) {
+      scrub.renderedIndex = scrub.targetIndex;
+      selectDate(addDays(scrub.week, scrub.targetIndex), null, {
+        silent: true,
+        preview: true,
+        animated: false,
+      });
+    }
+  }
   startScrubLoop();
 }
 
@@ -1735,6 +1744,7 @@ function endScrub(options = {}) {
   if (selection && !keepVisual) {
     selection.classList.add("is-week-reset");
     selection.style.removeProperty("transform");
+    selection.style.removeProperty("transition");
     window.requestAnimationFrame(() => {
       if (!scrub) selection.classList.remove("is-week-reset");
     });
@@ -1778,9 +1788,8 @@ function settleScrub() {
   scrub.settleStartPos = scrub.position;
   scrub.settleStartTime = performance.now();
   const dist = Math.abs(scrub.target - scrub.settleStartPos);
-  /* Плавное выравнивание на день: длительность пропорциональна оставшемуся расстоянию,
-     от 220 мс при микродовороте до 320 мс при смене дня */
-  scrub.settleDuration = scrub.reducedMotion ? 1 : Math.max(220, Math.min(320, 180 + dist * 2.5));
+  /* Плавное выравнивание на день: длительность пропорциональна оставшемуся расстоянию */
+  scrub.settleDuration = scrub.reducedMotion ? 1 : Math.max(150, Math.min(240, 100 + dist * 2.0));
   scrub.velocity = 0;
   scrub.strip.classList.remove("is-scrubbing", "is-pressing");
   scrub.strip.classList.add("is-settling");
@@ -1837,6 +1846,7 @@ function bindStrip() {
     selection.classList.remove("is-hop");
     window.clearTimeout(selection._hopTimer);
     strip.classList.add("is-pressing");
+    selection.style.transition = "none";
 
     /* Резервируем высоту один раз: браузер не сдвигает страницу при замене дней. */
     const stage = $("#stage");
@@ -1905,7 +1915,7 @@ function bindStrip() {
           selectDate(addDays(scrub.week, scrub.targetIndex), null, {
             silent: true,
             preview: true,
-            animated: previewAnimated(),
+            animated: false,
           });
         }
       }
@@ -1918,7 +1928,7 @@ function bindStrip() {
     if (!scrub || scrub.pointerId !== e.pointerId || !scrub.pointerDown) return;
     scrub.pointerX = e.clientX;
     const dx = e.clientX - scrub.startX;
-    if (!scrub.isDragging && Math.abs(dx) > 3) {
+    if (!scrub.isDragging && Math.abs(dx) > 1.5) {
       if (holdTimer !== null) {
         window.clearTimeout(holdTimer);
         holdTimer = null;
