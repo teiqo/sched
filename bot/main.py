@@ -34,18 +34,83 @@ from urllib.request import Request, urlopen
 if __package__:
     from .authentication import Auth, AuthError
     from .reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
-    from .table_image import render_schedule_table
 else:
     bot_dir = str(Path(__file__).resolve().parent)
     if not sys.path or sys.path[0] != bot_dir:
         sys.path.insert(0, bot_dir)
     from authentication import Auth, AuthError
     from reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
-    from table_image import render_schedule_table
 
 LOG = logging.getLogger("sched")
 GREETING = "<b>привет=)</b>"
 MAX_BODY = 65536
+
+
+def format_text_table(day_name: str, rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    col_w_num = 3
+    col_w_subj = 15
+    col_w_meta = 14
+    col_w_time = 12
+
+    def pad(s: str, w: int) -> str:
+        diff = w - len(s)
+        return s + (" " * diff) if diff > 0 else s[:w]
+
+    def wrap(text: str, w: int) -> list[str]:
+        if not text or text == "—":
+            return [text or ""]
+        words = text.split()
+        lines = []
+        cur = ""
+        for word in words:
+            test = f"{cur} {word}".strip()
+            if len(test) <= w:
+                cur = test
+            else:
+                if cur:
+                    lines.append(cur)
+                if len(word) > w:
+                    rem = word
+                    while len(rem) > w:
+                        lines.append(rem[:w-1] + "-")
+                        rem = rem[w-1:]
+                    cur = rem
+                else:
+                    cur = word
+        if cur:
+            lines.append(cur)
+        return lines or [""]
+
+    def sep(l: str, m: str, r: str) -> str:
+        return l + ("─" * col_w_num) + m + ("─" * col_w_subj) + m + ("─" * col_w_meta) + m + ("─" * col_w_time) + r
+
+    out = []
+    out.append(sep("┌", "┬", "┐"))
+    out.append("│" + pad(" #", col_w_num) + "│" + pad(" предмет", col_w_subj) + "│" + pad(" преп. / ауд.", col_w_meta) + "│" + pad(" время", col_w_time) + "│")
+    out.append(sep("├", "┼", "┤"))
+
+    for idx, r in enumerate(rows):
+        num = str(r.get("n", ""))
+        subj_lines = wrap(str(r.get("subject") or "—"), col_w_subj - 2)
+        meta_lines = wrap(str(r.get("teacher_room") or "—"), col_w_meta - 2)
+        time_str = str(r.get("time") or "")
+        max_lines = max(len(subj_lines), len(meta_lines))
+
+        for i in range(max_lines):
+            n_cell = f" {num}" if i == 0 else ""
+            s_cell = f" {subj_lines[i]}" if i < len(subj_lines) else ""
+            m_cell = f" {meta_lines[i]}" if i < len(meta_lines) else ""
+            t_cell = f" {time_str}" if i == 0 else ""
+            out.append("│" + pad(n_cell, col_w_num) + "│" + pad(s_cell, col_w_subj) + "│" + pad(m_cell, col_w_meta) + "│" + pad(t_cell, col_w_time) + "│")
+
+        if idx < len(rows) - 1:
+            out.append(sep("├", "┼", "┤"))
+
+    out.append(sep("└", "┴", "┘"))
+    content = "\n".join(out)
+    return f"<pre>\n{content}\n</pre>"
 
 
 class Config:
@@ -461,25 +526,13 @@ class App:
         else:
             targets = self.store.recipients(kind, group)
         table_data = data.get("table")
-        photo_bytes = None
-        if isinstance(table_data, dict) and table_data.get("rows"):
-            try:
-                photo_bytes = render_schedule_table(
-                    str(table_data.get("day_name") or ""),
-                    table_data.get("rows") or []
-                )
-            except Exception as err:
-                LOG.warning("не удалось сгенерировать таблицу: %s", err)
+        if isinstance(table_data, dict) and table_data.get("rows") and "<pre>" not in text:
+            table_str = format_text_table(str(table_data.get("day_name") or ""), table_data.get("rows") or [])
+            if table_str:
+                text = f"{text}\n\n{table_str}"
 
         method = "sendMessage"
         payload = {"parse_mode": "HTML"} if message_format == "html" else None
-        if photo_bytes:
-            method = "sendPhoto"
-            payload = {
-                "photo_b64": base64.b64encode(photo_bytes).decode("ascii"),
-                "caption": text[:1024],
-                "parse_mode": "HTML" if message_format == "html" else None
-            }
         created, queued = self.store.enqueue("event:" + kind + ":" + eid, text, targets, method=method, payload=payload)
         self.wake()
         LOG.info("событие %s: %s; в очереди получателей %d", kind, "принято" if created else "дубликат", queued)

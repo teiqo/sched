@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v74-table-notifs-cascade-and-mobile-fixes";
+const CACHE = CACHE_PREFIX + "2026-09-13-v75-text-table-notifs";
 const ASSETS = [
   "./",
   "./index.html",

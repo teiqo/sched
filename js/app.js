@@ -6018,20 +6018,72 @@ function buildDayTablePayload(dIso) {
 
 function formatMonospaceTable(tablePayload) {
   if (!tablePayload || !tablePayload.rows || !tablePayload.rows.length) return "";
-  const lines = [
-    `\n<pre>`,
-    `Расписание на ${tablePayload.day_name}:`,
-    `№  Предмет          Преп. / ауд.       Время`,
-    `─`.repeat(42),
-  ];
-  for (const r of tablePayload.rows) {
-    const num = String(r.n).padEnd(2, " ");
-    const subj = (r.subject.length > 15 ? r.subject.slice(0, 14) + "…" : r.subject).padEnd(16, " ");
-    const tr = (r.teacher_room.length > 17 ? r.teacher_room.slice(0, 16) + "…" : r.teacher_room).padEnd(18, " ");
-    lines.push(`${num} ${subj} ${tr} ${r.time}`);
+  const col_w_num = 3;
+  const col_w_subj = 15;
+  const col_w_meta = 14;
+  const col_w_time = 12;
+
+  function pad(str, len) {
+    const diff = len - str.length;
+    return diff > 0 ? str + " ".repeat(diff) : str.slice(0, len);
   }
-  lines.push(`</pre>`);
-  return lines.join("\n");
+
+  function wrap(str, len) {
+    if (!str || str === "—") return [str || ""];
+    const words = str.split(" ");
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (test.length <= len) {
+        cur = test;
+      } else {
+        if (cur) lines.push(cur);
+        if (w.length > len) {
+          let rem = w;
+          while (rem.length > len) {
+            lines.push(rem.slice(0, len - 1) + "-");
+            rem = rem.slice(len - 1);
+          }
+          cur = rem;
+        } else {
+          cur = w;
+        }
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [""];
+  }
+
+  function sep(l, m, r) {
+    return l + "─".repeat(col_w_num) + m + "─".repeat(col_w_subj) + m + "─".repeat(col_w_meta) + m + "─".repeat(col_w_time) + r;
+  }
+
+  const out = [];
+  out.push(sep("┌", "┬", "┐"));
+  out.push("│" + pad(" #", col_w_num) + "│" + pad(" предмет", col_w_subj) + "│" + pad(" преп. / ауд.", col_w_meta) + "│" + pad(" время", col_w_time) + "│");
+  out.push(sep("├", "┼", "┤"));
+
+  tablePayload.rows.forEach((r, idx) => {
+    const num = String(r.n);
+    const subjLines = wrap(r.subject || "—", col_w_subj - 2);
+    const metaLines = wrap(r.teacher_room || "—", col_w_meta - 2);
+    const maxLines = Math.max(subjLines.length, metaLines.length);
+
+    for (let i = 0; i < maxLines; i++) {
+      const nCell = i === 0 ? " " + num : "";
+      const sCell = " " + (subjLines[i] || "");
+      const mCell = " " + (metaLines[i] || "");
+      const tCell = i === 0 ? " " + (r.time || "") : "";
+      out.push("│" + pad(nCell, col_w_num) + "│" + pad(sCell, col_w_subj) + "│" + pad(mCell, col_w_meta) + "│" + pad(tCell, col_w_time) + "│");
+    }
+    if (idx < tablePayload.rows.length - 1) {
+      out.push(sep("├", "┼", "┤"));
+    }
+  });
+
+  out.push(sep("└", "┴", "┘"));
+  return `\n\n<pre>\n${out.join("\n")}\n</pre>`;
 }
 
 function notifyCloudEvent(path, body) {
