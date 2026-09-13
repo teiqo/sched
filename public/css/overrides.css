@@ -6376,6 +6376,20 @@ a.sched-settings-row,
   transform: scale(0.96);
 }
 
+html.sched-page body {
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+}
+
+.sched-maintenance-overlay,
+.sched-maintenance-overlay * {
+  box-sizing: border-box;
+}
 .sched-maintenance-overlay {
   position: fixed;
   inset: 0;
@@ -6385,55 +6399,75 @@ a.sched-settings-row,
   justify-content: center;
   padding: 20px;
   background: color-mix(in srgb, var(--sched-bg, #f5f5f7) 94%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 .sched-maintenance-card {
-  max-width: 420px;
+  max-width: 360px;
   width: 100%;
-  padding: 32px 24px;
+  padding: 36px 28px;
   background: var(--sched-surface, #fff);
   border: 1px solid var(--sched-separator, rgba(0, 0, 0, 0.08));
-  border-radius: 20px;
+  border-radius: 24px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
   text-align: center;
-  box-sizing: border-box;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  text-transform: lowercase;
+}
+:root[data-theme="dark"] .sched-maintenance-card {
+  background: var(--sched-raised, #1c1c1e);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 .sched-maintenance-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 14px;
 }
-.sched-maintenance-card h2 {
-  margin: 0 0 10px;
+.sched-maintenance-card h2,
+.sched-maintenance-title {
+  margin: 0 0 8px;
   font-size: 20px;
-  font-weight: 700;
-  color: var(--sched-text, #111);
-}
-.sched-maintenance-card p {
-  margin: 0 0 24px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--sched-secondary, #666);
-}
-.sched-maintenance-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.sched-maintenance-actions .sched-btn {
-  width: 100%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
-  border: none;
-  background: var(--sched-blue, #2481cc);
-  color: #fff;
-  transition: opacity 0.15s ease;
+  letter-spacing: -0.02em;
+  color: var(--sched-text, #111);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
 }
-.sched-maintenance-actions .sched-btn:hover {
-  opacity: 0.9;
+.sched-maintenance-card p,
+.sched-maintenance-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: var(--sched-secondary, #666);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
 }
 
 

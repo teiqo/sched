@@ -8368,7 +8368,7 @@ async function toggleMaintenanceMode(targetState) {
     const res = await botRequest("maintenance", { active: next }, session);
     if (res && res.ok) {
       updateMaintenanceUI(res.maintenance);
-      toast(res.maintenance ? "Технический перерыв включён" : "Технический перерыв выключен");
+      toast(res.maintenance ? "технический перерыв включён" : "технический перерыв выключен");
     } else {
       toast(res?.error || "не удалось переключить режим");
       updateMaintenanceUI(maintenanceActive);
@@ -8456,11 +8456,6 @@ async function toggleMaintenanceMode(targetState) {
   if (ownerMaintOff)
     ownerMaintOff.addEventListener("click", () => {
       toggleMaintenanceMode(false);
-    });
-  const maintLogin = document.getElementById("maintenance-login-btn");
-  if (maintLogin)
-    maintLogin.addEventListener("click", () => {
-      openProfile();
     });
   renderAccountRow();
   refreshMaintenanceStatus();
