@@ -1344,6 +1344,7 @@ function applyTheme() {
 
   if (state.palette === "accent" || state.palette === "accent-plus") {
     root.style.setProperty("--sched-accent", state.accent);
+    root.style.setProperty("--sched-blue", state.accent);
     const ink = accentInk(state.accent);
     root.style.setProperty("--sched-on-accent", ink);
     const contrast = (hex) => {
@@ -1364,6 +1365,7 @@ function applyTheme() {
     root.style.setProperty("--sched-accent-readable", readableAccent(state.accent, state.theme));
   } else {
     root.style.removeProperty("--sched-accent");
+    root.style.removeProperty("--sched-blue");
     root.style.removeProperty("--sched-on-accent");
     root.style.removeProperty("--sched-gradient-light");
     root.style.removeProperty("--sched-gradient-dark");
