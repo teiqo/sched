@@ -1681,81 +1681,81 @@ html.sched-page #root::-webkit-scrollbar,
 @keyframes t-row-in {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    transform: none;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 @keyframes t-stagger-line-in {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    transform: none;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 @keyframes sched-completed-row-in {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    transform: none;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 @keyframes sched-live-card-in {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    transform: none;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 @keyframes sched-day-in-forward {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    transform: none;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 @keyframes sched-day-in-backward {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    transform: none;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 @keyframes sched-day-out-forward {
   0% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
   100% {
     opacity: 0;
-    transform: translate3d(-16px, 12px, 0);
+    transform: none;
   }
 }
 @keyframes sched-day-out-backward {
   0% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
   100% {
     opacity: 0;
-    transform: translate3d(-16px, 12px, 0);
+    transform: none;
   }
 }
 
@@ -2204,30 +2204,49 @@ body.is-dragging-pair {
 
 /* ===== плавные следующие дни, ровная полоска, акцент и неон ===== */
 
-/* ---------- 1. появление дней: плавный фейд сверху вниз и справа налево, поэтапно сверху вниз ---------- */
-@keyframes sched-day-enter {
+/* ---------- 1. появление дней: градиентное проявление плашки вправо, каскадом сверху вниз ---------- */
+@keyframes sched-gradient-reveal {
   0% {
     opacity: 0;
-    transform: translate3d(24px, -16px, 0);
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  20% {
+    opacity: 1;
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
   }
 }
 
-/* Активный верхний день появляется первым */
-#stage .sched-active-day-scene.is-entering > .sched-day-block {
-  animation: sched-day-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: 0ms !important;
-  will-change: opacity, transform;
+/* Карточки дней на месте: мягкая градиентная прозрачность раскрывается вправо, как печать текста */
+#stage .sched-active-day-scene.is-entering > .sched-day-block,
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block {
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 42%, transparent 88%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 42%, transparent 88%, transparent 100%);
+  -webkit-mask-size: 260% 100%;
+  mask-size: 260% 100%;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: sched-gradient-reveal 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform: none !important;
+  will-change: opacity, -webkit-mask-position, mask-position;
 }
 
-/* Строки внутри активного дня двигаются единым блоком вместе с карточкой дня */
-#stage .sched-active-day-scene.is-entering > .sched-day-block .agenda-row,
-#stage .sched-active-day-scene.is-entering > .sched-day-block .agenda-break,
-#stage .sched-active-day-scene.is-entering > .sched-day-block :is(#live-host, .live-lesson-card),
-#stage .sched-active-day-scene.is-entering > .sched-day-block .completed-lessons {
+/* Активный верхний день проявляется первым */
+#stage .sched-active-day-scene.is-entering > .sched-day-block {
+  animation-delay: 0ms !important;
+}
+
+/* Строки и карточки внутри дня не прыгают отдельно, двигаясь единым монолитом вместе с плашкой */
+#stage .sched-active-day-scene.is-entering .sched-day-block .agenda-row,
+#stage .sched-active-day-scene.is-entering .sched-day-block .agenda-break,
+#stage .sched-active-day-scene.is-entering .sched-day-block :is(#live-host, .live-lesson-card),
+#stage .sched-active-day-scene.is-entering .sched-day-block .completed-lessons {
   animation: none !important;
   opacity: 1 !important;
   transform: none !important;
@@ -2237,33 +2256,42 @@ body.is-dragging-pair {
 .sched-future-days {
   animation: none;
 }
-.sched-future-days > .sched-day-block {
-  animation: sched-day-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: opacity, transform;
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) {
+  animation-delay: 55ms !important;
 }
-.sched-future-days > .sched-day-block:nth-of-type(1) {
-  animation-delay: 60ms !important;
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) {
+  animation-delay: 110ms !important;
 }
-.sched-future-days > .sched-day-block:nth-of-type(2) {
-  animation-delay: 120ms !important;
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) {
+  animation-delay: 165ms !important;
 }
-.sched-future-days > .sched-day-block:nth-of-type(3) {
-  animation-delay: 180ms !important;
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(4) {
+  animation-delay: 220ms !important;
 }
-.sched-future-days > .sched-day-block:nth-of-type(4) {
-  animation-delay: 240ms !important;
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(5) {
+  animation-delay: 275ms !important;
 }
-.sched-future-days > .sched-day-block:nth-of-type(5) {
-  animation-delay: 300ms !important;
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 6) {
+  animation-delay: 330ms !important;
 }
-.sched-future-days > .sched-day-block:nth-of-type(n + 6) {
-  animation-delay: 360ms !important;
+
+/* Снятие маски и сброс will-change после завершения фазы входа */
+.sched-active-day-scene:not(.is-entering) .sched-day-block {
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  opacity: 1 !important;
+  animation: none !important;
+  transform: none !important;
+  will-change: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
   #stage .sched-active-day-scene.is-entering > .sched-day-block,
+  #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block,
   .sched-future-days,
   .sched-future-days > .sched-day-block {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
     animation: none !important;
     transform: none !important;
     opacity: 1 !important;

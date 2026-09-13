@@ -993,10 +993,6 @@ function setScene(html, direction) {
   const stage = $("#stage");
   const old = $("#day-scene");
   if (old && old._schedHtml === html) {
-    if (!direction && old.classList.contains("is-entering")) {
-      old.classList.remove("is-entering");
-      old.removeAttribute("data-direction");
-    }
     return;
   }
   if (sceneOutTimer !== null) {
@@ -1082,12 +1078,12 @@ function setScene(html, direction) {
   setupLazyDays();
 
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = 160;
+  const dur = 130;
 
   const outAnim = old.animate(
     [
       { opacity: from.opacity },
-      { opacity: 0, transform: "translate3d(-14px, 10px, 0)" },
+      { opacity: 0 },
     ],
     { duration: dur, easing: ease, fill: "forwards" },
   );
@@ -1109,7 +1105,7 @@ function setScene(html, direction) {
     } catch (_) {}
     next.style.animation = "";
     sceneTimer = null;
-  }, 450);
+  }, 850);
 }
 
 function renderStrip() {
@@ -1740,7 +1736,7 @@ function endScrub(options = {}) {
     if (!sameDay(finalDate, state.selected)) {
       selectDate(finalDate);
     } else {
-      render();
+      renderStrip();
     }
   } else {
     renderStrip();
