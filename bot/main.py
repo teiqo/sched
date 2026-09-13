@@ -298,6 +298,11 @@ class Store:
             rows = self.db.execute(f"SELECT id,group_name FROM chats WHERE active=1 AND started=1 AND {column}=1").fetchall()
         return [r["id"] for r in rows if kind == "pending" or r["group_name"] and (not group or r["group_name"] == group)]
 
+    def all_subscribers(self):
+        with self.lock:
+            rows = self.db.execute("SELECT id FROM chats WHERE active=1 AND started=1").fetchall()
+        return [r["id"] for r in rows]
+
     def enqueue(self, event_id, text, targets, method="sendMessage", payload=None):
         targets = set(map(str, targets))
         with self.lock, self.db:
@@ -635,6 +640,28 @@ class App:
             if command == "/stop":
                 self.store.subscribe(cid, False, started=True)
                 reply = "уведомления выключены — /start, чтобы включить снова"
+            elif (cid == self.cfg.owner or cid in self.cfg.admins) and command in ("/broadcast", "/all", "/send", "/say"):
+                parts = text.strip().split(maxsplit=1)
+                msg = parts[1].strip() if len(parts) > 1 else ""
+                if not msg:
+                    reply = "<b>рассылка:</b> напиши <code>/broadcast текст сообщения</code>, чтобы отправить его всем подписчикам бота."
+                else:
+                    targets = self.store.all_subscribers()
+                    b_event = "tg-broadcast:" + os.urandom(8).hex()
+                    created, queued = self.store.enqueue(b_event, msg, targets, method="sendMessage", payload={"parse_mode": "HTML"})
+                    reply = f"сообщение поставлено в очередь рассылки (получателей: {queued})"
+            elif (cid == self.cfg.owner or cid in self.cfg.admins) and command == "/test":
+                parts = text.strip().split(maxsplit=1)
+                msg = parts[1].strip() if len(parts) > 1 else ""
+                if not msg:
+                    reply = "<b>тест:</b> напиши <code>/test текст сообщения</code>, чтобы проверить отображение только у себя."
+                else:
+                    b_event = "test-broadcast:" + os.urandom(8).hex()
+                    created, queued = self.store.enqueue(b_event, msg, [cid], method="sendMessage", payload={"parse_mode": "HTML"})
+                    reply = "тестовое сообщение отправлено"
+            elif (cid == self.cfg.owner or cid in self.cfg.admins) and command in ("/subscribers", "/users"):
+                sub_count = len(self.store.all_subscribers())
+                reply = f"активных подписчиков бота: <b>{sub_count}</b>"
             else:
                 reply = GREETING
             self.store.enqueue(event, reply, [cid], payload={"parse_mode": "HTML"})
@@ -687,8 +714,15 @@ class App:
                             payload = json.loads(row['payload'] or '{}')
                             if row['method'] == 'sendMessage':
                                 payload.update({'chat_id':row['chat_id'], 'text':row['text']})
-                                if row['report_id']: payload['parse_mode'] = 'HTML'
-                            await asyncio.to_thread(self.telegram.call, row['method'], payload)
+                            try:
+                                await asyncio.to_thread(self.telegram.call, row['method'], payload)
+                            except TelegramError as te:
+                                if te.code == 400 and payload.get('parse_mode') == 'HTML':
+                                    plain_payload = dict(payload)
+                                    plain_payload.pop('parse_mode', None)
+                                    await asyncio.to_thread(self.telegram.call, row['method'], plain_payload)
+                                else:
+                                    raise
                     except ReportError:
                         self.store.mark(row, 'cancelled')
                     except TelegramError as e:
@@ -705,6 +739,7 @@ class App:
                     await asyncio.sleep(0.05)  # At most 20 outgoing requests/second.
 
 
+BROADCAST_ROUTES = ("/broadcast", "/broadcast/status")
 REPORT_ROUTES = ("/reports", "/reports/list", "/reports/file", "/reports/delete")
 STATS_ROUTES = ("/stats", "/stats/visit")
 AUTH_ROUTES = ("/auth/start", "/auth/status", "/auth/cancel",
@@ -799,7 +834,7 @@ def handler_for(app):
 
         def do_OPTIONS(self):
             origin = self.headers.get("Origin", "")
-            if self.route() not in ("/notify", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES):
+            if self.route() not in ("/notify", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES, *BROADCAST_ROUTES):
                 self.respond(404, {"ok": False})
                 return
             if origin and not self.is_origin_allowed(origin):
@@ -810,7 +845,7 @@ def handler_for(app):
 
         def do_POST(self):
             route = self.route()
-            if route not in ("/notify", "/telegram", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES):
+            if route not in ("/notify", "/telegram", "/subscribe", "/subscription", *AUTH_ROUTES, *REPORT_ROUTES, *STATS_ROUTES, *BROADCAST_ROUTES):
                 self.respond(404, {"ok": False})
                 return
             if route == "/telegram":
@@ -918,6 +953,28 @@ def handler_for(app):
                             return
                         app.store.subscribe(who, prefs.get("telegram", False), prefs, group, started=None)
                         status, result = 200, app.store.subscription(who)
+                    elif route in BROADCAST_ROUTES:
+                        if not who or (who != "server" and who != app.cfg.owner and who not in app.cfg.admins):
+                            status, result = 403, {"ok": False, "error": "рассылка доступна только владельцу бота."}
+                        elif route == "/broadcast/status":
+                            subs = app.store.all_subscribers()
+                            status, result = 200, {"ok": True, "subscribers": len(subs)}
+                        else:
+                            text = str(data.get("text") or "").strip()
+                            target = str(data.get("target") or "all").strip()
+                            if not text:
+                                status, result = 400, {"ok": False, "error": "введите текст сообщения"}
+                            elif len(text) > 3900:
+                                status, result = 400, {"ok": False, "error": "сообщение слишком длинное (максимум 3900 символов)"}
+                            else:
+                                if target == "self":
+                                    targets = [app.cfg.owner] if app.cfg.owner else ([who] if who != "server" else [])
+                                else:
+                                    targets = app.store.all_subscribers()
+                                event_id = "broadcast:" + os.urandom(8).hex()
+                                created, queued = app.store.enqueue(event_id, text, targets, method="sendMessage", payload={"parse_mode": "HTML"})
+                                app.wake()
+                                status, result = 200, {"ok": True, "queued": queued, "target": target}
                     else:
                         status, result = app.notify(data, who)
             except ReportError as e:

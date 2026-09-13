@@ -6198,4 +6198,105 @@ a.sched-settings-row,
   50% { outline-color: color-mix(in srgb, var(--sched-blue) 45%, transparent); }
 }
 
+/* Рассылка в бота для владельца */
+#broadcast-backdrop :is(.sched-broadcast-sheet) {
+  width: min(580px, 100%) !important;
+  margin-inline: auto !important;
+  box-sizing: border-box;
+}
+.sched-broadcast-targets {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+.sched-broadcast-target-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--sched-border, rgba(128, 128, 128, 0.2));
+  background: var(--sched-input-bg, rgba(128, 128, 128, 0.06));
+  color: inherit;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+.sched-broadcast-target-btn.is-active {
+  border-color: var(--sched-blue, #2481cc);
+  background: color-mix(in srgb, var(--sched-blue, #2481cc) 14%, transparent);
+  font-weight: 600;
+}
+.sched-broadcast-tools {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+.sched-broadcast-tool-btn {
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--sched-border, rgba(128, 128, 128, 0.2));
+  background: var(--sched-input-bg, rgba(128, 128, 128, 0.06));
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sched-broadcast-tool-btn:hover {
+  background: color-mix(in srgb, var(--sched-blue, #2481cc) 12%, transparent);
+}
+.sched-broadcast-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sched-border, rgba(128, 128, 128, 0.2));
+  background: var(--sched-input-bg, rgba(128, 128, 128, 0.06));
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 110px;
+}
+.sched-broadcast-counter {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+.sched-broadcast-preview-wrap {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sched-broadcast-preview-label {
+  font-size: 12px;
+  opacity: 0.65;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sched-broadcast-preview {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--sched-input-bg, rgba(128, 128, 128, 0.06));
+  border-left: 3px solid var(--sched-blue, #2481cc);
+  font-size: 13.5px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+  min-height: 38px;
+}
+.sched-broadcast-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sched-blue, #2481cc) 15%, transparent);
+  color: var(--sched-blue, #2481cc);
+  font-weight: 500;
+}
+
 

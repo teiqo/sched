@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v92-clean-no-emoji";
+const CACHE = CACHE_PREFIX + "2026-09-13-v93-owner-broadcast";
 const ASSETS = [
   "./",
   "./index.html",

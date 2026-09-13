@@ -6782,6 +6782,15 @@ function renderAccountRow() {
     if (canSeeReports) repBtn.removeAttribute("tabindex");
     else repBtn.setAttribute("tabindex", "-1");
   }
+
+  const bcastBtn = document.getElementById("go-broadcast-sheet");
+  if (bcastBtn) {
+    const canBroadcast = role === "owner";
+    bcastBtn.hidden = !canBroadcast;
+    bcastBtn.setAttribute("aria-hidden", String(!canBroadcast));
+    if (canBroadcast) bcastBtn.removeAttribute("tabindex");
+    else bcastBtn.setAttribute("tabindex", "-1");
+  }
 }
 
 function closeTgSheet() {
@@ -8094,6 +8103,203 @@ function openReportsSheet() {
   renderReportsSheetBody();
 }
 
+function closeBroadcastSheet() {
+  const backdrop = document.getElementById("broadcast-backdrop");
+  if (!backdrop) return;
+  backdrop.classList.remove("is-open");
+  window.setTimeout(() => backdrop.remove(), 180);
+}
+
+let bcastTarget = "all";
+
+function openBroadcastSheet() {
+  closeBroadcastSheet();
+  const backdrop = document.createElement("div");
+  backdrop.id = "broadcast-backdrop";
+  backdrop.className = "sched-replace-backdrop";
+  backdrop.innerHTML =
+    '<div class="sched-replace-sheet sched-tg-sheet sched-broadcast-sheet" role="dialog" aria-label="рассылка в бота">' +
+    '<div id="broadcast-sheet-body"></div>' +
+    '</div>';
+  document.body.appendChild(backdrop);
+  window.requestAnimationFrame(() => backdrop.classList.add("is-open"));
+
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop || e.target.closest('[data-bcast-act="close"]')) {
+      closeBroadcastSheet();
+      return;
+    }
+  });
+
+  renderBroadcastSheetBody();
+}
+
+function renderBroadcastSheetBody() {
+  const body = document.getElementById("broadcast-sheet-body");
+  if (!body) return;
+
+  body.innerHTML =
+    '<div class="sched-replace-header">' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<h3 style="margin:0;font-size:17px;font-weight:700;">написать в бота</h3>' +
+        '<span id="bcast-sub-badge" class="sched-broadcast-badge">загрузка...</span>' +
+      '</div>' +
+      '<button type="button" class="sched-replace-close" data-bcast-act="close" aria-label="закрыть">✕</button>' +
+    '</div>' +
+
+    '<div class="sched-broadcast-targets" role="group" aria-label="получатели">' +
+      '<button type="button" class="sched-broadcast-target-btn ' + (bcastTarget === "all" ? "is-active" : "") + '" data-target="all">' +
+        '📢 всем подписчикам' +
+      '</button>' +
+      '<button type="button" class="sched-broadcast-target-btn ' + (bcastTarget === "self" ? "is-active" : "") + '" data-target="self">' +
+        '🧪 только себе (тест)' +
+      '</button>' +
+    '</div>' +
+
+    '<div class="sched-broadcast-tools">' +
+      '<button type="button" class="sched-broadcast-tool-btn" data-tool="b" title="жирный"><b>B</b></button>' +
+      '<button type="button" class="sched-broadcast-tool-btn" data-tool="i" title="курсив"><i>I</i></button>' +
+      '<button type="button" class="sched-broadcast-tool-btn" data-tool="a" title="ссылка">🔗 ссылка</button>' +
+      '<button type="button" class="sched-broadcast-tool-btn" data-tool="clear" title="очистить" style="margin-left:auto;">очистить</button>' +
+    '</div>' +
+
+    '<textarea id="bcast-text" class="sched-broadcast-textarea" rows="5" maxlength="3900" placeholder="текст сообщения для рассылки...\nподдерживает HTML: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;, &lt;a href=&quot;...&quot;&gt;ссылка&lt;/a&gt;"></textarea>' +
+    '<div class="sched-broadcast-counter"><span id="bcast-count">0</span> / 3900</div>' +
+
+    '<div class="sched-broadcast-preview-wrap">' +
+      '<span class="sched-broadcast-preview-label">предпросмотр в telegram:</span>' +
+      '<div id="bcast-preview" class="sched-broadcast-preview"><span style="opacity:0.4;">(сообщение пустое)</span></div>' +
+    '</div>' +
+
+    '<div class="sched-replace-actions" style="margin-top:16px;">' +
+      '<button type="button" class="is-secondary" data-bcast-act="close">отмена</button>' +
+      '<button type="button" id="bcast-send" class="is-primary">' + (bcastTarget === "all" ? "отправить всем" : "отправить себе") + '</button>' +
+    '</div>';
+
+  const textarea = document.getElementById("bcast-text");
+  const countEl = document.getElementById("bcast-count");
+  const previewEl = document.getElementById("bcast-preview");
+  const sendBtn = document.getElementById("bcast-send");
+
+  // Load subscriber count
+  ensurePushSession().then(token => {
+    botRequest("broadcast/status", {}, token).then(res => {
+      const badge = document.getElementById("bcast-sub-badge");
+      if (badge && res && res.ok) {
+        badge.textContent = res.subscribers + " подписч.";
+      }
+    }).catch(() => {
+      const badge = document.getElementById("bcast-sub-badge");
+      if (badge) badge.textContent = "активен";
+    });
+  }).catch(() => {});
+
+  // Target toggle
+  body.querySelectorAll(".sched-broadcast-target-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      bcastTarget = btn.dataset.target || "all";
+      body.querySelectorAll(".sched-broadcast-target-btn").forEach(b => {
+        b.classList.toggle("is-active", b.dataset.target === bcastTarget);
+      });
+      if (sendBtn) {
+        sendBtn.textContent = bcastTarget === "all" ? "отправить всем" : "отправить себе";
+      }
+    });
+  });
+
+  // Update preview & counter
+  function updatePreview() {
+    if (!textarea || !countEl || !previewEl) return;
+    const val = textarea.value;
+    countEl.textContent = String(val.length);
+    if (!val.trim()) {
+      previewEl.innerHTML = '<span style="opacity:0.4;">(сообщение пустое)</span>';
+      return;
+    }
+    let safe = val
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    safe = safe
+      .replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, "<b>$1</b>")
+      .replace(/&lt;strong&gt;(.*?)&lt;\/strong&gt;/gi, "<strong>$1</strong>")
+      .replace(/&lt;i&gt;(.*?)&lt;\/i&gt;/gi, "<i>$1</i>")
+      .replace(/&lt;em&gt;(.*?)&lt;\/em&gt;/gi, "<em>$1</em>")
+      .replace(/&lt;code&gt;(.*?)&lt;\/code&gt;/gi, "<code>$1</code>")
+      .replace(/&lt;s&gt;(.*?)&lt;\/s&gt;/gi, "<s>$1</s>")
+      .replace(/&lt;a\s+href=&quot;(.*?)&quot;&gt;(.*?)&lt;\/a&gt;/gi, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+    previewEl.innerHTML = safe.replace(/\n/g, "<br>");
+  }
+
+  if (textarea) {
+    textarea.addEventListener("input", updatePreview);
+  }
+
+  // Formatting tools
+  body.querySelectorAll(".sched-broadcast-tool-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!textarea) return;
+      const tool = btn.dataset.tool;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = textarea.value.substring(start, end);
+      let insertion = "";
+      if (tool === "b") {
+        insertion = "<b>" + (selected || "текст") + "</b>";
+      } else if (tool === "i") {
+        insertion = "<i>" + (selected || "текст") + "</i>";
+      } else if (tool === "a") {
+        const url = prompt("Введите ссылку (URL):", "https://");
+        if (!url) return;
+        insertion = '<a href="' + url + '">' + (selected || "текст ссылки") + '</a>';
+      } else if (tool === "clear") {
+        textarea.value = "";
+        updatePreview();
+        textarea.focus();
+        return;
+      }
+      textarea.setRangeText(insertion, start, end, "end");
+      updatePreview();
+      textarea.focus();
+    });
+  });
+
+  // Send action
+  if (sendBtn) {
+    sendBtn.addEventListener("click", async () => {
+      const text = textarea ? textarea.value.trim() : "";
+      if (!text) {
+        toast("введите текст сообщения");
+        if (textarea) textarea.focus();
+        return;
+      }
+      if (bcastTarget === "all") {
+        const ok = confirm("Отправить это сообщение ВСЕМ подписчикам бота в Telegram?");
+        if (!ok) return;
+      }
+      sendBtn.disabled = true;
+      sendBtn.textContent = "отправка...";
+      try {
+        const session = await ensurePushSession();
+        const res = await botRequest("broadcast", { text, target: bcastTarget }, session);
+        if (res && res.ok) {
+          toast(bcastTarget === "all" ? "рассылка запущена (получателей: " + res.queued + ")" : "тестовое сообщение отправлено");
+          closeBroadcastSheet();
+        } else {
+          toast(res?.error || "ошибка рассылки");
+        }
+      } catch (err) {
+        toast(err.message || "ошибка рассылки");
+      } finally {
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.textContent = bcastTarget === "all" ? "отправить всем" : "отправить себе";
+        }
+      }
+    });
+  }
+}
+
 (function initUpdates() {
   const btn = document.getElementById("go-updates");
   if (btn) btn.addEventListener("click", openUpdatesSheet);
@@ -8154,6 +8360,11 @@ function openReportsSheet() {
   if (repBtn)
     repBtn.addEventListener("click", () => {
       openReportsSheet();
+    });
+  const bcastBtn = document.getElementById("go-broadcast-sheet");
+  if (bcastBtn)
+    bcastBtn.addEventListener("click", () => {
+      openBroadcastSheet();
     });
   renderAccountRow();
 })();
