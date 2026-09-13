@@ -1105,7 +1105,7 @@ function setScene(html, direction) {
     } catch (_) {}
     next.style.animation = "";
     sceneTimer = null;
-  }, 1950);
+  }, 2200);
 }
 
 function renderStrip() {
@@ -1717,7 +1717,13 @@ function endScrub(options = {}) {
     });
   }
   scrub = null;
-  $("#stage")?.style.removeProperty("min-height");
+  if (sceneTimer !== null) {
+    window.setTimeout(() => {
+      $("#stage")?.style.removeProperty("min-height");
+    }, 450);
+  } else {
+    $("#stage")?.style.removeProperty("min-height");
+  }
   if (holdTimer !== null) {
     window.clearTimeout(holdTimer);
     holdTimer = null;
