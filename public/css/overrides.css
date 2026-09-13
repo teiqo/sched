@@ -1901,13 +1901,13 @@ html.sched-page #root::-webkit-scrollbar,
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--sched-tertiary);
   opacity: 0.55;
@@ -6086,20 +6086,20 @@ a.sched-settings-row,
 
 /* Кнопка добавления пары: размещается под кнопкой замены у крайней нижней пары дня */
 :root .agenda-row.has-add-pair {
-  min-height: 98px;
-  padding-right: 52px;
+  min-height: 86px;
+  padding-right: 46px;
 }
 :root .agenda-row .sched-add-pair-btn {
   position: absolute;
-  top: 50px;
-  right: 4px;
-  width: 44px;
-  height: 44px;
+  top: 44px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -6109,19 +6109,24 @@ a.sched-settings-row,
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
   z-index: 5;
+}
+:root .agenda-row .sched-add-pair-btn::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
 }
 :root .agenda-row .sched-add-pair-btn:hover,
 :root .agenda-row .sched-add-pair-btn:active {
-  transform: scale(1.08);
+  transform: none !important;
   opacity: 1 !important;
   background: var(--sched-fill) !important;
   color: var(--sched-blue) !important;
 }
 :root .agenda-row .sched-add-pair-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   pointer-events: none;
 }
 :root[data-editor-mode="true"] .sched-add-pair-btn {
@@ -6134,15 +6139,30 @@ a.sched-settings-row,
 .sched-empty-day .sched-add-pair-btn {
   position: static;
   margin: 12px auto 0;
-  width: 44px;
-  height: 44px;
+  width: 30px;
+  height: 30px;
   display: inline-grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent !important;
   color: var(--sched-tertiary) !important;
   opacity: 0.8 !important;
   border: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+.sched-empty-day .sched-add-pair-btn::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+.sched-empty-day .sched-add-pair-btn:hover,
+.sched-empty-day .sched-add-pair-btn:active {
+  transform: none !important;
+  opacity: 1 !important;
+  background: var(--sched-fill) !important;
+  color: var(--sched-blue) !important;
 }
 
 /* Плавное перемещение пилюли на дату */

@@ -4604,9 +4604,25 @@ function openAddPairSheet(dIso) {
   closeSheetAnimated("add-pair-backdrop", null, true);
 
   const d = dateFromIso(dIso);
+  const slots = slotsFor(d);
+  const sat = d.getDay() === 6;
   const backdrop = document.createElement("div");
   backdrop.id = "add-pair-backdrop";
   backdrop.className = "sched-replace-backdrop";
+
+  const firstFree = [1, 2, 3, 4, 5, 6].find(num => {
+    const s = slots.find(slot => slot.n === num);
+    return !s || s.window || s.cancelled || s.empty;
+  }) || 1;
+
+  const numOptions = [1, 2, 3, 4, 5, 6, 7].map(num => {
+    const s = slots.find(slot => slot.n === num);
+    const times = sat ? TIMES[num]?.sat : TIMES[num]?.week;
+    const timeStr = times ? ` (${times[0]}–${times[1]})` : "";
+    const isFree = !s || s.window || s.cancelled || s.empty;
+    const status = isFree ? "свободно" : `занято (${s.subject || "пара"})`;
+    return `<option value="${num}" ${num === firstFree ? "selected" : ""}>${num} пара${timeStr} · ${status}</option>`;
+  }).join("");
 
   const options = ['<option value="">выбери предмет</option>'].concat(subjectCatalog().map(item =>
     `<option value="${escapeHtml(item.subject)}" data-teacher="${escapeHtml(item.teacher)}" data-room="${escapeHtml(item.room)}">${escapeHtml(item.subject)}${item.teacher ? " · " + escapeHtml(item.teacher) : ""}</option>`)).join("");
@@ -4616,6 +4632,12 @@ function openAddPairSheet(dIso) {
       <strong id="add-pair-title">добавить пару</strong>
       <span>${escapeHtml(dateLabel(d))} · ${parityLabel(parityOf(d))} неделя</span>
     </div>
+    <label class="sched-replace-field">
+      <span>место (номер пары)</span>
+      <div class="sched-replace-select">
+        <select id="add-pair-num">${numOptions}</select>
+      </div>
+    </label>
     <label class="sched-replace-field">
       <span>предмет из расписания</span>
       <div class="sched-replace-select">
@@ -4636,9 +4658,8 @@ function openAddPairSheet(dIso) {
         <input id="add-pair-room" type="text" maxlength="40" placeholder="номер" />
       </label>
     </div>
-    <p class="sched-replace-hint">выбрал из списка — преподаватель и аудитория подставятся сами; затем перенесёшь на нужное место</p>
     <div class="sched-replace-actions">
-      <button class="is-primary" type="button" data-add-pair-send>выбрать</button>
+      <button class="is-primary" type="button" data-add-pair-send>добавить</button>
       <button type="button" data-add-pair-close>отмена</button>
     </div>
   </div>`;
@@ -4647,6 +4668,7 @@ function openAddPairSheet(dIso) {
   bindSheetKeyboard(backdrop, sheet);
   requestAnimationFrame(() => backdrop.classList.add("is-open"));
 
+  const numSelect = sheet.querySelector("#add-pair-num");
   const picker = sheet.querySelector("#add-pair-catalog");
   const custom = sheet.querySelector("#add-pair-custom");
   const teacherField = sheet.querySelector("#add-pair-teacher");
@@ -4673,6 +4695,7 @@ function openAddPairSheet(dIso) {
   });
 
   const send = () => {
+    const n = Number(numSelect?.value || 1);
     const chosen = picker?.options[picker.selectedIndex];
     const subj = (custom?.value || picker?.value || "").trim().slice(0, 120);
     const teacher = (teacherField?.value || chosen?.dataset.teacher || "").trim().slice(0, 120);
@@ -4681,36 +4704,10 @@ function openAddPairSheet(dIso) {
     if (!subj) { toast("выбери или впиши предмет"); return; }
     if (!room) { toast("укажи аудиторию"); roomField?.focus(); return; }
 
-    const daySlots = slotsFor(d);
-    const freeN = [1, 2, 3, 4, 5, 6].find(num => {
-      const s = daySlots.find(slot => slot.n === num);
-      return !s || s.window || s.cancelled || s.empty;
-    }) || 1;
-
-    setSwap(dIso, freeN, { subject: subj, teacher, room, moved: true, self: true });
+    setSwap(dIso, n, { subject: subj, teacher, room, moved: true, self: true });
     render();
-
     closeSheetAnimated(backdrop, () => {
-      const started = pairDragController?.beginPick(dIso, freeN, {
-        isNew: true,
-        onSave: () => toast("пара добавлена"),
-        onCancel: () => {
-          revertSwapOperation(dIso, freeN, "добавление отменено");
-          render();
-          toast("добавление отменено");
-        }
-      });
-      if (!started) {
-        openMoveSheet(dIso, freeN, {
-          isNew: true,
-          onSave: () => toast("пара добавлена"),
-          onCancel: () => {
-            revertSwapOperation(dIso, freeN, "добавление отменено");
-            render();
-            toast("добавление отменено");
-          }
-        });
-      }
+      toast("пара добавлена");
     });
   };
 
@@ -5941,7 +5938,7 @@ function buildDayTablePayload(dIso) {
   try {
     const d = dateFromIso(dIso);
     if (!d) return null;
-    const dayName = dayEntry(d).name;
+    const dayName = dayEntry(d).name.toLowerCase();
     const allSlots = slotsFor(d);
     const maxN = allSlots.reduce((max, s) => Math.max(max, s.n || 0), 0) || 4;
     const sat = d.getDay() === 6;
@@ -5997,18 +5994,21 @@ function notifyCloudEvent(path, body) {
   if (type === "pending") {
     verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
   } else if (body.makeWindow) verb = "сделали окном";
-  else if (body.deleted) verb = "вернули в исходное состояние";
+  else if (body.deleted) verb = "откатили изменения";
   else if (body.cancelled) verb = "отменили";
   else if (body.moved) verb = "перенесли";
   else verb = "заменили";
 
-  let text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>`;
+  let text;
   if (body.deleted) {
-    text += `\n\n${original ? `возвращено исходное расписание:\n${botLesson(original)}` : "возвращено в окно (пар нет)"}`;
-  } else if (body.cancelled) {
-    text += original ? `\n\n<s>${botLesson(original)}</s>` : "";
-  } else if (body) {
-    text += `\n\n${botLesson(body)}`;
+    text = `<b>${botHtml(botDate(dIso))} откатили изменения (${n} пара)</b>`;
+  } else {
+    text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>`;
+    if (body.cancelled) {
+      text += original ? `\n\n<s>${botLesson(original)}</s>` : "";
+    } else if (body) {
+      text += `\n\n${botLesson(body)}`;
+    }
   }
   const table = buildDayTablePayload(dIso);
   queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group, table }).catch(reportPushError);
@@ -6227,27 +6227,34 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       const allCancelled = list.every(([_, v]) => v.cancelled);
       const allMoved = list.every(([_, v]) => v.moved);
       const action = allDeleted
-        ? (pending ? "предложили вернуть пары в исходное состояние" : "вернули пары в исходное состояние")
+        ? (pending ? "предложили откатить изменения" : "откатили изменения")
         : allCancelled
           ? (pending ? "предложили отменить пары" : "отменили пары")
           : allMoved
             ? (pending ? "предложили перенести пары" : "перенесли пары")
             : (pending ? "предложили изменить пары" : "изменили пары");
 
-      const rows = list.map(([k, value]) => {
-        const n = Number(k.split(":").at(-1)) || 0;
-        let orig = null;
-        try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
-        const desc = value.deleted
-          ? (orig ? `возвращено исходное расписание:\n${botLesson(orig)}` : "возвращено в окно (пар нет)")
-          : value.cancelled
-            ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
-            : botLesson(value);
-        return `<b>${n} пара</b>\n${desc}`;
-      }).join("\n\n");
+      let text;
+      if (allDeleted) {
+        const pairNums = list.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
+        const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
+        text = `<b>${botHtml(botDate(date))} ${action} (${pairsLabel})</b>`;
+      } else {
+        const rows = list.map(([k, value]) => {
+          const n = Number(k.split(":").at(-1)) || 0;
+          let orig = null;
+          try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+          const desc = value.deleted
+            ? "откатили изменения"
+            : value.cancelled
+              ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
+              : botLesson(value);
+          return `<b>${n} пара</b>\n${desc}`;
+        }).join("\n\n");
+        text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
+      }
 
       const table = buildDayTablePayload(date);
-      let text = `<b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
       queueBotEvent({ type: pending ? "pending" : "swap", format: "html", group,
         event_id: section + ":" + (entry.operationId || key + ":" + entry.updatedAt), text, table
       }).catch(reportPushError);
@@ -6330,20 +6337,30 @@ async function approvePending(enc) {
   const decoded = decodeSwapKey(key), group = decoded.split("|")[0];
   const date = (decoded.split("|")[1] || "").split(":")[0];
   const allDeleted = entries.every(([_, v]) => v.deleted);
-  const rows = entries.map(([k, value]) => {
-    const when = decodeSwapKey(k).split("|")[1] || "";
-    const n = Number(when.split(":")[1]) || 0;
-    let orig = null;
-    try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
-    const desc = value.deleted
-      ? (orig ? `возвращено исходное расписание:\n${botLesson(orig)}` : "возвращено в окно (пар нет)")
-      : value.cancelled
-        ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
-        : botLesson(value);
-    return `<b>${n} пара</b>\n${desc}`;
-  }).join("\n\n");
+  let text;
+  if (allDeleted) {
+    const pairNums = entries.map(([k]) => {
+      const when = decodeSwapKey(k).split("|")[1] || "";
+      return Number(when.split(":")[1]) || 0;
+    }).filter(Boolean);
+    const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
+    text = `<b>${botHtml(botDate(date))} откатили изменения (${pairsLabel})</b>`;
+  } else {
+    const rows = entries.map(([k, value]) => {
+      const when = decodeSwapKey(k).split("|")[1] || "";
+      const n = Number(when.split(":")[1]) || 0;
+      let orig = null;
+      try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+      const desc = value.deleted
+        ? "откатили изменения"
+        : value.cancelled
+          ? (orig ? `отменена:\n<s>${botLesson(orig)}</s>` : "отменена")
+          : botLesson(value);
+      return `<b>${n} пара</b>\n${desc}`;
+    }).join("\n\n");
+    text = `<b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;
+  }
   const table = buildDayTablePayload(date);
-  let text = `<b>${botHtml(botDate(date))} ${allDeleted ? "вернули пары в исходное состояние" : "опубликовали изменения"}</b>\n\n${rows}`;
   queueBotEvent({ type: "swap", format: "html", group,
     event_id: "approved:" + (entry.operationId || key + ":" + entry.updatedAt),
     text, table

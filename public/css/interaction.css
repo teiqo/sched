@@ -1183,15 +1183,15 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
    скрыт правилом display:none !important. */
 :root .lesson-suggest-btn {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 44px;
-  height: 44px;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--sched-tertiary);
   opacity: .8;
@@ -1201,7 +1201,12 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   -webkit-user-select: none !important;
   transition: opacity .16s ease, background .16s ease, color .16s ease;
 }
-:root .lesson-suggest-btn svg { width: 18px; height: 18px; pointer-events: none; }
+:root .lesson-suggest-btn::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+:root .lesson-suggest-btn svg { width: 16px; height: 16px; pointer-events: none; }
 :root .lesson-suggest-btn:hover,
 :root .lesson-suggest-btn:active { opacity: 1; background: var(--sched-fill); color: var(--sched-blue); }
 :root .lesson-suggest-btn:focus-visible { outline: 2px solid var(--sched-blue); outline-offset: 3px; }

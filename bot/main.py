@@ -53,19 +53,19 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
         '<table bordered striped compact>',
     ]
     if day_name:
-        table_lines.append(f'  <caption>Расписание на {html.escape(day_name)}</caption>')
+        table_lines.append(f'  <caption>расписание на {html.escape(day_name.lower())}</caption>')
     table_lines.append('  <tr>')
     table_lines.append('    <th align="center">#</th>')
-    table_lines.append('    <th align="left">Предмет</th>')
-    table_lines.append('    <th align="left">Преп. / ауд.</th>')
-    table_lines.append('    <th align="center">Время</th>')
+    table_lines.append('    <th align="left">предмет</th>')
+    table_lines.append('    <th align="left">преп. / ауд.</th>')
+    table_lines.append('    <th align="center">время</th>')
     table_lines.append('  </tr>')
 
     for r in rows:
-        n = str(r.get("n", ""))
-        subj = str(r.get("subject") or "—")
-        meta = str(r.get("teacher_room") or "—")
-        time_str = str(r.get("time") or "")
+        n = str(r.get("n", "")).lower()
+        subj = str(r.get("subject") or "—").lower()
+        meta = str(r.get("teacher_room") or "—").lower()
+        time_str = str(r.get("time") or "").lower()
         table_lines.append('  <tr>')
         table_lines.append(f'    <td align="center">{html.escape(n)}</td>')
         table_lines.append(f'    <td align="left">{html.escape(subj)}</td>')
@@ -80,12 +80,12 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
 def format_clean_list(day_name: str, rows: list[dict]) -> str:
     if not rows:
         return ""
-    lines = [f"<b>Расписание на {html.escape(day_name)}:</b>"] if day_name else []
+    lines = [f"<b>расписание на {html.escape(day_name.lower())}:</b>"] if day_name else []
     for r in rows:
-        n = str(r.get("n", ""))
-        subj = str(r.get("subject") or "—")
-        meta = str(r.get("teacher_room") or "—")
-        t = str(r.get("time") or "")
+        n = str(r.get("n", "")).lower()
+        subj = str(r.get("subject") or "—").lower()
+        meta = str(r.get("teacher_room") or "—").lower()
+        t = str(r.get("time") or "").lower()
         meta_str = f" · {meta}" if meta and meta != "—" else ""
         time_str = f" ({t})" if t else ""
         lines.append(f"{n}. {html.escape(subj)}{html.escape(meta_str)}{html.escape(time_str)}")
@@ -508,9 +508,23 @@ class App:
         rich_message_payload = None
         method = "sendMessage"
 
+        clean_text = re.sub(r'\s*<pre>[\s\S]*?</pre>\s*', '', text).strip()
+        if "возвращено исходное расписание" in clean_text or "вернули в исходное состояние" in clean_text or "вернули пары в исходное состояние" in clean_text:
+            date_m = re.search(r'<b>(.*?)</b>', clean_text)
+            date_part = date_m.group(1) if date_m else ""
+            pairs = re.findall(r'(\d+)\s+пар', clean_text)
+            date_clean = re.sub(r'\s+вернули.*', '', date_part).strip()
+            if pairs:
+                u_pairs = list(dict.fromkeys(pairs))
+                p_str = f"{u_pairs[0]} пара" if len(u_pairs) == 1 else f"{', '.join(u_pairs)} пары"
+                clean_text = f"<b>{date_clean} откатили изменения ({p_str})</b>"
+            else:
+                clean_text = f"<b>{date_clean} откатили изменения</b>"
+
+        clean_text = clean_text.lower()
+
         if isinstance(table_data, dict) and table_data.get("rows"):
-            clean_text = re.sub(r'\s*<pre>[\s\S]*?</pre>\s*', '', text).strip()
-            day_name = str(table_data.get("day_name") or "").strip()
+            day_name = str(table_data.get("day_name") or "").strip().lower()
             rows = table_data.get("rows") or []
             table_html = format_rich_html_table(day_name, rows)
             clean_list = format_clean_list(day_name, rows)
@@ -532,8 +546,9 @@ class App:
                     }
                 }
         else:
-            fallback_text = text
+            fallback_text = clean_text
 
+        fallback_text = fallback_text.lower()
         payload = rich_message_payload if method == "sendRichMessage" else ({"parse_mode": "HTML"} if message_format == "html" else None)
         created, queued = self.store.enqueue("event:" + kind + ":" + eid, fallback_text, targets, method=method, payload=payload)
         self.wake()

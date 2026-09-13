@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v77-telegram-rich-table-messages";
+const CACHE = CACHE_PREFIX + "2026-09-13-v79-compact-hover-highlights";
 const ASSETS = [
   "./",
   "./index.html",
