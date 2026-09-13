@@ -400,7 +400,7 @@ function lessonsFor(d) {
   const preferences = state.editorMode
     ? { ...state, windows: true, showVacancies: true, showSelfStudy: true }
     : state;
-  return slotsFor(d).filter((s) => !s.window && isSlotVisible(s, preferences));
+  return slotsFor(d).filter((s) => !s.window && !s.hidden && isSlotVisible(s, preferences));
 }
 
 function visibleSlotsFor(d) {
@@ -412,7 +412,7 @@ function visibleSlotsFor(d) {
     .map((slot) => slot.cancelled && state.editorMode
       ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
       : slot)
-    .filter((s) => s.cancelled || isSlotVisible(s, preferences));
+    .filter((s) => !s.hidden && (s.cancelled || isSlotVisible(s, preferences)));
 
   return slots;
 }
@@ -426,7 +426,7 @@ function dragSlotsFor(d) {
     .map((slot) => slot.cancelled
       ? { ...slot, cancelled: false, window: true, empty: true, subject: "окно", teacher: null, room: null }
       : slot)
-    .filter((s) => isSlotVisible(s, preferences));
+    .filter((s) => !s.hidden && isSlotVisible(s, preferences));
 }
 
 function mins(hhmm) {
@@ -716,7 +716,7 @@ function headingHtml(d, sub, primary = false) {
       <h2 class="t-stagger-line t-stagger-line--1">${title}</h2>
       <span class="t-stagger-line t-stagger-line--2">${sub}${rel ? ` · ${rel}` : ""}</span>
     </div>
-    <div class="sched-day-actions"></div>
+    <div class="sched-day-actions">${dayRevertHtml(iso(d))}</div>
   </div>`;
 }
 
@@ -4431,10 +4431,10 @@ function suggestEntry(dIso, n, patch) {
   const slot = slotsFor(dateFromIso(dIso)).find(item => item.n === n) || {};
   const current = swapFor(dIso, n) || {};
   const entry = {
-    subject: slot.subject || "",
-    teacher: slot.teacher || "",
-    room: slot.room || "",
-    self: Boolean(slot.self),
+    subject: slot.origSubject || slot.subject || "",
+    teacher: slot.origTeacher || slot.teacher || "",
+    room: slot.origRoom || slot.room || "",
+    self: Boolean(slot.origSelf !== undefined ? slot.origSelf : slot.self),
   };
   if (current.moved) {
     entry.moved = true;
@@ -4494,7 +4494,18 @@ function openSuggestSheet(dIso, n) {
     <small>${escapeHtml(hint)}</small></span>${ICON_CHEVRON}</button>`;
 
   const renderRoot = () => {
-    const list = isEmptySlot ? [] : SUGGEST_OPTIONS;
+    const currentSwap = swapFor(dIso, n);
+    const isCancelledOnce = Boolean(currentSwap && currentSwap.cancelled && !currentSwap.hidden);
+    const list = isEmptySlot ? [] : SUGGEST_OPTIONS.map(item => {
+      if (item.id === "cancelled" && isCancelledOnce) {
+        return {
+          ...item,
+          title: "убрать пару совсем",
+          hint: "скрыть из расписания (не писать «отменена»)",
+        };
+      }
+      return item;
+    });
     sheet.innerHTML = head("что изменилось?") +
       '<div class="sched-move-targets">' +
       list.map(item => option(item.mark, item.title, item.hint, `data-suggest-pick="${item.id}"`)).join("") +
@@ -4601,8 +4612,20 @@ function openSuggestSheet(dIso, n) {
     const pick = event.target.closest("[data-suggest-pick]");
     if (pick) {
       const id = pick.dataset.suggestPick;
-      if (id === "cancelled") suggestSend(dIso, n, { cancelled: true });
-      else if (id === "revert") suggestSend(dIso, n, null);
+      if (id === "cancelled") {
+        const existingSw = swapFor(dIso, n) || {};
+        if (existingSw.cancelled && !existingSw.hidden) {
+          suggestSend(dIso, n, { cancelled: true, hidden: true });
+          toast("пара убрана из расписания");
+        } else {
+          suggestSend(dIso, n, { cancelled: true, hidden: false });
+          toast("пара отменена");
+        }
+      }
+      else if (id === "revert") {
+        suggestSend(dIso, n, null);
+        toast("расписание возвращено");
+      }
       /* Перенос — это та же шторка, что у редактора: список мест в дне. */
       /* «время сдвинули» — сразу та же доска с окнами, что в редакторе.
          Списком мест подстраховываемся, если строки на экране нет. */
@@ -4654,14 +4677,14 @@ function openAddPairSheet(dIso) {
 
   const firstFree = [1, 2, 3, 4, 5, 6].find(num => {
     const s = slots.find(slot => slot.n === num);
-    return !s || s.window || s.cancelled || s.empty;
+    return !s || s.window || s.cancelled || s.empty || s.hidden;
   }) || 1;
 
   const numOptions = [1, 2, 3, 4, 5, 6, 7].map(num => {
     const s = slots.find(slot => slot.n === num);
     const times = sat ? TIMES[num]?.sat : TIMES[num]?.week;
     const timeStr = times ? ` (${times[0]}–${times[1]})` : "";
-    const isFree = !s || s.window || s.cancelled || s.empty;
+    const isFree = !s || s.window || s.cancelled || s.empty || s.hidden;
     const status = isFree ? "свободно" : `занято (${s.subject || "пара"})`;
     return `<option value="${num}" ${num === firstFree ? "selected" : ""}>${num} пара${timeStr} · ${status}</option>`;
   }).join("");
@@ -4839,6 +4862,7 @@ function slotsFor(d) {
       next.cancelled = true;
       next.window = false;
       next.empty = false;
+      if (sw.hidden) next.hidden = true;
       if (!next.subject) next.subject = "пара отменена";
       return next;
     }
@@ -5043,7 +5067,7 @@ function openSwapSheet(dIso, n) {
     swapPrimaryLabel() +
     "</button>" +
     /* В окне отменять нечего — пары там нет. */
-    (isWindowSlot ? "" : '<button type="button" data-swap="cancel-lesson">отменить пару</button>') +
+    (isWindowSlot ? "" : '<button type="button" data-swap="cancel-lesson">' + (sw.cancelled && !sw.hidden ? "убрать совсем" : "отменить пару") + '</button>') +
     '<button type="button" data-swap="reset">вернуть как было</button>' +
     '<button type="button" data-swap="close">закрыть</button>' +
     "</div>" +
@@ -5130,7 +5154,14 @@ function openSwapSheet(dIso, n) {
         toast("в окне нет пары — отменять нечего");
         return;
       }
-      setSwap(dIso, n, { cancelled: true });
+      const existingSw = swapFor(dIso, n) || {};
+      if (existingSw.cancelled && !existingSw.hidden) {
+        setSwap(dIso, n, { cancelled: true, hidden: true });
+        toast("пара убрана из расписания");
+      } else {
+        setSwap(dIso, n, { cancelled: true, hidden: false });
+        toast("пара отменена");
+      }
 
       commit();
       return;
@@ -5996,7 +6027,7 @@ function buildDayTablePayload(dIso) {
       const slot = allSlots.find(s => s.n === n);
       const times = sat ? TIMES[n]?.sat : TIMES[n]?.week;
       const timeStr = times ? `${times[0]}–${times[1]}` : (slot?.from && slot?.to ? `${slot.from}–${slot.to}` : "");
-      if (!slot || slot.window || slot.empty) {
+      if (!slot || slot.window || slot.empty || slot.hidden) {
         rows.push({
           n,
           subject: "—",
@@ -6041,9 +6072,10 @@ function notifyCloudEvent(path, body) {
 
   let verb;
   if (type === "pending") {
-    verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
+    verb = body.hidden ? "предложили скрыть" : body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : "предложили изменить";
   } else if (body.makeWindow) verb = "сделали окном";
   else if (body.deleted) verb = "откатили изменения";
+  else if (body.hidden) verb = "скрыли";
   else if (body.cancelled) verb = "отменили";
   else if (body.moved) verb = "перенесли";
   else verb = "заменили";
@@ -6273,15 +6305,18 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       const group = key.split("|")[0], date = (key.split("|")[1] || "").split(":")[0];
       const pending = section === CLOUD_PATHS.pending;
       const allDeleted = list.every(([_, v]) => v.deleted);
+      const allHidden = list.every(([_, v]) => v.hidden);
       const allCancelled = list.every(([_, v]) => v.cancelled);
       const allMoved = list.every(([_, v]) => v.moved);
       const action = allDeleted
         ? (pending ? "предложили откатить изменения" : "откатили изменения")
-        : allCancelled
-          ? (pending ? "предложили отменить пары" : "отменили пары")
-          : allMoved
-            ? (pending ? "предложили перенести пары" : "перенесли пары")
-            : (pending ? "предложили изменить пары" : "изменили пары");
+        : allHidden
+          ? (pending ? "предложили скрыть пары" : "скрыли пары")
+          : allCancelled
+            ? (pending ? "предложили отменить пары" : "отменили пары")
+            : allMoved
+              ? (pending ? "предложили перенести пары" : "перенесли пары")
+              : (pending ? "предложили изменить пары" : "изменили пары");
 
       let text;
       if (allDeleted) {

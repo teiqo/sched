@@ -9,7 +9,7 @@ export function lessonType(slot) {
 }
 
 export function isSlotVisible(slot, preferences) {
-  if (slot.cancelled) return false;
+  if (slot.cancelled || slot.hidden) return false;
   if (slot.window) return Boolean(preferences.windows);
   if (isVacancy(slot) && !preferences.showVacancies) return false;
   if (slot.self && preferences.showSelfStudy === false) return false;
