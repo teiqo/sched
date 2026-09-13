@@ -5000,31 +5000,22 @@ a.sched-settings-row,
   transform: none !important;
   transition-property: color, background-color, opacity !important;
 }
-#stage .sched-active-day-scene.is-entering .live-lesson-card {
+#stage .sched-active-day-scene.is-entering :is(#live-host, .live-lesson-card) {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: 0s !important;
+  animation-delay: 35ms !important;
 }
 #stage .sched-active-day-scene.is-entering .agenda-row {
-  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both;
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
 }
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1) {
-  animation-delay: calc(var(--duration-stagger, 40ms) * 1);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2) {
-  animation-delay: calc(var(--duration-stagger, 40ms) * 2);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3) {
-  animation-delay: calc(var(--duration-stagger, 40ms) * 3);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4) {
-  animation-delay: calc(var(--duration-stagger, 40ms) * 4);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(5) {
-  animation-delay: calc(var(--duration-stagger, 40ms) * 5);
-}
-#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 6) {
-  animation-delay: calc(var(--duration-stagger, 40ms) * 6);
-}
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1 of .agenda-row) { animation-delay: 45ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2 of .agenda-row) { animation-delay: 100ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3 of .agenda-row) { animation-delay: 155ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4 of .agenda-row) { animation-delay: 210ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(5 of .agenda-row) { animation-delay: 265ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(6 of .agenda-row) { animation-delay: 320ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(7 of .agenda-row) { animation-delay: 375ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 8 of .agenda-row) { animation-delay: 430ms !important; }
 .sched-future-days {
   animation: none;
 }
@@ -5692,8 +5683,6 @@ a.sched-settings-row,
   opacity: 1 !important;
   transform: translate3d(0, 0, 0) !important;
   border-top: 1px solid var(--sched-separator) !important;
-  pointer-events: auto !important;
-  visibility: visible;
   transition:
     max-height 0.36s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.28s ease 0.04s,
@@ -5702,20 +5691,41 @@ a.sched-settings-row,
     padding-bottom 0.36s cubic-bezier(0.16, 1, 0.3, 1),
     border-top-color 0.22s ease !important;
 }
+/* visibility: visible и pointer-events: auto — только когда поповер открыт,
+   иначе accent-row пробивает visibility: hidden родителя и перехватывает клики
+   по кнопке «+» добавления пары, открывая color picker вместо шторки. */
+.sched-settings-popover.is-open #accent-row.is-visible,
+.sched-settings-popover.is-closing #accent-row.is-visible {
+  pointer-events: auto !important;
+  visibility: visible;
+}
 
 /* Каскад появления: перерывы и live-host вместе с парами */
-#stage .sched-active-day-scene.is-entering .agenda-break,
-#stage .sched-active-day-scene.is-entering #live-host {
+#stage .sched-active-day-scene.is-entering :is(#live-host, .live-lesson-card) {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: 35ms !important;
 }
-#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row,
-#stage .sched-active-day-scene.is-entering .agenda-list .agenda-break {
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
+}
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(1 of .agenda-row) { animation-delay: 45ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(2 of .agenda-row) { animation-delay: 100ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(3 of .agenda-row) { animation-delay: 155ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(4 of .agenda-row) { animation-delay: 210ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(5 of .agenda-row) { animation-delay: 265ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(6 of .agenda-row) { animation-delay: 320ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(7 of .agenda-row) { animation-delay: 375ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-row:nth-child(n + 8 of .agenda-row) { animation-delay: 430ms !important; }
+
+#stage .sched-active-day-scene.is-entering .agenda-list .agenda-break {
+  animation: sched-break-fade-in var(--duration-fast, 0.35s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
 }
 /* Завершённые пары сегодня при входе в день — лёгкое появление блока */
 #stage .sched-active-day-scene.is-entering .completed-lessons {
   animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: 0s !important;
+  animation-delay: 25ms !important;
 }
 #stage .sched-active-day-scene.is-entering .completed-lessons:not(.is-expanding) .agenda-row {
   animation: none !important;

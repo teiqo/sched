@@ -621,7 +621,7 @@ function liveCardHtml(live, dIso) {
   </article>`;
 }
 
-function rowHtml(slot, live, dIso, isLastLessonOfDay = false) {
+function rowHtml(slot, live, dIso, isLastLessonOfDay = false, rowIndex = null) {
   const isCurrent = live && live.kind === "current" && live.slot.n === slot.n && !slot.window;
   const isNext = live && live.kind === "next" && live.slot.n === slot.n && !slot.window;
   const cls = ["agenda-row"];
@@ -633,6 +633,7 @@ function rowHtml(slot, live, dIso, isLastLessonOfDay = false) {
   if (slot.pendingAdd) cls.push("is-pending-add");
   if (isLastLessonOfDay) cls.push("has-add-pair");
 
+  const styleAttr = rowIndex !== null ? ` style="--row-i:${rowIndex};"` : "";
   const time = `<div class="agenda-row-time"><span class="agenda-row-num">${slot.n}</span><time>${slot.from}<span>${slot.to}</span></time></div>`;
 
   if (slot.window) {
@@ -640,7 +641,7 @@ function rowHtml(slot, live, dIso, isLastLessonOfDay = false) {
     const editorAttrs = state.editorMode
       ? ` data-act="swap" data-date="${dIso}" data-n="${slot.n}" role="button" tabindex="0" aria-label="окно, ${slot.n} пара, нажми, чтобы изменить"`
       : "";
-    return `<div class="${cls.join(" ")}"${editorAttrs}>${time}<div class="agenda-row-content">
+    return `<div class="${cls.join(" ")}"${styleAttr}${editorAttrs}>${time}<div class="agenda-row-content">
       <strong>окно</strong>
     </div>${state.editorMode ? `<span class="lesson-swap-btn is-window-hint" aria-hidden="true">${ICON_SWAP}</span>` : suggestButtonHtml(dIso, slot)}</div>`;
   }
@@ -659,7 +660,7 @@ function rowHtml(slot, live, dIso, isLastLessonOfDay = false) {
         ? `<span class="lesson-origin-mark is-swap">${changeLabel(slot)}</span>`
         : "";
 
-  return `<div class="${cls.join(" ")}" data-row-n="${slot.n}">${time}<div class="agenda-row-content">
+  return `<div class="${cls.join(" ")}" data-row-n="${slot.n}"${styleAttr}>${time}<div class="agenda-row-content">
     <strong>${escapeHtml(slot.subject)}${swapMark}${mark}</strong>
     <span class="lesson-meta">${metaHtml(slot)}</span>
     <small>${bellDuration(mins(slot.to) - mins(slot.from))}</small>
@@ -668,8 +669,9 @@ function rowHtml(slot, live, dIso, isLastLessonOfDay = false) {
 
 /* Перерыв между парами: маленький чип, встроенный в линию-разделитель
    (в духе подложки аудитории, только на стыке строк). */
-function breakChipHtml(gap) {
-  return `<div class="agenda-break"><span class="agenda-break-chip">${gap >= 30 ? "большой перерыв" : "перерыв"} · <strong>${bellDuration(gap)}</strong></span></div>`;
+function breakChipHtml(gap, rowIndex = null) {
+  const styleAttr = rowIndex !== null ? ` style="--row-i:${rowIndex};"` : "";
+  return `<div class="agenda-break"${styleAttr}><span class="agenda-break-chip">${gap >= 30 ? "большой перерыв" : "перерыв"} · <strong>${bellDuration(gap)}</strong></span></div>`;
 }
 
 /* Между соседними парами вставляем чип перерыва.
@@ -677,13 +679,14 @@ function breakChipHtml(gap) {
 function withBreaksHtml(slots, live, dIso, lastLessonN = null) {
   const out = [];
   let prev = null;
+  let rowIndex = 0;
   slots.forEach((s) => {
     if (prev && !prev.window && !s.window) {
       const gap = mins(s.from) - mins(prev.to);
-      if (gap > 0) out.push(breakChipHtml(gap));
+      if (gap > 0) out.push(breakChipHtml(gap, rowIndex));
     }
     const isLast = !s.window && lastLessonN !== null && s.n === lastLessonN;
-    out.push(rowHtml(s, live, dIso, isLast));
+    out.push(rowHtml(s, live, dIso, isLast, rowIndex++));
     prev = s;
   });
   return out.join("");
@@ -1011,12 +1014,16 @@ function setScene(html, direction) {
 
   if (!old) {
     const first = document.createElement("div");
-    first.className = "sched-active-day-scene";
+    first.className = "sched-active-day-scene is-entering";
     first.id = "day-scene";
     first._schedHtml = html;
     first.innerHTML = html;
     stage.appendChild(first);
     setupLazyDays();
+    sceneTimer = window.setTimeout(() => {
+      first.classList.remove("is-entering");
+      sceneTimer = null;
+    }, 700);
     return;
   }
 

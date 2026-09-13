@@ -274,20 +274,39 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 /* Restore a true top-to-bottom cascade without moving break text. */
 @keyframes sched-pair-down-in { from { opacity: 0; transform: translate3d(0,-9px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
 @keyframes sched-break-fade-in { from { opacity: 0; } to { opacity: 1; } }
-#stage .sched-active-day-scene.is-entering .agenda-row[data-row-n] {
-  animation: sched-pair-down-in var(--duration-fast,.4s) var(--ease-smooth-out) both !important;
+
+#stage .sched-active-day-scene.is-entering .agenda-row {
+  animation: sched-pair-down-in var(--duration-fast, .4s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
 }
-#stage .sched-active-day-scene.is-entering :is(.agenda-row, .agenda-row[data-row-n], .live-lesson-card, .agenda-break) {
-  animation-delay: 0s !important;
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(1 of .agenda-row) { animation-delay: 45ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(2 of .agenda-row) { animation-delay: 100ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(3 of .agenda-row) { animation-delay: 155ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(4 of .agenda-row) { animation-delay: 210ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(5 of .agenda-row) { animation-delay: 265ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(6 of .agenda-row) { animation-delay: 320ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(7 of .agenda-row) { animation-delay: 375ms !important; }
+#stage .sched-active-day-scene.is-entering .agenda-row:nth-child(n + 8 of .agenda-row) { animation-delay: 430ms !important; }
+
+#stage .sched-active-day-scene.is-entering .agenda-break {
+  animation: sched-break-fade-in var(--duration-fast, .35s) var(--ease-smooth-out) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
+}
+
+#stage .sched-active-day-scene.is-entering :is(#live-host, .live-lesson-card) {
+  animation: sched-pair-down-in var(--duration-fast, .4s) var(--ease-smooth-out) both !important;
+  animation-delay: 35ms !important;
+}
+
+#stage .sched-active-day-scene.is-entering .completed-lessons {
+  animation: sched-pair-down-in var(--duration-fast, .4s) var(--ease-smooth-out) both !important;
+  animation-delay: 25ms !important;
 }
 
 /* При перемещении по рулетке или скраббинге задержки полностью отключаются */
 :is(.is-date-scrubbing, .is-date-settling, #strip.is-scrubbing, #scene.is-date-scrubbing, body.is-scrubbing) #stage .sched-active-day-scene.is-entering :is(.agenda-row, .live-lesson-card, .agenda-break, .t-stagger-line) {
   animation-delay: 0s !important;
   animation-duration: 0.16s !important;
-}
-#stage .sched-active-day-scene.is-entering .agenda-break {
-  animation: sched-break-fade-in .22s ease-out both !important;
 }
 
 /* “Дополнительно” looks like the other settings rows (for example, bell schedule). */
@@ -867,7 +886,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
    ========================================================================== */
 #stage .sched-active-day-scene.is-entering
   .sched-day-block > .agenda-list > .agenda-row:first-child {
-  animation-delay: 0s !important;
+  animation-delay: 45ms !important;
 }
 
 /* Карточка «далее»: fixes.css оставлял кнопке flex-basis:44px и отрицательный
