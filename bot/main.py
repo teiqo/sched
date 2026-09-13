@@ -28,18 +28,46 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
-# Use package-relative imports under `python -m bot.main`, and local imports
-# under direct `python bot/main.py` execution. This avoids accidentally loading
-# an unrelated installed package named `reports`.
-if __package__:
-    from .authentication import Auth, AuthError
-    from .reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
-else:
-    bot_dir = str(Path(__file__).resolve().parent)
-    if not sys.path or sys.path[0] != bot_dir:
-        sys.path.insert(0, bot_dir)
-    from authentication import Auth, AuthError
-    from reports import Reports, ReportError, MAX_BODY as MAX_REPORT_BODY
+import importlib.util
+
+_bot_dir = Path(__file__).resolve().parent
+
+
+def _load_sibling(name: str):
+    file_path = _bot_dir / f"{name}.py"
+    if not file_path.is_file():
+        raise ImportError(
+            f"\n[sched-bot] Файл '{file_path}' отсутствует на сервере!\n"
+            f"Загрузите его командой:\n"
+            f"  curl -sSL https://raw.githubusercontent.com/teiqo/sched/main/bot/{name}.py -o {file_path}\n"
+        )
+    size = file_path.stat().st_size
+    if size < 50:
+        raise ImportError(
+            f"\n[sched-bot] Файл '{file_path}' повреждён или пустой (размер: {size} байт)!\n"
+            f"FileZilla мог передать битый файл. Перекачайте его командой:\n"
+            f"  curl -sSL https://raw.githubusercontent.com/teiqo/sched/main/bot/{name}.py -o {file_path}\n"
+        )
+    pkg_mod_name = f"{__package__}.{name}" if __package__ else name
+    spec = importlib.util.spec_from_file_location(pkg_mod_name, file_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"[sched-bot] Не удалось инициализировать модуль {file_path}")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[pkg_mod_name] = mod
+    if not __package__:
+        sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_auth_mod = _load_sibling("authentication")
+Auth = _auth_mod.Auth
+AuthError = _auth_mod.AuthError
+
+_reports_mod = _load_sibling("reports")
+Reports = _reports_mod.Reports
+ReportError = _reports_mod.ReportError
+MAX_REPORT_BODY = _reports_mod.MAX_BODY
 
 LOG = logging.getLogger("sched")
 
