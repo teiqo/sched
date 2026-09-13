@@ -46,7 +46,7 @@ LOG = logging.getLogger("sched")
 GREETING = (
     "тут можно посмотреть расписание для <b>ЮУрГТК</b>\n\n"
     'вот тут — <a href="https://teiqo.github.io/sched/">https://teiqo.github.io/sched/</a>\n\n'
-    "а этот бот прост для уведомлений =)"
+    "а этот бот прост для уведомлений=)"
 )
 MAX_BODY = 65536
 
