@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v105-calm-reveal-day-headings";
+const CACHE = CACHE_PREFIX + "2026-09-13-v106-rectangle-reveal-text-scramble";
 const ASSETS = [
   "./",
   "./index.html",

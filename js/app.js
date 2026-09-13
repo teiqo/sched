@@ -683,7 +683,7 @@ function withBreaksHtml(slots, live, dIso, lastLessonN = null) {
   slots.forEach((s) => {
     if (prev && !prev.window && !s.window) {
       const gap = mins(s.from) - mins(prev.to);
-      if (gap > 0) out.push(breakChipHtml(gap, rowIndex));
+      if (gap > 0) out.push(breakChipHtml(gap, rowIndex++));
     }
     const isLast = !s.window && lastLessonN !== null && s.n === lastLessonN;
     out.push(rowHtml(s, live, dIso, isLast, rowIndex++));
@@ -987,6 +987,182 @@ function bellsHtml() {
   </div>`;
 }
 
+/* ---------- декодирование текста из случайных символов ---------- */
+
+const SCRAMBLE_CHARS = "абвгдежзийклмнопрстуфхцчшщ0123456789§#%&*+=/~";
+const PRESERVED_REGEX = /[\s.,:;–—\-/\\()0-9№#]/;
+
+let activeScrambleRaf = null;
+let activeScrambleNodes = [];
+
+function cancelActiveScramble() {
+  if (activeScrambleRaf !== null) {
+    cancelAnimationFrame(activeScrambleRaf);
+    activeScrambleRaf = null;
+  }
+  if (activeScrambleNodes.length > 0) {
+    for (let i = 0; i < activeScrambleNodes.length; i++) {
+      const item = activeScrambleNodes[i];
+      try {
+        if (item.node && item.node.isConnected) {
+          item.node.textContent = item.original;
+        }
+      } catch (_) {}
+    }
+    activeScrambleNodes = [];
+  }
+}
+
+function extractScrambleNodes(el) {
+  const nodes = [];
+  if (!el) return nodes;
+  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+  let n;
+  while ((n = walk.nextNode())) {
+    if (n.parentElement && n.parentElement.closest(".lesson-origin-mark, .lesson-swap-btn, .sched-add-pair-btn, svg")) continue;
+    const txt = n.textContent;
+    if (txt && txt.trim().length > 0) {
+      nodes.push({ node: n, original: txt, settled: false });
+    }
+  }
+  return nodes;
+}
+
+function runTextScramble(sceneNode) {
+  cancelActiveScramble();
+  if (!sceneNode) return;
+
+  const dayBlocks = sceneNode.querySelectorAll(".sched-day-block");
+  if (!dayBlocks.length) return;
+
+  const items = [];
+
+  dayBlocks.forEach((block, dayIdx) => {
+    // Анимируем только видимые блоки (активный день и первый последующий), экономя ресурсы
+    if (dayIdx > 1) return;
+
+    const baseHeadingDelay = dayIdx === 0 ? 20 : 200;
+    const baseRowDelay = dayIdx === 0 ? 60 : 240;
+    const rowStep = dayIdx === 0 ? 95 : 85;
+
+    // 1. Заголовок дня
+    const headingEl = block.querySelector(".sched-day-heading h2");
+    if (headingEl) {
+      extractScrambleNodes(headingEl).forEach((nObj, nodeIdx) => {
+        items.push({
+          ...nObj,
+          startAt: baseHeadingDelay + nodeIdx * 60,
+          duration: 380,
+        });
+      });
+    }
+
+    // 2. Строки расписания, перерывы, карточки и заглушки
+    const rows = block.querySelectorAll(".agenda-row, .agenda-break, #live-host, .sched-empty-day");
+    rows.forEach((row) => {
+      const rowI = parseInt(row.style.getPropertyValue("--row-i") || "0", 10);
+      const rowDelay = baseRowDelay + rowI * rowStep;
+
+      const titleEl = row.querySelector(".agenda-row-content strong, h3, strong");
+      if (titleEl) {
+        extractScrambleNodes(titleEl).forEach((nObj) => {
+          items.push({
+            ...nObj,
+            startAt: rowDelay,
+            duration: 380,
+          });
+        });
+      }
+
+      const metaEl = row.querySelector(".lesson-meta");
+      if (metaEl) {
+        extractScrambleNodes(metaEl).forEach((nObj) => {
+          items.push({
+            ...nObj,
+            startAt: rowDelay + 30,
+            duration: 350,
+          });
+        });
+      }
+
+      const chipEl = row.querySelector(".agenda-break-chip");
+      if (chipEl) {
+        extractScrambleNodes(chipEl).forEach((nObj) => {
+          items.push({
+            ...nObj,
+            startAt: rowDelay,
+            duration: 320,
+          });
+        });
+      }
+    });
+  });
+
+  if (!items.length) return;
+
+  activeScrambleNodes = items;
+  const startTime = performance.now();
+  let lastRandomize = 0;
+  let randomPool = "";
+  for (let k = 0; k < 64; k++) {
+    randomPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+  }
+
+  function step(now) {
+    const elapsed = now - startTime;
+    let allDone = true;
+
+    // Пул случайных символов обновляется ~30 раз/сек для мягкого мерцания без стробоскопа
+    if (now - lastRandomize > 32) {
+      lastRandomize = now;
+      let newPool = "";
+      for (let k = 0; k < 64; k++) {
+        newPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+      }
+      randomPool = newPool;
+    }
+
+    for (let j = 0; j < items.length; j++) {
+      const item = items[j];
+      if (!item.node.isConnected) continue;
+
+      if (elapsed < item.startAt) {
+        allDone = false;
+        continue;
+      }
+
+      const p = Math.min(1, (elapsed - item.startAt) / item.duration);
+      if (p < 1) {
+        allDone = false;
+        const orig = item.original;
+        const len = orig.length;
+        let out = "";
+        for (let i = 0; i < len; i++) {
+          const ch = orig[i];
+          if (PRESERVED_REGEX.test(ch) || p >= i / len) {
+            out += ch;
+          } else {
+            out += randomPool[(i + j * 7) % randomPool.length];
+          }
+        }
+        item.node.textContent = out;
+      } else if (!item.settled) {
+        item.settled = true;
+        item.node.textContent = item.original;
+      }
+    }
+
+    if (!allDone) {
+      activeScrambleRaf = requestAnimationFrame(step);
+    } else {
+      activeScrambleRaf = null;
+      activeScrambleNodes = [];
+    }
+  }
+
+  activeScrambleRaf = requestAnimationFrame(step);
+}
+
 /* ---------- рендер ---------- */
 
 function setScene(html, direction) {
@@ -995,6 +1171,7 @@ function setScene(html, direction) {
   if (old && old._schedHtml === html) {
     return;
   }
+  cancelActiveScramble();
   if (sceneOutTimer !== null) {
     window.clearTimeout(sceneOutTimer);
     sceneOutTimer = null;
@@ -1008,6 +1185,14 @@ function setScene(html, direction) {
     if (node !== old) node.remove();
   });
 
+  const scene = $("#scene");
+  const isLearning = isLearningModeActive();
+  const perfActive = Boolean(state.perfMode && !isLearning);
+  const reduced =
+    perfActive ||
+    (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+    Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
+
   if (!old) {
     const first = document.createElement("div");
     first.className = "sched-active-day-scene is-entering";
@@ -1016,20 +1201,16 @@ function setScene(html, direction) {
     first.innerHTML = html;
     stage.appendChild(first);
     setupLazyDays();
+    if (!reduced) {
+      runTextScramble(first);
+    }
     sceneTimer = window.setTimeout(() => {
       first.classList.remove("is-entering");
+      cancelActiveScramble();
       sceneTimer = null;
     }, 2600);
     return;
   }
-
-  const scene = $("#scene");
-  const isLearning = isLearningModeActive();
-  const perfActive = Boolean(state.perfMode && !isLearning);
-  const reduced =
-    perfActive ||
-    (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
-    Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
 
   if (!direction || reduced) {
     if (sceneTimer !== null) {
@@ -1076,6 +1257,9 @@ function setScene(html, direction) {
   next.innerHTML = html;
   stage.appendChild(next);
   setupLazyDays();
+  if (!reduced) {
+    runTextScramble(next);
+  }
 
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
   const dur = 160;
@@ -1104,6 +1288,7 @@ function setScene(html, direction) {
       outAnim.cancel();
     } catch (_) {}
     next.style.animation = "";
+    cancelActiveScramble();
     sceneTimer = null;
   }, 2600);
 }
@@ -2261,7 +2446,10 @@ function bindEvents() {
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
     contentKey: () => sceneRevision,
-    onActiveChange: active => { daySwipeActive = active; },
+    onActiveChange: active => {
+      daySwipeActive = active;
+      if (active) cancelActiveScramble();
+    },
     onCommit: d => {
       // The neighbour has already slid into place: do not play a second entrance.
       holdMotionLite();
@@ -7836,8 +8024,6 @@ function openReportSheet() {
     <button type="button" class="sched-report-dropzone" id="report-dropzone"><span class="sched-report-dropzone-text"><strong>прикрепить файл</strong><small>скриншот, видео или лог · до 20 мб</small></span></button>
     <div class="sched-report-file-preview" id="report-file-preview" hidden><div class="sched-report-file-info"><strong id="report-file-name"></strong><small id="report-file-size"></small></div><button type="button" id="report-file-remove" aria-label="удалить файл">×</button></div>
     <p id="report-file-error" class="sched-report-file-error" role="alert" hidden></p>
-    <label class="sched-report-include"><input id="report-include-diag" type="checkbox" checked><span>прикрепить диагностику</span></label>
-    <details class="sched-report-details"><summary>что войдёт в диагностику</summary><p class="sched-report-privacy">полные настройки пользователя, включая уведомления; выбранный день и пары, версия приложения, устройство, состояние подключения и последние ошибки. без токенов, паролей и истории браузера.</p><pre class="sched-report-diag-pre">${escapeHtml(diag)}</pre><button type="button" class="sched-report-download" id="report-download-diag">скачать диагностику</button></details>
     <p class="sched-report-form-error" id="report-form-error" role="alert" hidden></p>
     <div class="sched-replace-actions"><button type="button" data-report="close">отмена</button><button type="button" class="is-primary" id="report-submit-btn">отправить</button></div>
   </div></div>`;
@@ -7860,20 +8046,19 @@ function openReportSheet() {
   zone.addEventListener('dragleave', () => zone.classList.remove('is-dragover'));
   zone.addEventListener('drop', event => { event.preventDefault(); zone.classList.remove('is-dragover'); setFile(event.dataTransfer?.files[0]); });
   backdrop.addEventListener('paste', event => { const file = [...(event.clipboardData?.files || [])][0]; if (file) { event.preventDefault(); setFile(file); } });
-  backdrop.querySelector('#report-download-diag').addEventListener('click', () => downloadClientFile('sched-diagnostics.json', new Blob([diag], { type: 'application/json' })));
   const button = backdrop.querySelector('#report-submit-btn'), errorEl = backdrop.querySelector('#report-form-error');
   button.addEventListener('click', async () => {
     if (button.disabled) return;
     const message = backdrop.querySelector('#report-message').value.trim();
     if (!message) { errorEl.textContent = 'опиши, что произошло.'; errorEl.hidden = false; backdrop.querySelector('#report-message').focus(); return; }
-    if (LOCAL_PREVIEW) { errorEl.textContent = 'локальный просмотр: отчёт не отправляется. диагностику можно скачать.'; errorEl.hidden = false; return; }
+    if (LOCAL_PREVIEW) { errorEl.textContent = 'локальный просмотр: отчёт не отправляется.'; errorEl.hidden = false; return; }
     const selectedFile = reportSelectedFile;
     backdrop.dataset.sending = 'true'; button.textContent = 'отправляем…'; errorEl.hidden = true;
     backdrop.querySelectorAll('button,input,textarea').forEach(el => el.disabled = true);
     try {
       const file = await readReportFile(selectedFile);
       const result = await botRequest('reports', { report_id: reportId, message,
-        diagnostics: backdrop.querySelector('#report-include-diag').checked ? diag : '', group: state.group || '', file },
+        diagnostics: diag, group: state.group || '', file },
         pushSessionToken(), { retries: 1, timeout: 60000 });
       if (!result.report_id || selectedFile && !result.attachment_stored) throw new Error('сервер не подтвердил сохранение вложения. обнови сервер бота.');
       backdrop.dataset.sending = 'false';

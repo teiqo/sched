@@ -2209,13 +2209,15 @@ body.is-dragging-pair {
   }
 }
 
-/* ВСЕ ПЛАШКИ И ЗАГОЛОВКИ ДНЕЙ:
-   - Математически выверенная градиентная маска со 100% невидимым стартом (чистый старт с 0-го пикселя слева)
-   - Мягкий градиентный переход с возрастанием прозрачности вправо (linear-gradient: #000 0%, #000 40%, transparent 60%, transparent 100%)
-   - Длительность 0.92s и естественная кривая cubic-bezier(0.22, 0.7, 0.36, 1) исключают резкий рывок в начале и дают плавную прорисовку текста и карточек */
+/* ВСЕ ПРЯМОУГОЛЬНИКИ, ОБЛАСТИ И ЗАГОЛОВКИ ДНЕЙ:
+   - Маска применяется к каждому отдельному прямоугольнику (пара, окно, линия/чип перерыва, заголовок дня, live-карточка),
+     а не ко всему списку разом. Так каждая область прорисовывается по очереди слева направо.
+   - Подложка .agenda-list проявляется мягким фейдом. */
 #stage .sched-active-day-scene.is-entering :is(
   .sched-day-heading,
-  .agenda-list,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
@@ -2229,8 +2231,22 @@ body.is-dragging-pair {
   mask-position: 100% 0;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  animation: sched-gradient-reveal 0.92s cubic-bezier(0.22, 0.7, 0.36, 1) both !important;
+  animation: sched-gradient-reveal 0.68s cubic-bezier(0.22, 0.7, 0.36, 1) both !important;
   transform: none !important;
+}
+
+/* Сама серая подложка карточки плавно проявляется, не обрезая строки целиком */
+#stage .sched-active-day-scene.is-entering .agenda-list {
+  animation: sched-list-fade 0.35s ease both !important;
+  animation-delay: 30ms !important;
+}
+@keyframes sched-list-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Оптимизация композитинга: во время анимации входа дочерние элементы не порождают сотни изолированных GPU-слоёв */
@@ -2258,21 +2274,22 @@ body.is-dragging-pair {
 
 /* 1. АКТИВНЫЙ ВЕРХНИЙ ДЕНЬ:
    - Заголовок дня (текст дней) мягко и плавно прорисовывается слева направо (старт с 20 мс)
-   - Плашка со всеми парами подхватывает (старт с 70 мс)
-   - Все строки внутри плашки начинают проявляться с самого левого края вместе с маской плашки без обрыва наполовину */
+   - Прямоугольники строк и перерывы прорисовываются по очереди (старт с 60 мс + index * 95 мс) */
 #stage .sched-active-day-scene.is-entering > .sched-day-block .sched-day-heading {
   animation-delay: 20ms !important;
-  animation-duration: 0.88s !important;
+  animation-duration: 0.68s !important;
 }
 #stage .sched-active-day-scene.is-entering > .sched-day-block :is(
-  .agenda-list,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
   .sched-empty-day
 ) {
-  animation-delay: 70ms !important;
-  animation-duration: 0.92s !important;
+  animation-delay: calc(60ms + var(--row-i, 0) * 95ms) !important;
+  animation-duration: 0.68s !important;
 }
 
 /* 2. ПОСЛЕДУЮЩИЕ ДНИ:
@@ -2283,63 +2300,71 @@ body.is-dragging-pair {
   animation: none;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) .sched-day-heading {
-  animation-delay: 190ms !important;
-  animation-duration: 0.88s !important;
+  animation-delay: 200ms !important;
+  animation-duration: 0.68s !important;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) :is(
-  .agenda-list,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
   .sched-empty-day
 ) {
-  animation-delay: 230ms !important;
-  animation-duration: 0.92s !important;
+  animation-delay: calc(240ms + var(--row-i, 0) * 85ms) !important;
+  animation-duration: 0.68s !important;
 }
 
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) .sched-day-heading {
-  animation-delay: 360ms !important;
-  animation-duration: 0.88s !important;
+  animation-delay: 380ms !important;
+  animation-duration: 0.68s !important;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) :is(
-  .agenda-list,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
   .sched-empty-day
 ) {
-  animation-delay: 400ms !important;
-  animation-duration: 0.92s !important;
+  animation-delay: calc(420ms + var(--row-i, 0) * 80ms) !important;
+  animation-duration: 0.68s !important;
 }
 
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) .sched-day-heading {
-  animation-delay: 530ms !important;
-  animation-duration: 0.88s !important;
+  animation-delay: 560ms !important;
+  animation-duration: 0.68s !important;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) :is(
-  .agenda-list,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
   .sched-empty-day
 ) {
-  animation-delay: 570ms !important;
-  animation-duration: 0.92s !important;
+  animation-delay: calc(600ms + var(--row-i, 0) * 75ms) !important;
+  animation-duration: 0.68s !important;
 }
 
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 4) .sched-day-heading {
-  animation-delay: 700ms !important;
-  animation-duration: 0.88s !important;
+  animation-delay: 740ms !important;
+  animation-duration: 0.68s !important;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 4) :is(
-  .agenda-list,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
   .sched-empty-day
 ) {
-  animation-delay: 740ms !important;
-  animation-duration: 0.92s !important;
+  animation-delay: calc(780ms + var(--row-i, 0) * 70ms) !important;
+  animation-duration: 0.68s !important;
 }
 
 /* Снятие маски после завершения анимации:
@@ -2377,8 +2402,8 @@ body.is-dragging-pair {
 .sched-days-scene:is(.is-date-scrubbing, .is-date-settling) .sched-active-day-scene:is(.is-entering, .is-leaving) {
   animation-duration: inherit;
 }
-.sched-days-scene:is(.is-date-scrubbing, .is-date-settling) #stage .sched-active-day-scene.is-entering :is(.agenda-list, .sched-day-heading, #live-host, .live-lesson-card, .completed-lessons, .sched-empty-day) {
-  animation-duration: 0.92s !important;
+.sched-days-scene:is(.is-date-scrubbing, .is-date-settling) #stage .sched-active-day-scene.is-entering :is(.sched-day-heading, .agenda-row, .agenda-row.is-window-row, .agenda-break, #live-host, .live-lesson-card, .completed-lessons, .sched-empty-day) {
+  animation-duration: 0.68s !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
