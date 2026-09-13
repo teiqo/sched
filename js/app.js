@@ -6085,7 +6085,7 @@ function buildDayTablePayload(dIso) {
 const CAT_EMOJIS = {
   wave: '<tg-emoji emoji-id="5316885400361387337">👋</tg-emoji>',
   cat: '<tg-emoji emoji-id="5316832933040898464">🐱</tg-emoji>',
-  sad: '<tg-emoji emoji-id="5316651878694534428">😿</tg-emoji>',
+  sad: '<tg-emoji emoji-id="5316651878694534428">😢</tg-emoji>',
   cool: '<tg-emoji emoji-id="5316555220455539890">😎</tg-emoji>',
   happy: '<tg-emoji emoji-id="5317021237292057676">🥰</tg-emoji>',
   angel: '<tg-emoji emoji-id="5316583610189367227">😇</tg-emoji>',
