@@ -2211,7 +2211,7 @@ body.is-dragging-pair {
     -webkit-mask-position: 100% 0;
     mask-position: 100% 0;
   }
-  20% {
+  15% {
     opacity: 1;
   }
   100% {
@@ -2224,15 +2224,15 @@ body.is-dragging-pair {
 /* Карточки дней на месте: мягкая градиентная прозрачность раскрывается вправо, как печать текста */
 #stage .sched-active-day-scene.is-entering > .sched-day-block,
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block {
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 42%, transparent 88%, transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 42%, transparent 88%, transparent 100%);
-  -webkit-mask-size: 260% 100%;
-  mask-size: 260% 100%;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 38%, transparent 62%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 38%, transparent 62%, transparent 100%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
   -webkit-mask-position: 100% 0;
   mask-position: 100% 0;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  animation: sched-gradient-reveal 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sched-gradient-reveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
   transform: none !important;
   will-change: opacity, -webkit-mask-position, mask-position;
 }
@@ -2257,22 +2257,22 @@ body.is-dragging-pair {
   animation: none;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) {
-  animation-delay: 55ms !important;
-}
-#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) {
   animation-delay: 110ms !important;
 }
-#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) {
-  animation-delay: 165ms !important;
-}
-#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(4) {
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) {
   animation-delay: 220ms !important;
 }
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) {
+  animation-delay: 330ms !important;
+}
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(4) {
+  animation-delay: 440ms !important;
+}
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(5) {
-  animation-delay: 275ms !important;
+  animation-delay: 550ms !important;
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 6) {
-  animation-delay: 330ms !important;
+  animation-delay: 660ms !important;
 }
 
 /* Снятие маски и сброс will-change после завершения фазы входа */

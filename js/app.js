@@ -1105,7 +1105,7 @@ function setScene(html, direction) {
     } catch (_) {}
     next.style.animation = "";
     sceneTimer = null;
-  }, 850);
+  }, 1600);
 }
 
 function renderStrip() {
