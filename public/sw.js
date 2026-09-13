@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-13-v82-clean-palette-switch-to-default";
+const CACHE = CACHE_PREFIX + "2026-09-13-v85-fix-add-pair-no-moved-no-self";
 const ASSETS = [
   "./",
   "./index.html",

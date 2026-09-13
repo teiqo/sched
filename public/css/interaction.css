@@ -303,11 +303,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   animation-delay: 25ms !important;
 }
 
-/* При перемещении по рулетке или скраббинге задержки полностью отключаются */
-:is(.is-date-scrubbing, .is-date-settling, #strip.is-scrubbing, #scene.is-date-scrubbing, body.is-scrubbing) #stage .sched-active-day-scene.is-entering :is(.agenda-row, .live-lesson-card, .agenda-break, .t-stagger-line) {
-  animation-delay: 0s !important;
-  animation-duration: 0.16s !important;
-}
+/* Staggered entrance animations remain active during roulette scrub and day transitions */
 
 /* “Дополнительно” looks like the other settings rows (for example, bell schedule). */
 .sched-settings-more-group { overflow: hidden; }

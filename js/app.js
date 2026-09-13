@@ -4222,6 +4222,31 @@ function dayRevertHtml(dIso) {
     </button>`;
 }
 
+function bindBackdropDismiss(backdrop, closeFn) {
+  let touchDismiss = false;
+  backdrop.addEventListener("pointerdown", (e) => {
+    if (e.target === backdrop) {
+      touchDismiss = true;
+      e.stopPropagation();
+    }
+  });
+  backdrop.addEventListener("pointerup", (e) => {
+    if (e.target === backdrop && touchDismiss) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFn();
+    }
+    touchDismiss = false;
+  });
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFn();
+    }
+  });
+}
+
 function closeSheetAnimated(elOrId, onComplete, immediate = false) {
   const backdrop = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
   if (!backdrop) {
@@ -4240,6 +4265,9 @@ function closeSheetAnimated(elOrId, onComplete, immediate = false) {
   if (backdrop.classList.contains("is-closing")) return;
   backdrop.classList.add("is-closing");
   backdrop.classList.remove("is-open");
+  if (document.activeElement && document.activeElement !== document.body) {
+    try { document.activeElement.blur(); } catch (_) {}
+  }
   let done = false;
   const finish = () => {
     if (done) return;
@@ -4322,18 +4350,21 @@ function openMoveSheet(dIso, n, opts = {}) {
   </div>`;
   document.body.appendChild(backdrop);
   requestAnimationFrame(() => backdrop.classList.add("is-open"));
-  const close = () => {
+  const close = (returnFocus = false) => {
     closeMoveSheet(() => {
       if (opts?.isNew && typeof opts?.onCancel === "function") {
         opts.onCancel();
-      } else {
-        /* Вне редактора ручка другая, и старый селектор терял фокус в никуда. */
+      } else if (returnFocus) {
+        /* Возвращаем фокус только при выходе с клавиатуры (Escape),
+           но не при тапе вне окна на мобильных экранах. */
         const handle = state.editorMode ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
         document.querySelector(`${handle}[data-date="${dIso}"][data-n="${n}"]`)?.focus({ preventScroll: true });
       }
     });
   };
+  bindBackdropDismiss(backdrop, () => close(false));
   backdrop.addEventListener("click", event => {
+    if (event.target === backdrop) return;
     const target = event.target.closest("[data-move-to]");
     const edge = event.target.closest("[data-move-edge]");
     if (target && !target.disabled) {
@@ -4349,10 +4380,10 @@ function openMoveSheet(dIso, n, opts = {}) {
       movePairToEdge(dIso, n, edge.dataset.moveEdge === "bottom");
       if (typeof opts?.onSave === "function") opts.onSave();
     }
-    else if (event.target === backdrop || event.target.closest("[data-move-close]")) close();
+    else if (event.target.closest("[data-move-close]")) close(false);
   });
   backdrop.addEventListener("keydown", event => {
-    if (event.key === "Escape") { event.stopPropagation(); close(); }
+    if (event.key === "Escape") { event.stopPropagation(); close(true); }
     if (event.key === "Tab") {
       const buttons = [...backdrop.querySelectorAll("button:not(:disabled)")];
       if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1)?.focus(); }
@@ -4562,8 +4593,10 @@ function openSuggestSheet(dIso, n) {
     });
   };
 
+  bindBackdropDismiss(backdrop, () => closeSuggestSheet());
   backdrop.addEventListener("click", event => {
-    if (event.target === backdrop || event.target.closest("[data-suggest-close]")) { closeSuggestSheet(); return; }
+    if (event.target === backdrop) return;
+    if (event.target.closest("[data-suggest-close]")) { closeSuggestSheet(); return; }
     if (event.target.closest("[data-suggest-back]")) { renderRoot(); return; }
     const pick = event.target.closest("[data-suggest-pick]");
     if (pick) {
@@ -4713,15 +4746,17 @@ function openAddPairSheet(dIso) {
     if (!subj) { toast("выбери или впиши предмет"); return; }
     if (!room) { toast("укажи аудиторию"); roomField?.focus(); return; }
 
-    setSwap(dIso, n, { subject: subj, teacher, room, moved: true, self: true });
+    setSwap(dIso, n, { subject: subj, teacher, room, moved: false, self: false });
     render();
     closeSheetAnimated(backdrop, () => {
       toast("пара добавлена");
     });
   };
 
+  bindBackdropDismiss(backdrop, () => closeSheetAnimated(backdrop));
   backdrop.addEventListener("click", event => {
-    if (event.target === backdrop || event.target.closest("[data-add-pair-close]")) {
+    if (event.target === backdrop) return;
+    if (event.target.closest("[data-add-pair-close]")) {
       closeSheetAnimated(backdrop);
       return;
     }
@@ -5070,11 +5105,9 @@ function openSwapSheet(dIso, n) {
     render();
   };
 
+  bindBackdropDismiss(backdrop, () => closeSwapSheet());
   backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) {
-      closeSwapSheet();
-      return;
-    }
+    if (e.target === backdrop) return;
     const btn = e.target.closest("button[data-swap]");
     if (!btn) return;
     const act = btn.dataset.swap;
@@ -5252,7 +5285,14 @@ function previewAnimated() {
 function migrateSwaps(data) {
   const out = {};
   Object.keys(data).forEach((key) => {
-    out[key.indexOf("|") === -1 ? "тм-303/б|" + key : key] = data[key];
+    const entry = data[key];
+    if (entry && typeof entry === "object") {
+      if (entry.moved && entry.self && !entry.movedFrom && !entry.makeWindow) {
+        entry.moved = false;
+        entry.self = false;
+      }
+    }
+    out[key.indexOf("|") === -1 ? "тм-303/б|" + key : key] = entry;
   });
   return out;
 }
