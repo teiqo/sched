@@ -929,7 +929,9 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   pointer-events: none;
   -webkit-tap-highlight-color: transparent;
 }
-.sched-swipe-panel > .sched-day-block {
+.sched-swipe-panel > .sched-day-block,
+.sched-swipe-panel .sched-future-days,
+.sched-swipe-panel .sched-day-block {
   width: 100%;
   box-sizing: border-box;
 }

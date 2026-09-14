@@ -2266,41 +2266,13 @@ body.is-dragging-pair {
 
 /* ===== плавные следующие дни, ровная полоска, акцент и неон ===== */
 
-/* ---------- 1. следующие дни проявляются плавно и поэтапно ---------- */
-@keyframes sched-future-in {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 16px, 0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-.sched-future-days {
-  animation: none;
-}
+/* ---------- 1. следующие дни без скачков и повторных анимаций ---------- */
+.sched-future-days,
 .sched-future-days > .sched-day-block {
-  animation: sched-future-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: opacity, transform;
-}
-.sched-future-days > .sched-day-block:nth-of-type(1) {
-  animation-delay: 50ms !important;
-}
-.sched-future-days > .sched-day-block:nth-of-type(2) {
-  animation-delay: 110ms !important;
-}
-.sched-future-days > .sched-day-block:nth-of-type(3) {
-  animation-delay: 170ms !important;
-}
-.sched-future-days > .sched-day-block:nth-of-type(4) {
-  animation-delay: 230ms !important;
-}
-.sched-future-days > .sched-day-block:nth-of-type(5) {
-  animation-delay: 290ms !important;
-}
-.sched-future-days > .sched-day-block:nth-of-type(n + 6) {
-  animation-delay: 350ms !important;
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  will-change: auto !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .sched-future-days,

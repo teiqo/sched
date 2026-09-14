@@ -2298,7 +2298,7 @@ function bindEvents() {
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
     getDate: () => state.selected, minDate: minAllowedDate, addDays,
-    renderDay: d => dayHtml(d, true),
+    renderDay: d => dayHtml(d, true) + futureDaysHtml(d),
     /* Копии соседних дней готовятся заранее. Ключ меняется на каждой
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
@@ -2414,15 +2414,16 @@ function dotsHtml(d) {
   return `<span class="date-lesson-dots" aria-hidden="true">${"<i></i>".repeat(count)}</span>`;
 }
 
-function futureDaysHtml() {
-  const isWeekend = state.selected.getDay() === 6 || state.selected.getDay() === 0;
+function futureDaysHtml(forDate = state.selected) {
+  const dateRef = startOfDay(forDate);
+  const isWeekend = dateRef.getDay() === 6 || dateRef.getDay() === 0;
   if (state.scope !== "week" && !isWeekend) return "";
-  const ws = weekStart(state.selected);
+  const ws = weekStart(dateRef);
   const days = [];
   if (state.scope === "week") {
     for (let i = 0; i < 6; i += 1) {
       const d = addDays(ws, i);
-      if (d <= state.selected) continue;
+      if (d <= dateRef) continue;
       days.push(d);
     }
   }
@@ -2433,6 +2434,7 @@ function futureDaysHtml() {
       days.push(nextMon);
     }
   }
+  if (!days.length) return "";
   /* На телефоне раньше ближайший день рендерили сразу, а остальные — лениво
      через IntersectionObserver. Заполнение плейсхолдера реальной вёрсткой
      давало скачок высоты (мин-height считался по числу пар, а реальная
@@ -2449,8 +2451,6 @@ function futureDaysHtml() {
         'px" aria-hidden="true"></div>'
       : cachedFutureDay(d),
   );
-  /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
-     а не возникали резко вместе со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
