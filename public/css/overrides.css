@@ -2314,48 +2314,27 @@ body.is-dragging-pair {
 }
 
 /* ПЕРЕРЫВ МЕЖДУ ПАРАМИ:
-   Заполнен тем же фоном var(--sched-surface) с высотой и нулевыми отступами (margin: 0),
-   чтобы между парами не было чёрного просвета страницы. */
+   Нулевой отступ (margin: 0), нулевая высота (height: 0), линия строго по border-top.
+   Без маски обрезки (чтобы чип не срезался), линия плавно проявляется вместе с каскадом. */
 #stage .sched-active-day-scene.is-entering .agenda-break {
   margin: 0 !important;
-  height: 20px !important;
-  background: var(--sched-surface) !important;
+  height: 0 !important;
   position: relative !important;
-  z-index: 2;
-  border-top: none !important;
+  z-index: 3 !important;
+  border-top: 1px solid var(--sched-separator) !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
   overflow: visible !important;
   transform: none !important;
+  animation: sched-break-line-reveal 0.4s ease both !important;
 }
-#stage .sched-active-day-scene.is-entering .agenda-break::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: var(--sched-separator);
-}
-
-#stage .sched-active-day-scene.is-entering :is(
-  .sched-day-heading,
-  .agenda-row,
-  .agenda-row.is-window-row,
-  .agenda-break,
-  #live-host,
-  .live-lesson-card,
-  .completed-lessons,
-  .sched-empty-day
-) {
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 40%, transparent 60%, transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 40%, transparent 60%, transparent 100%);
-  -webkit-mask-size: 250% 100%;
-  mask-size: 250% 100%;
-  -webkit-mask-position: 100% 0;
-  mask-position: 100% 0;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  animation: sched-gradient-reveal 0.68s cubic-bezier(0.22, 0.7, 0.36, 1) both !important;
-  transform: none !important;
+@keyframes sched-break-line-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* Оптимизация композитинга: во время анимации входа дочерние элементы не порождают сотни изолированных GPU-слоёв */
@@ -2365,25 +2344,44 @@ body.is-dragging-pair {
   backface-visibility: visible;
 }
 
-/* Центрирование чипа перерыва: строго по центру линии в любом состоянии без обрезки маской */
+/* Чип перерыва: строго по центру линии (top: 0, translate -50%, -50%) в любом состоянии,
+   чистая подложка без просвета, аккуратное мягкое проявление без срезания маской */
+.agenda-break-chip,
 #stage .agenda-break-chip,
-.sched-active-day-scene:not(.is-entering) .agenda-break-chip {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translate(-50%, -50%) !important;
+.sched-active-day-scene .agenda-break-chip {
+  position: absolute !important;
+  left: 50% !important;
+  top: 0 !important;
+  transform: translate3d(-50%, -50%, 0) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  background: var(--sched-raised) !important;
+  color: var(--sched-tertiary) !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  line-height: 14px !important;
+  white-space: nowrap !important;
+  z-index: 4 !important;
   -webkit-mask-image: none !important;
   mask-image: none !important;
   overflow: visible !important;
 }
 #stage .sched-active-day-scene.is-entering .agenda-break .agenda-break-chip {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) !important;
-  -webkit-mask-image: none !important;
-  mask-image: none !important;
-  overflow: visible !important;
+  animation: sched-break-chip-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+  animation-delay: calc(60ms + var(--row-i, 0) * 95ms + 70ms) !important;
+}
+@keyframes sched-break-chip-pop {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
 }
 
 /* 1. АКТИВНЫЙ ВЕРХНИЙ ДЕНЬ:
@@ -2396,7 +2394,6 @@ body.is-dragging-pair {
 #stage .sched-active-day-scene.is-entering > .sched-day-block :is(
   .agenda-row,
   .agenda-row.is-window-row,
-  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
@@ -2404,6 +2401,12 @@ body.is-dragging-pair {
 ) {
   animation-delay: calc(60ms + var(--row-i, 0) * 95ms) !important;
   animation-duration: 0.68s !important;
+}
+#stage .sched-active-day-scene.is-entering > .sched-day-block .agenda-break {
+  animation-delay: calc(60ms + var(--row-i, 0) * 95ms) !important;
+}
+#stage .sched-active-day-scene.is-entering > .sched-day-block .agenda-break .agenda-break-chip {
+  animation-delay: calc(60ms + var(--row-i, 0) * 95ms + 70ms) !important;
 }
 
 /* 2. ПОСЛЕДУЮЩИЕ ДНИ:
@@ -2431,6 +2434,9 @@ body.is-dragging-pair {
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) .agenda-break {
   animation-delay: calc(240ms + var(--row-i, 0) * 85ms) !important;
 }
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) .agenda-break .agenda-break-chip {
+  animation-delay: calc(240ms + var(--row-i, 0) * 85ms + 70ms) !important;
+}
 
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) .sched-day-heading {
   animation-delay: 380ms !important;
@@ -2449,6 +2455,9 @@ body.is-dragging-pair {
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) .agenda-break {
   animation-delay: calc(420ms + var(--row-i, 0) * 80ms) !important;
+}
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) .agenda-break .agenda-break-chip {
+  animation-delay: calc(420ms + var(--row-i, 0) * 80ms + 70ms) !important;
 }
 
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) .sched-day-heading {
@@ -2469,6 +2478,9 @@ body.is-dragging-pair {
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) .agenda-break {
   animation-delay: calc(600ms + var(--row-i, 0) * 75ms) !important;
 }
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) .agenda-break .agenda-break-chip {
+  animation-delay: calc(600ms + var(--row-i, 0) * 75ms + 70ms) !important;
+}
 
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 4) .sched-day-heading {
   animation-delay: 740ms !important;
@@ -2487,6 +2499,9 @@ body.is-dragging-pair {
 }
 #stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 4) .agenda-break {
   animation-delay: calc(780ms + var(--row-i, 0) * 70ms) !important;
+}
+#stage .sched-active-day-scene.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 4) .agenda-break .agenda-break-chip {
+  animation-delay: calc(780ms + var(--row-i, 0) * 70ms + 70ms) !important;
 }
 
 /* Снятие маски после завершения анимации:
@@ -3919,9 +3934,17 @@ a.sched-settings-row.sched-settings-link strong {
   opacity: 0.6;
 }
 
-/* --- перерыв между парами: чуть больше воздуха над и под линией --- */
+/* --- перерыв между парами: нулевой отступ разделителя исключает щели и полосы,
+   а комфортный воздух над и под чипом задаётся паддингами соседних строк --- */
 .agenda-list .agenda-break {
-  margin: 6px 0;
+  margin: 0 !important;
+}
+.agenda-row.has-break-after,
+.agenda-row:has(+ .agenda-break) {
+  padding-bottom: 16px !important;
+}
+.agenda-break + .agenda-row {
+  padding-top: 16px !important;
 }
 
 /* --- лоадер: фон и иконка следуют теме/акценту ещё до загрузки app.js --- */

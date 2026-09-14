@@ -622,7 +622,7 @@ function liveCardHtml(live, dIso) {
   </article>`;
 }
 
-function rowHtml(slot, live, dIso, isLastLessonOfDay = false, rowIndex = null) {
+function rowHtml(slot, live, dIso, isLastLessonOfDay = false, rowIndex = null, hasBreakAfter = false) {
   const isCurrent = live && live.kind === "current" && live.slot.n === slot.n && !slot.window;
   const isNext = live && live.kind === "next" && live.slot.n === slot.n && !slot.window;
   const cls = ["agenda-row"];
@@ -633,6 +633,7 @@ function rowHtml(slot, live, dIso, isLastLessonOfDay = false, rowIndex = null) {
   if (slot.swapped) cls.push("is-swapped");
   if (slot.pendingAdd) cls.push("is-pending-add");
   if (isLastLessonOfDay) cls.push("has-add-pair");
+  if (hasBreakAfter) cls.push("has-break-after");
 
   const styleAttr = rowIndex !== null ? ` style="--row-i:${rowIndex};"` : "";
   const time = `<div class="agenda-row-time"><span class="agenda-row-num">${slot.n}</span><time>${slot.from}<span>${slot.to}</span></time></div>`;
@@ -681,13 +682,17 @@ function withBreaksHtml(slots, live, dIso, lastLessonN = null) {
   const out = [];
   let prev = null;
   let rowIndex = 0;
-  slots.forEach((s) => {
+  slots.forEach((s, idx) => {
     if (prev && !prev.window && !s.window) {
       const gap = mins(s.from) - mins(prev.to);
       if (gap > 0) out.push(breakChipHtml(gap, rowIndex++));
     }
+    const next = slots[idx + 1];
+    const hasBreakAfter = Boolean(
+      next && !s.window && !next.window && mins(next.from) - mins(s.to) > 0,
+    );
     const isLast = !s.window && lastLessonN !== null && s.n === lastLessonN;
-    out.push(rowHtml(s, live, dIso, isLast, rowIndex++));
+    out.push(rowHtml(s, live, dIso, isLast, rowIndex++, hasBreakAfter));
     prev = s;
   });
   return out.join("");
