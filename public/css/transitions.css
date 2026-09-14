@@ -202,7 +202,7 @@
 }
 .sched-active-day-scene.is-entering .agenda-row,
 .sched-active-day-scene.is-entering .live-lesson-card {
-  animation: none !important;
+  will-change: transform, opacity;
 }
 @keyframes t-row-in {
   0% {

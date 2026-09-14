@@ -1028,13 +1028,16 @@ function setScene(html, direction) {
 
   if (!old) {
     const first = document.createElement("div");
-    first.className = "sched-active-day-scene";
+    first.className = "sched-active-day-scene is-entering";
     first.id = "day-scene";
     first._schedHtml = html;
     first.innerHTML = html;
     stage.appendChild(first);
     setupLazyDays();
-    sceneTimer = null;
+    sceneTimer = window.setTimeout(() => {
+      first.classList.remove("is-entering");
+      sceneTimer = null;
+    }, 650);
     return;
   }
 
@@ -1075,7 +1078,7 @@ function setScene(html, direction) {
   old.style.animation = "none";
 
   const next = document.createElement("div");
-  next.className = "sched-active-day-scene";
+  next.className = "sched-active-day-scene is-entering";
   next.id = "day-scene";
   next.dataset.direction = direction;
   next.style.animation = "none";
@@ -1084,9 +1087,9 @@ function setScene(html, direction) {
   stage.appendChild(next);
   setupLazyDays();
 
-  const dist = cssVar("--page-slide-distance", "8px");
+  const dist = cssVar("--page-slide-distance", "28px");
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = cssTimeMs("--page-slide-dur", 250);
+  const dur = cssTimeMs("--page-slide-dur", 320);
   const outX =
     direction === "forward"
       ? `translate3d(calc(${dist} * -1), 0, 0)`
@@ -1111,6 +1114,11 @@ function setScene(html, direction) {
     { duration: dur, easing: ease, fill: "both" },
   );
 
+  /* Каскадные анимации строк длятся дольше смены подложки */
+  const rowDur = cssTimeMs("--duration-fast", 360);
+  const rowStep = cssTimeMs("--duration-stagger", 55);
+  const total = Math.max(dur + 80, rowDur + rowStep * 8 + 80);
+
   /* Уходящая сцена быстро освобождает место новому дню */
   sceneOutTimer = window.setTimeout(() => {
     old.remove();
@@ -1121,6 +1129,7 @@ function setScene(html, direction) {
   }, dur);
   sceneTimer = window.setTimeout(() => {
     old.remove();
+    next.classList.remove("is-entering");
     next.removeAttribute("data-direction");
     [outAnim, inAnim].forEach((a) => {
       try {
@@ -1129,7 +1138,7 @@ function setScene(html, direction) {
     });
     next.style.animation = "";
     sceneTimer = null;
-  }, dur + 40);
+  }, total);
 }
 
 function renderStrip() {
@@ -1235,6 +1244,12 @@ function renderTab() {
     strip.style.display = "";
     auxView.hidden = true;
     auxView.innerHTML = "";
+    /* При переключении вкладок сцена остаётся статичной без повторного каскада пар */
+    const dayScene = $("#day-scene");
+    if (dayScene) {
+      dayScene.classList.remove("is-entering", "is-leaving");
+      dayScene.removeAttribute("data-direction");
+    }
   }
   applyFlags();
 }
