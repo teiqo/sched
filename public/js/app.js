@@ -6253,6 +6253,17 @@ function botLesson(slot) {
   const meta = metaParts.map(botHtml).join(" · ");
   return meta ? `${subject} · ${meta}` : subject;
 }
+function formatLessonQuote(subject, meta, { prefix = "", strike = false } = {}) {
+  const cleanSubj = botHtml(subject || "пара");
+  const subjText = strike ? `<s>${cleanSubj}</s>` : cleanSubj;
+  const pfx = prefix ? `${botHtml(prefix)} ` : "";
+  if (meta) {
+    const cleanMeta = botHtml(meta);
+    const metaText = strike ? `<s>${cleanMeta}</s>` : cleanMeta;
+    return `<blockquote>${pfx}${subjText}<blockquote>${metaText}</blockquote></blockquote>`;
+  }
+  return `<blockquote>${pfx}${subjText}</blockquote>`;
+}
 function buildDayTablePayload(dIso) {
   try {
     const d = dateFromIso(dIso);
@@ -6348,9 +6359,8 @@ function notifyCloudEvent(path, body) {
   } else if (body.cancelled) {
     if (origLesson) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
-      const metaStr = origMeta ? ` · ${origMeta}` : "";
       const action = type === "pending" ? "предложили отменить" : "отменили";
-      text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n<s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+      text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { strike: true })}`;
     } else {
       // Исходно в этом слоте пары не было (окно) — не пишем «отменили окно» и не шлём уведомление!
       return;
@@ -6358,27 +6368,25 @@ function notifyCloudEvent(path, body) {
   } else if (body.makeWindow) {
     if (origLesson) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
-      const metaStr = origMeta ? ` · ${origMeta}` : "";
-      text = `<b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\nбыло: <s>${botHtml(origLesson.subject)}${botHtml(metaStr)}</s>`;
+      text = `<b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true })}`;
     } else {
       return;
     }
   } else if (body.moved) {
     const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
-    const newStr = newMeta ? ` · ${newMeta}` : "";
     const moveFromStr = body.movedFrom ? ` (с ${body.movedFrom} пары)` : "";
     const action = type === "pending" ? "предложили перенести" : "перенесли";
-    text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+    text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
   } else {
     // Замена или добавление пары
     const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
-    const newStr = newMeta ? ` · ${newMeta}` : "";
     if (origLesson && origLesson.subject !== body.subject) {
       const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
-      const origStr = origMeta ? ` · ${origMeta}` : "";
-      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\nвместо: <s>${botHtml(origLesson.subject)}${botHtml(origStr)}</s>\nстало: ${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+      const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "вместо:", strike: true });
+      const newQuote = formatLessonQuote(body.subject || "пара", newMeta, { prefix: "стало:" });
+      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${oldQuote}\n\n${newQuote}`;
     } else {
-      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${botHtml(body.subject || "пара")}${botHtml(newStr)}`;
+      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
     }
   }
   const table = buildDayTablePayload(dIso);
@@ -6628,11 +6636,20 @@ async function publishSwapBatch(entries, label = "изменены пары") {
           let orig = null;
           try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
           const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
-          const desc = value.deleted
-            ? "откатили изменения"
-            : value.cancelled
-              ? (origLesson ? `отменена:\n<s>${botLesson(origLesson)}</s>` : "отменена")
-              : botLesson(value);
+          let desc;
+          if (value.deleted) {
+            desc = "<blockquote>откатили изменения</blockquote>";
+          } else if (value.cancelled) {
+            if (origLesson) {
+              const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+              desc = formatLessonQuote(origLesson.subject, origMeta, { prefix: "отменена:", strike: true });
+            } else {
+              desc = "<blockquote>отменена</blockquote>";
+            }
+          } else {
+            const valMeta = [value.teacher, value.room ? `ауд. ${value.room}` : ""].filter(Boolean).join(", ");
+            desc = formatLessonQuote(value.subject, valMeta);
+          }
           return `<b>${n} пара</b>\n${desc}`;
         }).join("\n\n");
         const batchEmoji = allCancelled ? CAT_EMOJIS.sad : allMoved ? CAT_EMOJIS.wave : CAT_EMOJIS.cool;
@@ -6739,11 +6756,20 @@ async function approvePending(enc) {
         let orig = null;
         try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
         const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
-        const desc = value.deleted
-          ? "откатили изменения"
-          : value.cancelled
-            ? (origLesson ? `отменена:\n<s>${botLesson(origLesson)}</s>` : "отменена")
-            : botLesson(value);
+        let desc;
+        if (value.deleted) {
+          desc = "<blockquote>откатили изменения</blockquote>";
+        } else if (value.cancelled) {
+          if (origLesson) {
+            const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+            desc = formatLessonQuote(origLesson.subject, origMeta, { prefix: "отменена:", strike: true });
+          } else {
+            desc = "<blockquote>отменена</blockquote>";
+          }
+        } else {
+          const valMeta = [value.teacher, value.room ? `ауд. ${value.room}` : ""].filter(Boolean).join(", ");
+          desc = formatLessonQuote(value.subject, valMeta);
+        }
         return `<b>${n} пара</b>\n${desc}`;
       }).join("\n\n");
       text = `${CAT_EMOJIS.ok} <b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;

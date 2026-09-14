@@ -83,6 +83,72 @@ def clean_header(text: str) -> str:
     return re.sub(r"<tg-emoji[^>]*>(.*?)</tg-emoji>\s*", "", text).strip()
 
 
+def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
+    text = clean_text.strip()
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return clean_text, []
+
+    header = paragraphs[0]
+    header_html = header if header.startswith("<b>") else f"<b>{header}</b>"
+
+    if any("<blockquote" in p.lower() for p in paragraphs[1:]):
+        quote_blocks = []
+        for p in paragraphs[1:]:
+            parts = re.split(r'(?<=</blockquote>)(?:\s*)(?=<blockquote)', p, flags=re.IGNORECASE)
+            for part in parts:
+                part = part.strip()
+                if part:
+                    quote_blocks.append(part)
+        return header_html, quote_blocks
+
+    quote_blocks = []
+    for p in paragraphs[1:]:
+        lines = [line.strip() for line in p.split("\n") if line.strip()]
+        pair_prefix = ""
+        for line in lines:
+            m_pair = re.match(r'^(<b>\d+\s+пара</b>)$', line, re.IGNORECASE)
+            if m_pair:
+                pair_prefix = m_pair.group(1) + " "
+                continue
+
+            prefix = ""
+            m_pfx = re.match(r'^(было|вместо|стало|отменена):\s*(.*)$', line, re.IGNORECASE)
+            if m_pfx:
+                prefix = m_pfx.group(1).lower() + ": "
+                line = m_pfx.group(2).strip()
+
+            is_s = False
+            m_s = re.match(r'^<s>(.*)</s>$', line, re.IGNORECASE)
+            if m_s:
+                is_s = True
+                line = m_s.group(1).strip()
+
+            if " · " in line:
+                subj, meta = line.split(" · ", 1)
+            elif " - " in line and ("ауд" in line or "каб" in line):
+                subj, meta = line.split(" - ", 1)
+            else:
+                subj = line
+                meta = ""
+
+            subj = subj.strip()
+            meta = meta.strip()
+            if is_s:
+                subj = f"<s>{subj}</s>"
+                if meta:
+                    meta = f"<s>{meta}</s>"
+
+            combined_prefix = f"{pair_prefix}{prefix}"
+            pair_prefix = ""
+            if meta:
+                quote_blocks.append(f"<blockquote>{combined_prefix}{subj}<blockquote>{meta}</blockquote></blockquote>")
+            else:
+                quote_blocks.append(f"<blockquote>{combined_prefix}{subj}</blockquote>")
+
+    return header_html, quote_blocks
+
+
 def _trim_schedule_rows(rows: list[dict]) -> list[dict]:
     # Пользователь запросил: «окна в боте должны всегда показываться, все окна во дне быть»
     # Не отсекаем окна ни в начале, ни в конце дня — отображаем всю сетку пар дня со всеми окнами.
@@ -103,15 +169,13 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
         return ""
     table_lines = [
         '<table bordered striped compact>',
+        '  <tr>',
+        '    <th align="center">#</th>',
+        '    <th align="left">предмет</th>',
+        '    <th align="left">преп. / ауд.</th>',
+        '    <th align="center">время</th>',
+        '  </tr>',
     ]
-    if day_name:
-        table_lines.append(f'  <caption align="right">расписание на {html.escape(day_name.lower())}</caption>')
-    table_lines.append('  <tr>')
-    table_lines.append('    <th align="center">#</th>')
-    table_lines.append('    <th align="left">предмет</th>')
-    table_lines.append('    <th align="left">преп. / ауд.</th>')
-    table_lines.append('    <th align="center">время</th>')
-    table_lines.append('  </tr>')
 
     for r in clean_rows:
         n = str(r.get("n", "")).lower()
@@ -664,22 +728,32 @@ class App:
         clean_text = clean_text.lower()
         clean_text = clean_header(clean_text)
 
+        header_html, quote_blocks = format_notification_blocks(clean_text)
+
         if isinstance(table_data, dict) and table_data.get("rows"):
             day_name = str(table_data.get("day_name") or "").strip().lower()
             rows = table_data.get("rows") or []
             table_html = format_rich_html_table(day_name, rows)
             clean_list = format_clean_list(day_name, rows)
-            fallback_text = f"{clean_text}\n\n{clean_list}" if clean_list else clean_text
 
-            text_html_paragraphs = []
-            for para in clean_text.split("\n\n"):
-                para = para.strip()
-                if para:
-                    para_html = para.replace("\n", "<br>")
-                    text_html_paragraphs.append(f"<p>{para_html}</p>")
-            body_html = "".join(text_html_paragraphs)
+            fallback_parts = [header_html]
+            if quote_blocks:
+                fallback_parts.append("\n\n".join(quote_blocks))
+            if clean_list:
+                fallback_parts.append(clean_list)
+            fallback_text = "\n\n".join(fallback_parts)
+
             if table_html:
-                rich_html = f"{body_html}\n{table_html}" if body_html else table_html
+                body_parts = [f"<p>{header_html}</p>"]
+                if quote_blocks:
+                    for q in quote_blocks:
+                        body_parts.append("<p><br></p>")
+                        body_parts.append(q)
+                body_parts.append("<p><br></p>")
+                if day_name:
+                    body_parts.append(f"<p>расписание на {html.escape(day_name)}</p>")
+                body_parts.append(table_html)
+                rich_html = "\n".join(body_parts)
                 method = "sendRichMessage"
                 rich_message_payload = {
                     "rich_message": {
@@ -687,7 +761,10 @@ class App:
                     }
                 }
         else:
-            fallback_text = clean_text
+            fallback_parts = [header_html]
+            if quote_blocks:
+                fallback_parts.append("\n\n".join(quote_blocks))
+            fallback_text = "\n\n".join(fallback_parts)
 
         fallback_text = fallback_text.lower()
         payload = rich_message_payload if method == "sendRichMessage" else ({"parse_mode": "HTML"} if message_format == "html" else None)
