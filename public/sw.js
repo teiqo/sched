@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-14-v114-text-scramble-all-days-and-values";
+const CACHE = CACHE_PREFIX + "2026-09-14-v115-remove-scramble-effect-completely";
 const ASSETS = [
   "./",
   "./index.html",
