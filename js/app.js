@@ -1028,16 +1028,13 @@ function setScene(html, direction) {
 
   if (!old) {
     const first = document.createElement("div");
-    first.className = "sched-active-day-scene is-entering";
+    first.className = "sched-active-day-scene";
     first.id = "day-scene";
     first._schedHtml = html;
     first.innerHTML = html;
     stage.appendChild(first);
     setupLazyDays();
-    sceneTimer = window.setTimeout(() => {
-      first.classList.remove("is-entering");
-      sceneTimer = null;
-    }, 650);
+    sceneTimer = null;
     return;
   }
 
@@ -1078,7 +1075,7 @@ function setScene(html, direction) {
   old.style.animation = "none";
 
   const next = document.createElement("div");
-  next.className = "sched-active-day-scene is-entering";
+  next.className = "sched-active-day-scene";
   next.id = "day-scene";
   next.dataset.direction = direction;
   next.style.animation = "none";
@@ -1087,9 +1084,9 @@ function setScene(html, direction) {
   stage.appendChild(next);
   setupLazyDays();
 
-  const dist = cssVar("--page-slide-distance", "28px");
+  const dist = cssVar("--page-slide-distance", "8px");
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = cssTimeMs("--page-slide-dur", 320);
+  const dur = cssTimeMs("--page-slide-dur", 250);
   const outX =
     direction === "forward"
       ? `translate3d(calc(${dist} * -1), 0, 0)`
@@ -1114,11 +1111,6 @@ function setScene(html, direction) {
     { duration: dur, easing: ease, fill: "both" },
   );
 
-  /* Каскадные анимации строк длятся дольше смены подложки */
-  const rowDur = cssTimeMs("--duration-fast", 360);
-  const rowStep = cssTimeMs("--duration-stagger", 55);
-  const total = Math.max(dur + 80, rowDur + rowStep * 8 + 80);
-
   /* Уходящая сцена быстро освобождает место новому дню */
   sceneOutTimer = window.setTimeout(() => {
     old.remove();
@@ -1129,7 +1121,6 @@ function setScene(html, direction) {
   }, dur);
   sceneTimer = window.setTimeout(() => {
     old.remove();
-    next.classList.remove("is-entering");
     next.removeAttribute("data-direction");
     [outAnim, inAnim].forEach((a) => {
       try {
@@ -1138,7 +1129,7 @@ function setScene(html, direction) {
     });
     next.style.animation = "";
     sceneTimer = null;
-  }, total);
+  }, dur + 40);
 }
 
 function renderStrip() {
@@ -1244,12 +1235,6 @@ function renderTab() {
     strip.style.display = "";
     auxView.hidden = true;
     auxView.innerHTML = "";
-    /* При переключении вкладок сцена остаётся статичной без повторного каскада пар */
-    const dayScene = $("#day-scene");
-    if (dayScene) {
-      dayScene.classList.remove("is-entering", "is-leaving");
-      dayScene.removeAttribute("data-direction");
-    }
   }
   applyFlags();
 }
@@ -2313,7 +2298,7 @@ function bindEvents() {
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
     getDate: () => state.selected, minDate: minAllowedDate, addDays,
-    renderDay: d => dayHtml(d, true) + futureDaysHtml(d),
+    renderDay: d => dayHtml(d, true),
     /* Копии соседних дней готовятся заранее. Ключ меняется на каждой
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
@@ -2429,16 +2414,15 @@ function dotsHtml(d) {
   return `<span class="date-lesson-dots" aria-hidden="true">${"<i></i>".repeat(count)}</span>`;
 }
 
-function futureDaysHtml(forDate = state.selected) {
-  const dateRef = startOfDay(forDate);
-  const isWeekend = dateRef.getDay() === 6 || dateRef.getDay() === 0;
+function futureDaysHtml() {
+  const isWeekend = state.selected.getDay() === 6 || state.selected.getDay() === 0;
   if (state.scope !== "week" && !isWeekend) return "";
-  const ws = weekStart(dateRef);
+  const ws = weekStart(state.selected);
   const days = [];
   if (state.scope === "week") {
     for (let i = 0; i < 6; i += 1) {
       const d = addDays(ws, i);
-      if (d <= dateRef) continue;
+      if (d <= state.selected) continue;
       days.push(d);
     }
   }
@@ -2449,7 +2433,6 @@ function futureDaysHtml(forDate = state.selected) {
       days.push(nextMon);
     }
   }
-  if (!days.length) return "";
   /* На телефоне раньше ближайший день рендерили сразу, а остальные — лениво
      через IntersectionObserver. Заполнение плейсхолдера реальной вёрсткой
      давало скачок высоты (мин-height считался по числу пар, а реальная
@@ -2466,6 +2449,8 @@ function futureDaysHtml(forDate = state.selected) {
         'px" aria-hidden="true"></div>'
       : cachedFutureDay(d),
   );
+  /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
+     а не возникали резко вместе со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
