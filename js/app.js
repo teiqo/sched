@@ -995,11 +995,43 @@ function bellsHtml() {
 
 /* ---------- дешифровка текста из случайных символов ---------- */
 
-const SCRAMBLE_CHARS = "абвгдежзийклмнопрстуфхцчшщ0123456789§#%&*+=/~";
-const PRESERVED_REGEX = /[\s.,:;–—\-/\\()0-9№#]/;
+const CYRILLIC_LOWER = "абвгдежзийклмнопрстуфхцчшщэюя";
+const CYRILLIC_UPPER = "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ";
+const LATIN_LOWER = "abcdefghijklmnopqrstuvwxyz";
+const LATIN_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const DIGITS = "0123456789";
+const SYMBOLS = "#$%&*+=/~!?§";
+
+// Пробелы, знаки препинания и разделители остаются на своих местах, чтобы вёрстка не прыгала
+const PRESERVED_REGEX = /[\s.,:;–—\-/\\()[\]"'«»№#•·|]/;
 
 let activeScrambleRaf = null;
 let activeScrambleNodes = [];
+
+function getScrambleChar(origChar, seed) {
+  if (DIGITS.indexOf(origChar) !== -1) {
+    const pool = DIGITS + SYMBOLS;
+    return pool[seed % pool.length];
+  }
+  if (CYRILLIC_UPPER.indexOf(origChar) !== -1) {
+    const pool = CYRILLIC_UPPER + DIGITS;
+    return pool[seed % pool.length];
+  }
+  if (CYRILLIC_LOWER.indexOf(origChar) !== -1) {
+    const pool = CYRILLIC_LOWER + DIGITS + SYMBOLS;
+    return pool[seed % pool.length];
+  }
+  if (LATIN_UPPER.indexOf(origChar) !== -1) {
+    const pool = LATIN_UPPER + DIGITS;
+    return pool[seed % pool.length];
+  }
+  if (LATIN_LOWER.indexOf(origChar) !== -1) {
+    const pool = LATIN_LOWER + DIGITS + SYMBOLS;
+    return pool[seed % pool.length];
+  }
+  const pool = CYRILLIC_LOWER + DIGITS + SYMBOLS;
+  return pool[seed % pool.length];
+}
 
 function cancelActiveScramble() {
   if (activeScrambleRaf !== null) {
@@ -1025,7 +1057,17 @@ function extractScrambleNodes(el) {
   const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
   let n;
   while ((n = walk.nextNode())) {
-    if (n.parentElement && n.parentElement.closest(".lesson-origin-mark, .lesson-swap-btn, .sched-add-pair-btn, svg, .agenda-break-chip")) continue;
+    const parent = n.parentElement;
+    if (!parent) continue;
+    // Исключаем элементы, которые не должны дешифровываться:
+    // кнопки, иконки, чип перерыва и цветные маркеры статусов
+    if (
+      parent.closest(
+        ".agenda-break, .agenda-break-chip, .lesson-origin-mark, .lesson-swap-btn, .sched-add-pair-btn, .sched-day-revert, .sched-onboarding-back, svg, button, input, select, textarea"
+      )
+    ) {
+      continue;
+    }
     const txt = n.textContent;
     if (txt && txt.trim().length > 0) {
       nodes.push({ node: n, original: txt, settled: false });
@@ -1034,96 +1076,103 @@ function extractScrambleNodes(el) {
   return nodes;
 }
 
-function runTextScramble(sceneNode) {
+function runTextScramble(container) {
   cancelActiveScramble();
-  if (!sceneNode) return;
+  if (!container) return;
 
-  const dayBlocks = sceneNode.querySelectorAll(".sched-day-block");
-  if (!dayBlocks.length) return;
-
+  const dayBlocks = Array.from(container.querySelectorAll(".sched-day-block"));
+  const blocksToProcess = dayBlocks.length > 0 ? dayBlocks : [container];
   const items = [];
 
-  dayBlocks.forEach((block, dayIdx) => {
-    // Анимируем только видимые блоки (активный день и первый последующий), экономя ресурсы
-    if (dayIdx > 1) return;
+  blocksToProcess.forEach((block, dayIdx) => {
+    // Каскад дней: активный день (dayIdx=0) стартует сразу (20мс),
+    // последующие дни вступают плавно в соответствии с анимацией списка дней
+    const dayBaseDelay = dayIdx === 0 ? 20 : Math.min(360, 50 + (dayIdx - 1) * 60);
 
-    const baseHeadingDelay = dayIdx === 0 ? 20 : 200;
-    const baseRowDelay = dayIdx === 0 ? 60 : 240;
-    const rowStep = dayIdx === 0 ? 95 : 85;
-
-    // 1. Дешифровка заголовка дня
-    const headingEl = block.querySelector(".sched-day-heading h2");
-    if (headingEl) {
-      extractScrambleNodes(headingEl).forEach((nObj, nodeIdx) => {
+    // 1. Дешифровка заголовка дня (название дня недели, дата, количество пар)
+    const heading = block.querySelector(".sched-day-heading");
+    if (heading) {
+      extractScrambleNodes(heading).forEach((nObj, idx) => {
         items.push({
           ...nObj,
-          startAt: baseHeadingDelay + nodeIdx * 60,
-          duration: 380,
+          startAt: dayBaseDelay + idx * 30,
+          duration: 320,
         });
       });
     }
 
-    // 2. Дешифровка строк пар (название предмета, кабинет, преподаватель)
-    // ВАЖНО: .agenda-break и его чип полностью исключены!
-    const rows = block.querySelectorAll(".agenda-row, #live-host, .sched-empty-day");
-    rows.forEach((row) => {
-      const rowI = parseInt(row.style.getPropertyValue("--row-i") || "0", 10);
-      const rowDelay = baseRowDelay + rowI * rowStep;
+    // 2. Дешифровка всех строк и карточек дня (время, номер пары, предмет, кабинет, преподаватель, пустое расписание)
+    const rows = Array.from(
+      block.querySelectorAll(
+        ".agenda-row, #live-host, .sched-empty-day, .bells-section, .completed-lessons-toggle"
+      )
+    );
 
-      const titleEl = row.querySelector(".agenda-row-content strong, h3, strong");
-      if (titleEl) {
-        extractScrambleNodes(titleEl).forEach((nObj) => {
-          items.push({
-            ...nObj,
-            startAt: rowDelay,
-            duration: 380,
-          });
-        });
-      }
+    rows.forEach((row, rIdx) => {
+      const rawI = row.style.getPropertyValue("--row-i");
+      const rowI = rawI !== "" ? parseInt(rawI, 10) : rIdx;
+      const rowStep = dayIdx === 0 ? 55 : 35;
+      const rowDelay = dayBaseDelay + 40 + rowI * rowStep;
 
-      const metaEl = row.querySelector(".lesson-meta");
-      if (metaEl) {
-        extractScrambleNodes(metaEl).forEach((nObj) => {
-          items.push({
-            ...nObj,
-            startAt: rowDelay + 30,
-            duration: 350,
-          });
+      extractScrambleNodes(row).forEach((nObj, nIdx) => {
+        items.push({
+          ...nObj,
+          startAt: rowDelay + nIdx * 20,
+          duration: 320,
         });
-      }
+      });
     });
   });
 
   if (!items.length) return;
 
   activeScrambleNodes = items;
-  const startTime = performance.now();
-  let lastRandomize = 0;
-  let randomPool = "";
-  for (let k = 0; k < 64; k++) {
-    randomPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+
+  // Инициализируем текст в заскрембленном виде, чтобы при плавном появлении
+  // строк текст уже декодировался, а не вспыхивал из читаемого в случайный.
+  const initTick = Math.floor(performance.now() / 33);
+  for (let j = 0; j < items.length; j++) {
+    const item = items[j];
+    if (!item.node.isConnected) continue;
+    const orig = item.original;
+    let out = "";
+    for (let i = 0; i < orig.length; i++) {
+      const ch = orig[i];
+      if (PRESERVED_REGEX.test(ch)) {
+        out += ch;
+      } else {
+        out += getScrambleChar(ch, i * 7 + j * 13 + initTick);
+      }
+    }
+    item.node.textContent = out;
   }
+
+  const startTime = performance.now();
 
   function step(now) {
     const elapsed = now - startTime;
+    const scrambleTick = Math.floor(now / 33);
     let allDone = true;
-
-    // Пул случайных символов обновляется ~30 раз/сек для мягкого мерцания без стробоскопа
-    if (now - lastRandomize > 32) {
-      lastRandomize = now;
-      let newPool = "";
-      for (let k = 0; k < 64; k++) {
-        newPool += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
-      }
-      randomPool = newPool;
-    }
 
     for (let j = 0; j < items.length; j++) {
       const item = items[j];
       if (!item.node.isConnected) continue;
 
+      if (item.settled) continue;
+
       if (elapsed < item.startAt) {
         allDone = false;
+        const orig = item.original;
+        let out = "";
+        for (let i = 0; i < orig.length; i++) {
+          const ch = orig[i];
+          if (PRESERVED_REGEX.test(ch)) {
+            out += ch;
+          } else {
+            out += getScrambleChar(ch, i * 7 + j * 13 + scrambleTick);
+          }
+        }
+        item.node.textContent = out;
         continue;
       }
 
@@ -1132,17 +1181,18 @@ function runTextScramble(sceneNode) {
         allDone = false;
         const orig = item.original;
         const len = orig.length;
+        const revealedCount = Math.floor(p * (len + 1));
         let out = "";
         for (let i = 0; i < len; i++) {
           const ch = orig[i];
-          if (PRESERVED_REGEX.test(ch) || p >= i / len) {
+          if (PRESERVED_REGEX.test(ch) || i < revealedCount) {
             out += ch;
           } else {
-            out += randomPool[(i + j * 7) % randomPool.length];
+            out += getScrambleChar(ch, i * 7 + j * 13 + scrambleTick);
           }
         }
         item.node.textContent = out;
-      } else if (!item.settled) {
+      } else {
         item.settled = true;
         item.node.textContent = item.original;
       }
@@ -1226,6 +1276,9 @@ function setScene(html, direction) {
     if (old._schedHtml !== html) {
       old._schedHtml = html;
       old.innerHTML = html;
+      if (!reduced) {
+        runTextScramble(old);
+      }
     }
     old.inert = false;
     old.removeAttribute("aria-hidden");
@@ -1287,7 +1340,7 @@ function setScene(html, direction) {
   /* Каскадные анимации строк длятся дольше смены подложки */
   const rowDur = cssTimeMs("--duration-fast", 320);
   const rowStep = cssTimeMs("--duration-stagger", 55);
-  const total = Math.max(dur + 80, rowDur + rowStep * 10 + 120);
+  const total = Math.max(1100, dur + 80, rowDur + rowStep * 12 + 120);
 
   /* Уходящая сцена быстро освобождает место новому дню */
   sceneOutTimer = window.setTimeout(() => {
@@ -1403,12 +1456,20 @@ function renderTab() {
   const scheduleView = $("#schedule-view");
   const auxView = $("#aux-view");
   const strip = $("#strip");
+  const isLearning = isLearningModeActive();
+  const perfActive = Boolean(state.perfMode && !isLearning);
+  const reduced =
+    perfActive ||
+    (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   if (state.tab === "bells") {
     scheduleView.style.display = "none";
     strip.style.display = "none";
     auxView.hidden = false;
     auxView.innerHTML = bellsHtml();
+    if (!reduced) {
+      runTextScramble(auxView);
+    }
   } else {
     state.tab = "schedule";
     scheduleView.style.display = "";
