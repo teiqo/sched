@@ -1204,7 +1204,7 @@ function setScene(html, direction) {
       first.classList.remove("is-entering");
       cancelActiveScramble();
       sceneTimer = null;
-    }, 2600);
+    }, 1200);
     return;
   }
 
@@ -1257,18 +1257,39 @@ function setScene(html, direction) {
     runTextScramble(next);
   }
 
+  const dist = cssVar("--page-slide-distance", "8px");
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = 160;
+  const dur = cssTimeMs("--page-slide-dur", 250);
+  const outX =
+    direction === "forward"
+      ? `translate3d(calc(${dist} * -1), 0, 0)`
+      : `translate3d(${dist}, 0, 0)`;
+  const inX =
+    direction === "forward"
+      ? `translate3d(${dist}, 0, 0)`
+      : `translate3d(calc(${dist} * -1), 0, 0)`;
 
   const outAnim = old.animate(
     [
-      { opacity: from.opacity },
-      { opacity: 0 },
+      { opacity: from.opacity, transform: from.transform },
+      { opacity: 0, transform: outX },
     ],
     { duration: dur, easing: ease, fill: "forwards" },
   );
+  const inAnim = next.animate(
+    [
+      { opacity: 0, transform: inX },
+      { opacity: 1, transform: "translate3d(0, 0, 0)" },
+    ],
+    { duration: dur, easing: ease, fill: "both" },
+  );
 
-  /* Уходящий день быстро и плавно растворяется, освобождая место новому */
+  /* Каскадные анимации строк длятся дольше смены подложки */
+  const rowDur = cssTimeMs("--duration-fast", 320);
+  const rowStep = cssTimeMs("--duration-stagger", 55);
+  const total = Math.max(dur + 80, rowDur + rowStep * 10 + 120);
+
+  /* Уходящая сцена быстро освобождает место новому дню */
   sceneOutTimer = window.setTimeout(() => {
     old.remove();
     try {
@@ -1280,13 +1301,15 @@ function setScene(html, direction) {
     old.remove();
     next.classList.remove("is-entering");
     next.removeAttribute("data-direction");
-    try {
-      outAnim.cancel();
-    } catch (_) {}
+    [outAnim, inAnim].forEach((a) => {
+      try {
+        a.cancel();
+      } catch (err) {}
+    });
     next.style.animation = "";
     cancelActiveScramble();
     sceneTimer = null;
-  }, 2600);
+  }, total);
 }
 
 function renderStrip() {
