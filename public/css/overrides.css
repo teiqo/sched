@@ -2296,38 +2296,66 @@ body.is-dragging-pair {
   transform: none !important;
 }
 
-/* Сама серая подложка карточки плавно проявляется единым целым блоком */
+/* ВО ВРЕМЯ АНИМАЦИИ ВХОДА:
+   Каждая пара и каждая область (включая серый фон var(--sched-surface))
+   полностью прорисовывается градиентной маской слева направо.
+   Общий контейнер .agenda-list прозрачен во время входа и ограничивает скругление углов. */
 #stage .sched-active-day-scene.is-entering .agenda-list {
-  animation: sched-list-fade 0.35s ease both !important;
-  animation-delay: 30ms !important;
+  background: transparent !important;
+  border-color: var(--sched-separator) !important;
+  overflow: hidden !important;
+  animation: none !important;
 }
-@keyframes sched-list-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+
+#stage .sched-active-day-scene.is-entering :is(.agenda-row, .agenda-row.is-window-row) {
+  background: var(--sched-surface) !important;
+  position: relative;
+  z-index: 2;
 }
 
 /* ПЕРЕРЫВ МЕЖДУ ПАРАМИ:
-   - Без маски (маска на нулевой высоте срезала чип в полоску 1px)
-   - Чистый плавный фейд по очереди вместе со своим шагом --row-i */
+   Заполнен тем же фоном var(--sched-surface) с высотой и нулевыми отступами (margin: 0),
+   чтобы между парами не было чёрного просвета страницы. */
 #stage .sched-active-day-scene.is-entering .agenda-break {
-  -webkit-mask-image: none !important;
-  mask-image: none !important;
+  margin: 0 !important;
+  height: 20px !important;
+  background: var(--sched-surface) !important;
+  position: relative !important;
+  z-index: 2;
+  border-top: none !important;
   overflow: visible !important;
   transform: none !important;
-  animation: sched-break-fade 0.4s ease both !important;
-  animation-delay: calc(60ms + var(--row-i, 0) * 95ms) !important;
 }
-@keyframes sched-break-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+#stage .sched-active-day-scene.is-entering .agenda-break::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--sched-separator);
+}
+
+#stage .sched-active-day-scene.is-entering :is(
+  .sched-day-heading,
+  .agenda-row,
+  .agenda-row.is-window-row,
+  .agenda-break,
+  #live-host,
+  .live-lesson-card,
+  .completed-lessons,
+  .sched-empty-day
+) {
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 40%, transparent 60%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 40%, transparent 60%, transparent 100%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: sched-gradient-reveal 0.68s cubic-bezier(0.22, 0.7, 0.36, 1) both !important;
+  transform: none !important;
 }
 
 /* Оптимизация композитинга: во время анимации входа дочерние элементы не порождают сотни изолированных GPU-слоёв */
@@ -2339,11 +2367,19 @@ body.is-dragging-pair {
 
 /* Центрирование чипа перерыва: строго по центру линии в любом состоянии без обрезки маской */
 #stage .agenda-break-chip,
-#stage .sched-active-day-scene.is-entering .agenda-break-chip,
 .sched-active-day-scene:not(.is-entering) .agenda-break-chip {
   position: absolute;
   left: 50%;
   top: 0;
+  transform: translate(-50%, -50%) !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  overflow: visible !important;
+}
+#stage .sched-active-day-scene.is-entering .agenda-break .agenda-break-chip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   transform: translate(-50%, -50%) !important;
   -webkit-mask-image: none !important;
   mask-image: none !important;
@@ -2360,6 +2396,7 @@ body.is-dragging-pair {
 #stage .sched-active-day-scene.is-entering > .sched-day-block :is(
   .agenda-row,
   .agenda-row.is-window-row,
+  .agenda-break,
   #live-host,
   .live-lesson-card,
   .completed-lessons,
@@ -5509,8 +5546,9 @@ a.sched-settings-row,
 :root[data-sched-palette="accent-plus"] #app {
   background: var(--sched-plus-canvas) !important;
 }
-:root[data-sched-palette="accent-plus"] .sched-header {
-  background: transparent;
+:root[data-sched-palette="accent"] .sched-setting-switch[aria-pressed="true"] {
+  background: var(--sched-accent, #0a84ff) !important;
+  color: var(--sched-on-accent, #fff) !important;
 }
 :root[data-sched-palette="accent-plus"] #brand .sched-header-mark,
 :root[data-sched-palette="accent-plus"] .sched-theme-modes button.is-active,
@@ -5762,6 +5800,12 @@ a.sched-settings-row,
 .sched-header-actions .sched-settings-trigger.is-avatar,
 #settings-trigger.is-avatar {
   border-radius: 50% !important;
+  width: 35px !important;
+  min-width: 35px !important;
+  max-width: 35px !important;
+  height: 35px !important;
+  min-height: 35px !important;
+  max-height: 35px !important;
   aspect-ratio: 1 / 1 !important;
   flex: 0 0 auto !important;
   flex-shrink: 0 !important;
@@ -5773,6 +5817,14 @@ a.sched-settings-row,
   box-shadow:
     0 0 0 2px var(--sched-header-bg, var(--sched-surface, #18181b)),
     0 0 0 4px var(--sched-accent, #2e9bff) !important;
+}
+.sched-header-actions .sched-settings:has(#settings-trigger.is-avatar) {
+  width: 35px !important;
+  min-width: 35px !important;
+  max-width: 35px !important;
+  height: 35px !important;
+  min-height: 35px !important;
+  max-height: 35px !important;
 }
 .sched-header-actions .sched-settings-trigger.is-avatar .sched-trigger-avatar,
 #settings-trigger.is-avatar .sched-trigger-avatar {
@@ -5804,6 +5856,22 @@ a.sched-settings-row,
     flex-shrink: 0 !important;
     border-radius: 50% !important;
     box-sizing: border-box !important;
+  }
+  .sched-header-actions .sched-settings-trigger.is-avatar,
+  .sched-header-actions .sched-settings > #settings-trigger.is-avatar,
+  #settings-trigger.is-avatar {
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+  }
+  .sched-header-actions .sched-settings:has(#settings-trigger.is-avatar) {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
   }
 }
 @media (max-width: 360px) {
@@ -5972,29 +6040,18 @@ a.sched-settings-row,
 }
 
 /* Единый неподвижный холст: градиент фона рисуется один раз на весь экран
-   и не перерисовывается при листании дней, скролле и пересоздании списков. */
+   и не перерисовывается при листании дней, скролле и пересоздании списков.
+   Фон всегда сохраняет цвет var(--sched-bg), исключая белый просвет и вспышку. */
 :root[data-sched-palette="accent-plus"] html.sched-page {
-  background: transparent !important;
+  background-color: var(--sched-bg) !important;
 }
 :root[data-sched-palette="accent-plus"] body {
-  background: transparent !important;
+  background-color: var(--sched-bg) !important;
+  background-image: var(--sched-plus-canvas);
+  background-attachment: fixed;
 }
 :root[data-sched-palette="accent-plus"] body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: var(--sched-plus-canvas);
-  pointer-events: none;
-  animation: sched-plus-canvas-in 0.4s ease-out both;
-}
-@keyframes sched-plus-canvas-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  display: none !important;
 }
 :root[data-sched-palette="accent-plus"] #root,
 :root[data-sched-palette="accent-plus"] .sched-app,

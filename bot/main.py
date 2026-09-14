@@ -84,20 +84,9 @@ def clean_header(text: str) -> str:
 
 
 def _trim_schedule_rows(rows: list[dict]) -> list[dict]:
-    first_idx = -1
-    last_idx = -1
-    for i, r in enumerate(rows):
-        subj = str(r.get("subject") or "").strip().lower()
-        is_cancelled = bool(r.get("cancelled"))
-        is_win = bool(r.get("window")) or (subj in ("окно", "—", "") and not is_cancelled)
-        if not is_win and subj:
-            if first_idx == -1:
-                first_idx = i
-            last_idx = i
-
-    if first_idx == -1 or last_idx == -1:
-        return []
-    return rows[first_idx : last_idx + 1]
+    # Пользователь запросил: «окна в боте должны всегда показываться, все окна во дне быть»
+    # Не отсекаем окна ни в начале, ни в конце дня — отображаем всю сетку пар дня со всеми окнами.
+    return [r for r in rows if isinstance(r, dict)]
 
 
 def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
@@ -105,6 +94,12 @@ def format_rich_html_table(day_name: str, rows: list[dict]) -> str:
         return ""
     clean_rows = _trim_schedule_rows(rows)
     if not clean_rows:
+        return ""
+    has_any_lesson = any(
+        not (bool(r.get("window")) or (str(r.get("subject") or "").strip().lower() in ("окно", "—", "") and not bool(r.get("cancelled"))))
+        for r in clean_rows
+    )
+    if not has_any_lesson:
         return ""
     table_lines = [
         '<table bordered striped compact>',
@@ -156,6 +151,12 @@ def format_clean_list(day_name: str, rows: list[dict]) -> str:
         return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
     clean_rows = _trim_schedule_rows(rows)
     if not clean_rows:
+        return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
+    has_any_lesson = any(
+        not (bool(r.get("window")) or (str(r.get("subject") or "").strip().lower() in ("окно", "—", "") and not bool(r.get("cancelled"))))
+        for r in clean_rows
+    )
+    if not has_any_lesson:
         return f"<b>расписание на {html.escape(day_name.lower())}: пар нет</b>" if day_name else "<b>пар нет</b>"
     lines = [f"<b>расписание на {html.escape(day_name.lower())}:</b>"] if day_name else []
     for r in clean_rows:

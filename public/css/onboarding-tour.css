@@ -201,7 +201,7 @@
   transition: none !important;
 }
 
-:root .lesson-suggest-btn.is-tour-highlight {
+:root :is(.lesson-suggest-btn, .sched-add-pair-btn).is-tour-highlight {
   opacity: 1 !important;
   color: var(--sched-blue) !important;
   background: color-mix(in srgb, var(--sched-blue) 18%, transparent) !important;
@@ -209,7 +209,7 @@
   animation: sched-tour-btn-pulse 1.4s ease-in-out infinite !important;
 }
 
-:root .lesson-suggest-btn.is-tour-pressed {
+:root :is(.lesson-suggest-btn, .sched-add-pair-btn).is-tour-pressed {
   transform: scale(0.85) !important;
   background: var(--sched-blue) !important;
   color: #fff !important;
@@ -243,10 +243,11 @@ body.is-tour-active .sched-tour-copy {
   z-index: 650 !important;
 }
 
-body.is-tour-active .sched-move-target.is-tour-picked {
+body.is-tour-active :is(.sched-move-target, [data-add-pair-send]).is-tour-picked {
   background: var(--sched-fill) !important;
+  filter: brightness(1.2) !important;
   transform: scale(0.96) !important;
-  transition: transform 0.14s ease, background 0.14s ease !important;
+  transition: transform 0.14s ease, background 0.14s ease, filter 0.14s ease !important;
 }
 
 .sched-tour-copy .sched-tour-accent {

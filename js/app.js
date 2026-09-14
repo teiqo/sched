@@ -93,7 +93,8 @@ const systemTheme = () =>
 
 var TOUR_STEP_STRIP = 0;
 var TOUR_STEP_SWAP = 1;
-var TOUR_STEP_SETTINGS = 2;
+var TOUR_STEP_ADD_PAIR = 2;
+var TOUR_STEP_SETTINGS = 3;
 
 function isLearningModeActive() {
   if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return true;
@@ -3192,9 +3193,12 @@ var basicsTourRouletteOriginalDate = null;
 var basicsTourLastTriggerTime = 0;
 var basicsTourSwapTimers = [];
 var basicsTourSwapOverride = null;
+var basicsTourAddPairTimers = [];
+var basicsTourAddPairOverride = null;
 const BASICS_TOUR = [
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn", title: "замена пары", text: "здесь можно в два тапа отметить <span class=\"sched-tour-accent\">отмену, перенос или новый кабинет</span>. изменения сразу увидят одногруппники." },
+  { selector: "#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn", title: "добавление пары", text: "нажми плюс, чтобы быстро добавить внеплановую пару или занятие в расписание дня." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3412,15 +3416,40 @@ function updateBasicsTourSpotlight() {
   const step = BASICS_TOUR[basicsTourStep];
   const target = step && document.querySelector(step.selector);
   if (!target) return;
-  const rect = target.getBoundingClientRect();
-  const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
-  const left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-  const top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-  const width = basicsTourStep === TOUR_STEP_STRIP
-    ? Math.min(innerWidth - left, rect.width)
-    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
-  const height = rect.height + pad * 2;
-  const spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : basicsTourStep === TOUR_STEP_SWAP ? 14 : 12;
+  const visualTarget = basicsTourStep === TOUR_STEP_SETTINGS && target.classList.contains("is-avatar")
+    ? target.querySelector(".sched-trigger-avatar") || target
+    : target;
+  const rect = visualTarget.getBoundingClientRect();
+  let left, top, width, height, spotRadius;
+
+  if (basicsTourStep === TOUR_STEP_SETTINGS) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const size = Math.round(Math.max(rect.width, rect.height) + 8);
+    left = Math.round(cx - size / 2);
+    top = Math.round(cy - size / 2);
+    width = size;
+    height = size;
+    spotRadius = Math.round(size / 2);
+  } else if (basicsTourStep === TOUR_STEP_ADD_PAIR) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const size = Math.round(Math.max(rect.width, rect.height) + 10);
+    left = Math.round(cx - size / 2);
+    top = Math.round(cy - size / 2);
+    width = size;
+    height = size;
+    spotRadius = 12;
+  } else {
+    const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
+    left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+    top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+    width = basicsTourStep === TOUR_STEP_STRIP
+      ? Math.min(innerWidth - left, rect.width)
+      : Math.min(innerWidth - left - 8, rect.width + pad * 2);
+    height = rect.height + pad * 2;
+    spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 14;
+  }
 
   const spotlight = host.querySelector(".sched-tour-spotlight");
   if (spotlight) {
@@ -3554,8 +3583,147 @@ function startBasicsTourSwapDemo() {
   }, 9500);
 }
 
+function ensureTourDayWithLessons() {
+  const isSunday = state.selected.getDay() === 0;
+  const currentSlots = slotsFor(state.selected);
+  const hasLessons = currentSlots.some(s => !s.window && !s.empty && s.subject);
+
+  if (!isSunday && hasLessons) return;
+
+  const candidates = [
+    defaultSelectedDate(),
+    addDays(state.selected, isSunday ? 1 : 1),
+    addDays(state.selected, isSunday ? 2 : -1),
+  ];
+  const mon = weekStart(state.selected);
+  for (let i = 0; i < 6; i++) {
+    candidates.push(addDays(mon, i));
+  }
+  const nextMon = addDays(mon, 7);
+  for (let i = 0; i < 6; i++) {
+    candidates.push(addDays(nextMon, i));
+  }
+
+  for (const cand of candidates) {
+    if (cand.getDay() === 0) continue;
+    const slots = slotsFor(cand);
+    if (slots.some(s => !s.window && !s.empty && s.subject)) {
+      selectDate(cand, null, { silent: true, preview: true, animated: false });
+      render();
+      return;
+    }
+  }
+}
+
+function stopBasicsTourAddPairDemo() {
+  while (basicsTourAddPairTimers.length) {
+    clearTimeout(basicsTourAddPairTimers.pop());
+  }
+  closeSheetAnimated(document.getElementById("add-pair-backdrop"), null, true);
+  document.querySelectorAll(".sched-add-pair-btn.is-tour-highlight, .sched-add-pair-btn.is-tour-pressed").forEach(b => {
+    b.classList.remove("is-tour-highlight", "is-tour-pressed");
+  });
+  if (basicsTourAddPairOverride) {
+    basicsTourAddPairOverride = null;
+    render();
+    updateBasicsTourSpotlight();
+  }
+}
+
+function startBasicsTourAddPairDemo() {
+  stopBasicsTourAddPairDemo();
+  if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+
+  const scheduleTimer = (fn, delay) => {
+    const t = window.setTimeout(() => {
+      const idx = basicsTourAddPairTimers.indexOf(t);
+      if (idx !== -1) basicsTourAddPairTimers.splice(idx, 1);
+      fn();
+    }, delay);
+    basicsTourAddPairTimers.push(t);
+    return t;
+  };
+
+  const btn = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+  if (!btn) return;
+  const dIso = iso(state.selected);
+
+  // 1. Мягкая подсветка кнопки «плюсик»
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    const b = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    b?.classList.add("is-tour-highlight");
+  }, 400);
+
+  // 2. Нажатие на «плюсик»
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    const b = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    b?.classList.remove("is-tour-highlight");
+    b?.classList.add("is-tour-pressed");
+  }, 1100);
+
+  // 3. Открытие шторки добавления пары
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    const b = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    b?.classList.remove("is-tour-pressed");
+    openAddPairSheet(dIso);
+  }, 1350);
+
+  // 4. Заполнение демо-данных
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    const sheet = document.querySelector("#add-pair-backdrop .sched-replace-sheet");
+    if (sheet) {
+      const customInput = sheet.querySelector("#add-pair-custom");
+      const roomInput = sheet.querySelector("#add-pair-room");
+      if (customInput) customInput.value = "комп. графика";
+      if (roomInput) roomInput.value = "305";
+      const sendBtn = sheet.querySelector("[data-add-pair-send]");
+      sendBtn?.classList.add("is-tour-picked");
+    }
+  }, 2700);
+
+  // 5. Клик по «добавить» -> шторка закрывается, пара появляется в расписании
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    const slots = slotsFor(state.selected);
+    const freeNum = [1, 2, 3, 4, 5, 6].find(num => {
+      const s = slots.find(slot => slot.n === num);
+      return !s || s.window || s.cancelled || s.empty || s.hidden;
+    }) || (slots.length ? slots[slots.length - 1].n + 1 : 1);
+
+    basicsTourAddPairOverride = {
+      [swapKey(dIso, freeNum)]: {
+        subject: "комп. графика",
+        room: "305",
+        teacher: "иванов и.и.",
+        updatedAt: Date.now(),
+      }
+    };
+    closeSheetAnimated(document.getElementById("add-pair-backdrop"), null, true);
+    render();
+    updateBasicsTourSpotlight();
+  }, 3200);
+
+  // 6. Пауза на показ пары, затем откат и повтор
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    basicsTourAddPairOverride = null;
+    render();
+    updateBasicsTourSpotlight();
+  }, 6200);
+
+  scheduleTimer(() => {
+    if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
+    startBasicsTourAddPairDemo();
+  }, 7800);
+}
+
 function finishBasicsTour() {
   stopBasicsTourSwapDemo();
+  stopBasicsTourAddPairDemo();
   stopBasicsTourRoulette();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
@@ -3566,24 +3734,15 @@ function finishBasicsTour() {
 function renderBasicsTour() {
   stopBasicsTourRoulette();
   stopBasicsTourSwapDemo();
+  stopBasicsTourAddPairDemo();
 
-  if (basicsTourStep === TOUR_STEP_SWAP) {
+  if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
     if (!state.group && typeof GROUPS !== "undefined" && GROUPS.length) {
       state.group = GROUPS[0].id;
       state.draftGroup = GROUPS[0].id;
       render();
     }
-    let row = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-    if (!row) {
-      const mon = weekStart(state.selected);
-      for (let offset = 0; offset < 6; offset++) {
-        const d = addDays(mon, offset);
-        if (slotsFor(d).some(s => !s.window && !s.empty)) {
-          selectDate(d, null, { silent: true, preview: true, animated: false });
-          break;
-        }
-      }
-    }
+    ensureTourDayWithLessons();
   }
 
   const step = BASICS_TOUR[basicsTourStep];
@@ -3603,19 +3762,42 @@ function renderBasicsTour() {
     ? target.querySelector(".sched-trigger-avatar") || target
     : target;
   const rect = visualTarget.getBoundingClientRect();
-  const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
-  const left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-  const top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-  const width = basicsTourStep === TOUR_STEP_STRIP
-    ? Math.min(innerWidth - left, rect.width)
-    : Math.min(innerWidth - left - 8, rect.width + pad * 2);
-  const height = rect.height + pad * 2;
+  let left, top, width, height, spotRadius;
+
+  if (basicsTourStep === TOUR_STEP_SETTINGS) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const size = Math.round(Math.max(rect.width, rect.height) + 8);
+    left = Math.round(cx - size / 2);
+    top = Math.round(cy - size / 2);
+    width = size;
+    height = size;
+    spotRadius = Math.round(size / 2);
+  } else if (basicsTourStep === TOUR_STEP_ADD_PAIR) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const size = Math.round(Math.max(rect.width, rect.height) + 10);
+    left = Math.round(cx - size / 2);
+    top = Math.round(cy - size / 2);
+    width = size;
+    height = size;
+    spotRadius = 12;
+  } else {
+    const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
+    left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+    top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+    width = basicsTourStep === TOUR_STEP_STRIP
+      ? Math.min(innerWidth - left, rect.width)
+      : Math.min(innerWidth - left - 8, rect.width + pad * 2);
+    height = rect.height + pad * 2;
+    spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 14;
+  }
+
   const copyWidth = Math.min(340, innerWidth - 24);
   const below = top + height + 14;
 
   const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
   const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
-  const spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : basicsTourStep === TOUR_STEP_SWAP ? 14 : 12;
 
   let spotlight = host.querySelector(".sched-tour-spotlight");
   let copy = host.querySelector(".sched-tour-copy");
@@ -3670,6 +3852,7 @@ function renderBasicsTour() {
     if (action === "skip") { finishBasicsTour(); return; }
     if (action === "next") {
       stopBasicsTourSwapDemo();
+      stopBasicsTourAddPairDemo();
       basicsTourStep += 1;
       if (basicsTourStep >= BASICS_TOUR.length) finishBasicsTour();
       else renderBasicsTour();
@@ -3701,12 +3884,19 @@ function renderBasicsTour() {
       startBasicsTourSwapDemo();
       return;
     }
+    if (basicsTourStep === TOUR_STEP_ADD_PAIR) {
+      if (event.target.closest(".sched-tour-copy")) return;
+      startBasicsTourAddPairDemo();
+      return;
+    }
   };
 
   if (basicsTourStep === TOUR_STEP_STRIP) {
     startBasicsTourRoulette({ delay: 650 });
   } else if (basicsTourStep === TOUR_STEP_SWAP) {
     startBasicsTourSwapDemo();
+  } else if (basicsTourStep === TOUR_STEP_ADD_PAIR) {
+    startBasicsTourAddPairDemo();
   }
 }
 
@@ -3714,6 +3904,7 @@ function startBasicsTour() {
   closeSettings();
   closeProfile();
   stopBasicsTourSwapDemo();
+  stopBasicsTourAddPairDemo();
   if (state.editorMode && !editorChangedEntries().length) {
     finishEditorMode();
   }
@@ -3727,6 +3918,7 @@ if (typeof window !== "undefined") {
   window.finishBasicsTour = finishBasicsTour;
   Object.defineProperty(window, "basicsTourStep", { get: () => basicsTourStep, configurable: true });
   Object.defineProperty(window, "basicsTourSwapOverride", { get: () => basicsTourSwapOverride, configurable: true });
+  Object.defineProperty(window, "basicsTourAddPairOverride", { get: () => basicsTourAddPairOverride, configurable: true });
 }
 
 /* ---------- события разделов ---------- */
@@ -4044,7 +4236,10 @@ function cloneSwapMap(map) {
 
 function activeSwapMap() {
   const base = state.editorMode && editorSession ? editorSession.draft : loadSwaps();
-  return basicsTourSwapOverride ? Object.assign({}, base, basicsTourSwapOverride) : base;
+  let res = base;
+  if (basicsTourSwapOverride) res = Object.assign({}, res, basicsTourSwapOverride);
+  if (basicsTourAddPairOverride) res = Object.assign({}, res, basicsTourAddPairOverride);
+  return res;
 }
 
 function playEditorToolbarOpen() {
@@ -4678,8 +4873,9 @@ function openSuggestSheet(dIso, n) {
   const renderRoot = () => {
     const currentSwap = swapFor(dIso, n);
     const isCancelledOnce = Boolean(currentSwap && currentSwap.cancelled && !currentSwap.hidden);
-    const list = isEmptySlot ? [] : SUGGEST_OPTIONS.filter(item => {
-      if (item.id === "cancelled" && isBaseWindow) return false;
+    const isTour = typeof basicsTourStep !== "undefined" && basicsTourStep === TOUR_STEP_SWAP;
+    const list = isEmptySlot && !isTour ? [] : SUGGEST_OPTIONS.filter(item => {
+      if (item.id === "cancelled" && isBaseWindow && !isTour) return false;
       return true;
     }).map(item => {
       if (item.id === "cancelled" && isCancelledOnce) {
