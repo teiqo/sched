@@ -83,6 +83,21 @@ def clean_header(text: str) -> str:
     return re.sub(r"<tg-emoji[^>]*>(.*?)</tg-emoji>\s*", "", text).strip()
 
 
+def _ensure_quote_subj_bold(q: str) -> str:
+    pattern = r'^(<blockquote[^>]*>(?:[a-zA-Zа-яА-ЯёЁ0-9\s<>:/]+?:\s+|<b>\d+\s+пара</b>\s+)?)(<s>)?(.*?)(</s>)?(<blockquote>.*?</blockquote>)?(</blockquote>)$'
+    m = re.match(pattern, q, re.IGNORECASE | re.DOTALL)
+    if m:
+        prefix_part, s_open, subj, s_close, inner_quote, q_close = m.groups()
+        inner_quote = inner_quote or ''
+        s_open = s_open or ''
+        s_close = s_close or ''
+        subj_clean = subj.strip()
+        if not (subj_clean.startswith('<b>') and subj_clean.endswith('</b>')):
+            subj_clean = f'<b>{subj_clean}</b>'
+        return f'{prefix_part}{s_open}{subj_clean}{s_close}{inner_quote}{q_close}'
+    return q
+
+
 def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
     text = clean_text.strip()
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
@@ -99,7 +114,7 @@ def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
             for part in parts:
                 part = part.strip()
                 if part:
-                    quote_blocks.append(part)
+                    quote_blocks.append(_ensure_quote_subj_bold(part))
         return header_html, quote_blocks
 
     quote_blocks = []
@@ -134,6 +149,7 @@ def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
 
             subj = subj.strip()
             meta = meta.strip()
+            subj = f"<b>{subj}</b>"
             if is_s:
                 subj = f"<s>{subj}</s>"
                 if meta:

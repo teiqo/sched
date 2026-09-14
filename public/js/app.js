@@ -6246,7 +6246,8 @@ function botLesson(slot) {
 }
 function formatLessonQuote(subject, meta, { prefix = "", strike = false } = {}) {
   const cleanSubj = botHtml(subject || "пара");
-  const subjText = strike ? `<s>${cleanSubj}</s>` : cleanSubj;
+  const subjBold = `<b>${cleanSubj}</b>`;
+  const subjText = strike ? `<s>${subjBold}</s>` : subjBold;
   const pfx = prefix ? `${botHtml(prefix)} ` : "";
   if (meta) {
     const cleanMeta = botHtml(meta);
