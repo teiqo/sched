@@ -83,19 +83,64 @@ def clean_header(text: str) -> str:
     return re.sub(r"<tg-emoji[^>]*>(.*?)</tg-emoji>\s*", "", text).strip()
 
 
+def _format_quote_meta(meta: str) -> str:
+    meta = meta.strip()
+    if not meta:
+        return ""
+    is_s = False
+    m_s = re.match(r"^<s>(.*)</s>$", meta, re.IGNORECASE)
+    if m_s:
+        is_s = True
+        meta = m_s.group(1).strip()
+
+    if not meta.startswith(("•", "·", "• ")):
+        if not re.match(r"^(?:ауд\.|каб\.)", meta, re.IGNORECASE):
+            meta = f"• {meta}"
+
+    return f"<s>{meta}</s>" if is_s else meta
+
+
 def _ensure_quote_subj_bold(q: str) -> str:
-    pattern = r'^(<blockquote[^>]*>(?:[a-zA-Zа-яА-ЯёЁ0-9\s<>:/]+?:\s+|<b>\d+\s+пара</b>\s+)?)(<s>)?(.*?)(</s>)?(<blockquote>.*?</blockquote>)?(</blockquote>)$'
+    pattern = r"^(<blockquote[^>]*>(?:[a-zA-Zа-яА-ЯёЁ0-9\s<>:/]+?:\s+|<b>\d+\s+пара</b>\s+)?)(<s>)?(.*?)(</s>)?(<blockquote>(.*?)</blockquote>)?(</blockquote>)$"
     m = re.match(pattern, q, re.IGNORECASE | re.DOTALL)
     if m:
-        prefix_part, s_open, subj, s_close, inner_quote, q_close = m.groups()
-        inner_quote = inner_quote or ''
-        s_open = s_open or ''
-        s_close = s_close or ''
+        prefix_part, s_open, subj, s_close, inner_quote, inner_content, q_close = m.groups()
+        s_open = s_open or ""
+        s_close = s_close or ""
         subj_clean = subj.strip()
-        if not (subj_clean.startswith('<b>') and subj_clean.endswith('</b>')):
-            subj_clean = f'<b>{subj_clean}</b>'
-        return f'{prefix_part}{s_open}{subj_clean}{s_close}{inner_quote}{q_close}'
+        if not (subj_clean.startswith("<b>") and subj_clean.endswith("</b>")):
+            subj_clean = f"<b>{subj_clean}</b>"
+        if inner_content:
+            formatted_meta = _format_quote_meta(inner_content)
+            inner_quote = f"<blockquote>{formatted_meta}</blockquote>"
+        else:
+            inner_quote = ""
+        return f"{prefix_part}{s_open}{subj_clean}{s_close}{inner_quote}{q_close}"
     return q
+
+
+ACTIONS_PATTERN = re.compile(
+    r"\b(предложили\s+добавить|предложили\s+отменить|предложили\s+перенести|предложили\s+заменить|предложили\s+откатить\s+изменения|добавили|отменили|заменили|перенесли|сделали\s+окном|откатили\s+изменения|опубликовали\s+изменения)\b",
+    re.IGNORECASE,
+)
+
+
+def format_header_html(header: str) -> str:
+    clean = re.sub(r"</?b>", "", header).strip()
+    m = ACTIONS_PATTERN.search(clean)
+    if not m:
+        return f"<b>{clean}</b>" if clean else ""
+    date_part = clean[: m.start()].strip()
+    action_part = m.group(1).strip()
+    rest_part = clean[m.end() :].strip()
+
+    parts = []
+    if date_part:
+        parts.append(f"<b>{date_part}</b>")
+    parts.append(action_part)
+    if rest_part:
+        parts.append(f"<b>{rest_part}</b>")
+    return " ".join(parts)
 
 
 def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
@@ -105,7 +150,7 @@ def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
         return clean_text, []
 
     header = paragraphs[0]
-    header_html = header if header.startswith("<b>") else f"<b>{header}</b>"
+    header_html = format_header_html(header)
 
     if any("<blockquote" in p.lower() for p in paragraphs[1:]):
         quote_blocks = []
@@ -150,6 +195,8 @@ def format_notification_blocks(clean_text: str) -> tuple[str, list[str]]:
             subj = subj.strip()
             meta = meta.strip()
             subj = f"<b>{subj}</b>"
+            if meta:
+                meta = _format_quote_meta(meta)
             if is_s:
                 subj = f"<s>{subj}</s>"
                 if meta:
@@ -737,9 +784,9 @@ class App:
             if pairs:
                 u_pairs = list(dict.fromkeys(pairs))
                 p_str = f"{u_pairs[0]} пара" if len(u_pairs) == 1 else f"{', '.join(u_pairs)} пары"
-                clean_text = f"<b>{date_clean} откатили изменения ({p_str})</b>"
+                clean_text = f"<b>{date_clean}</b> откатили изменения <b>({p_str})</b>"
             else:
-                clean_text = f"<b>{date_clean} откатили изменения</b>"
+                clean_text = f"<b>{date_clean}</b> откатили изменения"
 
         clean_text = clean_text.lower()
         clean_text = clean_header(clean_text)

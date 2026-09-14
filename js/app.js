@@ -6236,12 +6236,17 @@ function botDate(dIso) {
     return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
   } catch (_) { return dIso || "неизвестная дата"; }
 }
+function formatLessonMeta(teacher, room) {
+  const parts = [];
+  if (teacher) parts.push(`• ${botHtml(teacher)}`);
+  if (room) parts.push(`ауд. ${botHtml(room)}`);
+  return parts.join(", ");
+}
 function botLesson(slot) {
   const value = slot || {};
   if (value.makeWindow || value.window || value.empty || !value.subject) return "";
   const subject = botHtml(value.subject);
-  const metaParts = [value.teacher, value.room ? `ауд. ${value.room}` : ""].filter(Boolean);
-  const meta = metaParts.map(botHtml).join(" · ");
+  const meta = formatLessonMeta(value.teacher, value.room);
   return meta ? `${subject} · ${meta}` : subject;
 }
 function formatLessonQuote(subject, meta, { prefix = "", strike = false } = {}) {
@@ -6347,38 +6352,38 @@ function notifyCloudEvent(path, body) {
   let text;
   if (body.deleted) {
     const action = type === "pending" ? "предложили откатить изменения" : "откатили изменения";
-    text = `<b>${botHtml(botDate(dIso))} ${action} (${n} пара)</b>`;
+    text = `<b>${botHtml(botDate(dIso))}</b> ${action} <b>(${n} пара)</b>`;
   } else if (body.cancelled) {
     if (origLesson) {
-      const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+      const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
       const action = type === "pending" ? "предложили отменить" : "отменили";
-      text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { strike: true })}`;
+      text = `<b>${botHtml(botDate(dIso))}</b> ${action} <b>${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { strike: true })}`;
     } else {
       // Исходно в этом слоте пары не было (окно) — не пишем «отменили окно» и не шлём уведомление!
       return;
     }
   } else if (body.makeWindow) {
     if (origLesson) {
-      const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
-      text = `<b>${botHtml(botDate(dIso))} сделали окном ${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true })}`;
+      const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+      text = `<b>${botHtml(botDate(dIso))}</b> сделали окном <b>${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true })}`;
     } else {
       return;
     }
   } else if (body.moved) {
-    const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
+    const newMeta = formatLessonMeta(body.teacher, body.room);
     const moveFromStr = body.movedFrom ? ` (с ${body.movedFrom} пары)` : "";
     const action = type === "pending" ? "предложили перенести" : "перенесли";
-    text = `<b>${botHtml(botDate(dIso))} ${action} ${n} пару${moveFromStr}</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
+    text = `<b>${botHtml(botDate(dIso))}</b> ${action} <b>${n} пару${moveFromStr}</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
   } else {
     // Замена или добавление пары
-    const newMeta = [body.teacher, body.room ? `ауд. ${body.room}` : ""].filter(Boolean).join(", ");
+    const newMeta = formatLessonMeta(body.teacher, body.room);
     if (origLesson && origLesson.subject !== body.subject) {
-      const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+      const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
       const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "вместо:", strike: true });
       const newQuote = formatLessonQuote(body.subject || "пара", newMeta, { prefix: "стало:" });
-      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${oldQuote}\n\n${newQuote}`;
+      text = `<b>${botHtml(botDate(dIso))}</b> ${verb} <b>${n} пару</b>\n\n${oldQuote}\n\n${newQuote}`;
     } else {
-      text = `<b>${botHtml(botDate(dIso))} ${verb} ${n} пару</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
+      text = `<b>${botHtml(botDate(dIso))}</b> ${verb} <b>${n} пару</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
     }
   }
   const table = buildDayTablePayload(dIso);
@@ -6621,7 +6626,7 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       if (allDeleted) {
         const pairNums = visibleList.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
         const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-        text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))} ${action} (${pairsLabel})</b>`;
+        text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))}</b> ${action} <b>(${pairsLabel})</b>`;
       } else {
         const rows = visibleList.map(([k, value]) => {
           const n = Number(k.split(":").at(-1)) || 0;
@@ -6633,19 +6638,19 @@ async function publishSwapBatch(entries, label = "изменены пары") {
             desc = "<blockquote>откатили изменения</blockquote>";
           } else if (value.cancelled) {
             if (origLesson) {
-              const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+              const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
               desc = formatLessonQuote(origLesson.subject, origMeta, { prefix: "отменена:", strike: true });
             } else {
               desc = "<blockquote>отменена</blockquote>";
             }
           } else {
-            const valMeta = [value.teacher, value.room ? `ауд. ${value.room}` : ""].filter(Boolean).join(", ");
+            const valMeta = formatLessonMeta(value.teacher, value.room);
             desc = formatLessonQuote(value.subject, valMeta);
           }
           return `<b>${n} пара</b>\n${desc}`;
         }).join("\n\n");
         const batchEmoji = allCancelled ? CAT_EMOJIS.sad : allMoved ? CAT_EMOJIS.wave : CAT_EMOJIS.cool;
-        text = `${batchEmoji} <b>${botHtml(botDate(date))} ${action}</b>\n\n${rows}`;
+        text = `${batchEmoji} <b>${botHtml(botDate(date))}</b> ${action}\n\n${rows}`;
       }
 
       const table = buildDayTablePayload(date);
@@ -6740,7 +6745,7 @@ async function approvePending(enc) {
         return Number(when.split(":")[1]) || 0;
       }).filter(Boolean);
       const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-      text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))} откатили изменения (${pairsLabel})</b>`;
+      text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))}</b> откатили изменения <b>(${pairsLabel})</b>`;
     } else {
       const rows = visibleEntries.map(([k, value]) => {
         const when = decodeSwapKey(k).split("|")[1] || "";
@@ -6753,18 +6758,18 @@ async function approvePending(enc) {
           desc = "<blockquote>откатили изменения</blockquote>";
         } else if (value.cancelled) {
           if (origLesson) {
-            const origMeta = [origLesson.teacher, origLesson.room ? `ауд. ${origLesson.room}` : ""].filter(Boolean).join(", ");
+            const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
             desc = formatLessonQuote(origLesson.subject, origMeta, { prefix: "отменена:", strike: true });
           } else {
             desc = "<blockquote>отменена</blockquote>";
           }
         } else {
-          const valMeta = [value.teacher, value.room ? `ауд. ${value.room}` : ""].filter(Boolean).join(", ");
+          const valMeta = formatLessonMeta(value.teacher, value.room);
           desc = formatLessonQuote(value.subject, valMeta);
         }
         return `<b>${n} пара</b>\n${desc}`;
       }).join("\n\n");
-      text = `${CAT_EMOJIS.ok} <b>${botHtml(botDate(date))} опубликовали изменения</b>\n\n${rows}`;
+      text = `${CAT_EMOJIS.ok} <b>${botHtml(botDate(date))}</b> опубликовали изменения\n\n${rows}`;
     }
     const table = buildDayTablePayload(date);
     queueBotEvent({ type: "swap", format: "html", group,
