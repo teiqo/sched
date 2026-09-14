@@ -1028,16 +1028,13 @@ function setScene(html, direction) {
 
   if (!old) {
     const first = document.createElement("div");
-    first.className = "sched-active-day-scene is-entering";
+    first.className = "sched-active-day-scene";
     first.id = "day-scene";
     first._schedHtml = html;
     first.innerHTML = html;
     stage.appendChild(first);
     setupLazyDays();
-    sceneTimer = window.setTimeout(() => {
-      first.classList.remove("is-entering");
-      sceneTimer = null;
-    }, 1200);
+    sceneTimer = null;
     return;
   }
 
@@ -1078,7 +1075,7 @@ function setScene(html, direction) {
   old.style.animation = "none";
 
   const next = document.createElement("div");
-  next.className = "sched-active-day-scene is-entering";
+  next.className = "sched-active-day-scene";
   next.id = "day-scene";
   next.dataset.direction = direction;
   next.style.animation = "none";
@@ -1114,11 +1111,6 @@ function setScene(html, direction) {
     { duration: dur, easing: ease, fill: "both" },
   );
 
-  /* Каскадные анимации строк длятся дольше смены подложки */
-  const rowDur = cssTimeMs("--duration-fast", 320);
-  const rowStep = cssTimeMs("--duration-stagger", 55);
-  const total = Math.max(dur + 80, rowDur + rowStep * 10 + 120);
-
   /* Уходящая сцена быстро освобождает место новому дню */
   sceneOutTimer = window.setTimeout(() => {
     old.remove();
@@ -1129,7 +1121,6 @@ function setScene(html, direction) {
   }, dur);
   sceneTimer = window.setTimeout(() => {
     old.remove();
-    next.classList.remove("is-entering");
     next.removeAttribute("data-direction");
     [outAnim, inAnim].forEach((a) => {
       try {
@@ -1138,7 +1129,7 @@ function setScene(html, direction) {
     });
     next.style.animation = "";
     sceneTimer = null;
-  }, total);
+  }, dur + 40);
 }
 
 function renderStrip() {

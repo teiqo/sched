@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-14-v116-nested-quote-left-table-title";
+const CACHE = CACHE_PREFIX + "2026-09-14-v117-fix-tab-switch-pair-animation";
 const ASSETS = [
   "./",
   "./index.html",
