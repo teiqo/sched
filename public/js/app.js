@@ -1143,26 +1143,6 @@ function setScene(html, direction) {
 
 
 
-function playPairCascadeEntrance() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  /* Same CSS cascade as desktop day enter — keeps swipe feel without locking input. */
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2354,10 +2334,10 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      // Free the gesture immediately; continue pair cascade on the live day (PC CSS).
+      // Cascade already ran on the incoming panel; do not replay on the live scene
+      // (that second is-entering made the whole day blink).
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
-      playPairCascadeEntrance();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
