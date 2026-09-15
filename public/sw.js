@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-15-v124-fix-tour-spotlight-and-temp-group";
+const CACHE = CACHE_PREFIX + "2026-09-15-v125-sched-rename-declutter";
 const ASSETS = [
   "./",
   "./index.html",
@@ -22,15 +22,11 @@ const ASSETS = [
   "./css/components.css",
   "./css/transitions.css",
   "./css/palettes.css",
-  "./css/overrides.css",
-  "./css/fixes.css",
+  "./css/app-ui.css",
   "./css/interaction.css",
   "./css/editor-mode.css",
-  "./css/editor-mode-close.css",
-  "./css/phone-fixes.css",
   "./css/onboarding-tour.css",
   "./css/break-gray.css",
-  "./css/ui-ux-polish.css",
   "./assets/fonts/inter.ttf",
   "./assets/icons/sched.svg",
   "./assets/icons/tg-bot-avatar.jpg",
@@ -40,10 +36,7 @@ const ASSETS = [
   "./data/schedule.json",
   "./data/changelog.json",
 ];
-const isOurs = (key) =>
-  key.startsWith(CACHE_PREFIX) ||
-  key.startsWith("weeqo-groups-") ||
-  key.startsWith("weekly-groups-");
+const isOurs = (key) => key.startsWith(CACHE_PREFIX);
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches

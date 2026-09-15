@@ -1,11 +1,5 @@
-/* ---------- шрифт Inter (variable, вшит локально) ---------- */
-@font-face {
-  font-family: "Inter";
-  src: url("../assets/fonts/inter.ttf") format("truetype");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
+/* App UI layer: themes, swap sheet, day strip, palette accents (formerly overrides.css). */
+/* Inter @font-face lives in base.css / index.html */
 
 /* ---------- лоадер сразу берёт фон темы, без белой вспышки при обновлении ---------- */
 .app-loading-state {

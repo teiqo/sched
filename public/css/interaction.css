@@ -1298,3 +1298,172 @@ body.is-dragging-pair .sched-pick-bar ~ .sched-drag-status { display: none; }
   user-select: none !important;
   -webkit-user-select: none !important;
 }
+
+/* --- formerly phone-fixes.css --- */
+
+/* Починки для телефона.
+
+   Копии дня (карусель свайпа) создаются клонированием разметки, но id в них
+   снимаются, чтобы не было дублей на странице. Из-за этого часть оформления,
+   привязанная к id (#live-left, #live-progress, #live-host), пропадала —
+   крупный синий текст «через N мин» превращался в мелкий серый.
+   day-swipe.js теперь переносит имя id в одноимённый класс, а правила ниже
+   повторяют оформление уже для классов. */
+
+.live-card-timing.is-next-timing .live-left {
+  color: var(--palette-accent-1);
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+:root[data-sched-palette="accent-plus"] .live-card-progress > .live-progress {
+  background: var(--sched-accent-gradient) !important;
+  color: var(--sched-on-accent) !important;
+}
+
+.live-host:empty {
+  display: none;
+}
+
+/* Зажатая пара (летающая карточка) тоже обводится пунктиром, как пустое
+   место и цель переноса, но синим и со скруглением карточки.
+   Рамка рисуется псевдоэлементом, а не outline: так штрихи повторяют углы
+   и не гасятся правилом outline: none в editor-mode-close.css. */
+:root :is(.agenda-row, .live-lesson-card).is-drag-float {
+  border-color: transparent !important;
+}
+:root :is(.agenda-row, .live-lesson-card).is-drag-float::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 2px dashed var(--sched-blue);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Плашка перерыва центрируется собственным transform и обязана сохранять его
+   в любом состоянии — и в живой сцене, и в копиях дня. */
+.agenda-break-chip {
+  top: 0;
+  transform: translate3d(-50%, -50%, 0);
+}
+
+/* Уведомление и заявка за один день собирают несколько пар в одну карточку:
+   разделяем пары тонкой линией, как внутри блока «до → после». */
+:root .sched-notif-frag > .sched-notif-frag-lesson + .sched-notif-frag-lesson,
+:root .sched-notif-frag > .sched-notif-frag-lesson + .sched-notif-frag-change,
+:root .sched-notif-frag > .sched-notif-frag-change + .sched-notif-frag-lesson,
+:root .sched-notif-frag > .sched-notif-frag-change + .sched-notif-frag-change {
+  border-top: 1px solid color-mix(in srgb, var(--sched-separator) 72%, transparent);
+}
+
+/* --- formerly ui-ux-polish.css --- */
+
+/* UI/UX hardening: loaded last to resolve legacy cascade conflicts safely. */
+
+/* On very narrow screens the floating editor action shared the footer row and
+   could cover refresh. Reserve a dedicated lane without hiding either action. */
+@media (max-width: 385px) {
+  /* Отступы симметричные, иначе штамп «обновлено …» уезжал влево от центра. */
+  .sched-schedule-footer {
+    padding-right: 8px !important;
+    padding-left: 8px !important;
+  }
+}
+
+/* Отменённая пара — «выключенная» строка: и текст, и линии уходят в серое,
+   чтобы отмена читалась спокойнее активных пар и замен. */
+.agenda-row.is-cancelled {
+  --sched-cancelled-ink: var(--sched-secondary);
+  --sched-cancelled-line: color-mix(in srgb, var(--sched-secondary) 65%, transparent);
+  --sched-cancelled-tint: color-mix(in srgb, var(--sched-secondary) 12%, transparent);
+}
+
+/* Ни предмет, ни преподаватель, ни время не остаются акцентными. */
+.agenda-row.is-cancelled,
+.agenda-row.is-cancelled .agenda-row-content,
+.agenda-row.is-cancelled .agenda-row-content strong,
+.agenda-row.is-cancelled .agenda-row-content small,
+.agenda-row.is-cancelled .lesson-meta,
+.agenda-row.is-cancelled .lesson-meta span,
+.agenda-row.is-cancelled .lesson-type-accent,
+.agenda-row.is-cancelled .lesson-type-accent.is-vacancy,
+.agenda-row.is-cancelled .lesson-room,
+.agenda-row.is-cancelled .lesson-location,
+.agenda-row.is-cancelled .agenda-row-time,
+.agenda-row.is-cancelled .agenda-row-time time,
+.agenda-row.is-cancelled .agenda-row-time time span,
+.agenda-row.is-cancelled .agenda-row-num {
+  color: var(--sched-cancelled-ink) !important;
+}
+
+.agenda-row.is-cancelled .agenda-row-content strong {
+  font-weight: 600;
+}
+
+/* Зачёркивание — серой линией, а не цветом темы, для всех элементов внутри строки. */
+.agenda-row.is-cancelled,
+.agenda-row.is-cancelled * {
+  text-decoration-color: var(--sched-cancelled-line) !important;
+}
+
+.agenda-row.is-cancelled :is(strong, small, time, .lesson-meta, .lesson-meta span, .lesson-room),
+.agenda-row.is-cancelled .agenda-row-time time span {
+  text-decoration: line-through !important;
+  text-decoration-color: var(--sched-cancelled-line) !important;
+  text-decoration-thickness: 1px !important;
+}
+
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap,
+.agenda-row.is-cancelled .lesson-advisory,
+.agenda-row.is-cancelled .lesson-suggest-btn {
+  text-decoration: none !important;
+}
+
+/* Рамки чипов внутри строки — той же серой линией. */
+.agenda-row.is-cancelled .lesson-room,
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap {
+  border-color: var(--sched-cancelled-line) !important;
+}
+
+/* Собственные разделители строки только светлеют, чтобы отмена
+   не стала заметнее соседних пар. */
+.agenda-row.is-cancelled,
+.agenda-row.is-cancelled .agenda-row-content,
+.agenda-row.is-cancelled .agenda-row-time {
+  border-color: color-mix(in srgb, var(--sched-separator) 75%, transparent) !important;
+}
+
+.agenda-row.is-cancelled :is(.lesson-room, .agenda-row-num, .lesson-origin-mark.is-swap) {
+  background: var(--sched-cancelled-tint) !important;
+}
+
+/* Аудитория у отменённой пары — серая и зачёркнутая при любых темах и палитрах. */
+:root .agenda-row.is-cancelled .lesson-room,
+:root[data-sched-palette] .agenda-row.is-cancelled .lesson-room {
+  color: var(--sched-cancelled-ink) !important;
+  background: var(--sched-cancelled-tint) !important;
+  border-color: var(--sched-cancelled-line) !important;
+  text-decoration: line-through !important;
+  text-decoration-color: var(--sched-cancelled-line) !important;
+  text-decoration-thickness: 1px !important;
+}
+
+/* Плашка «отменена» — серая, без акцента замены. */
+.agenda-row.is-cancelled .lesson-origin-mark.is-swap {
+  color: var(--sched-cancelled-ink) !important;
+}
+
+/* Та же логика у мини-карточки пары в уведомлении. */
+.sched-notif-frag-lesson.is-cancelled,
+.sched-notif-frag-lesson.is-cancelled :is(time, b, i) {
+  color: var(--sched-secondary) !important;
+  text-decoration: line-through !important;
+  text-decoration-color: color-mix(in srgb, var(--sched-secondary) 65%, transparent) !important;
+}
+

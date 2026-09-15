@@ -6635,8 +6635,7 @@ async function cloudWriteAnonymousPending(payloads) {
     });
     lastCloudStatus = response.status;
     if (!response.ok) {
-      /* Многопутевой PATCH в корень weeqo-pending база проверяет по правилам
-         родителя, а разрешение для анонимных описано на $key. Дожимаем каждый ключ отдельно. */
+      /* Root multi-path PATCH can fail auth rules that live on $key; retry per key. */
       if (response.status === 401 || response.status === 403) {
         const perKey = await cloudWriteAnonymousPendingPerKey(payloads, controller.signal);
         if (perKey) {
@@ -7011,7 +7010,7 @@ async function pullSharedSwaps() {
       if (!scrub && !document.getElementById("swap-backdrop")) renderPassive();
     }
     /* Не ушедшие записи дожимаем любой ролью: у автора предложения
-       тоже есть право записи в weeqo-pending. */
+       тоже есть право записи в pending. */
     {
       const batches = new Map();
       for (const [key, entry] of Object.entries(map)) {
