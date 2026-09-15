@@ -1150,41 +1150,43 @@ function renderStrip() {
   const existing = Array.from(strip.querySelectorAll("button[data-date-index]"));
   const sameWeek = existing.length === 7 && existing[0].dataset.date === iso(ws);
 
-  if (!sameWeek) {
+  const paintDayButton = (btn, i) => {
+    const d = addDays(ws, i);
+    btn.dataset.dateIndex = String(i);
+    btn.dataset.date = iso(d);
+    btn.classList.toggle("is-selected", i === selectedIndex);
+    btn.classList.toggle("is-today", sameDay(d, today));
+    btn.classList.toggle("is-day-off", isDayOff(d));
+    const label = btn.querySelector("span");
+    const dayNum = btn.querySelector("strong");
+    if (label) label.textContent = SHORT[i];
+    else btn.insertAdjacentHTML("afterbegin", `<span>${SHORT[i]}</span>`);
+    if (dayNum) dayNum.textContent = String(d.getDate());
+    else if (label) label.insertAdjacentHTML("afterend", `<strong>${d.getDate()}</strong>`);
+    const dotsEl = btn.querySelector(".date-lesson-dots");
+    const dotCount = Math.min(lessonsFor(d).length, 6);
+    if (dotsEl) {
+      if (dotsEl.childElementCount !== dotCount) dotsEl.innerHTML = "<i></i>".repeat(dotCount);
+    } else {
+      btn.insertAdjacentHTML("beforeend", dotsHtml(d));
+    }
+  };
+
+  /* Keep the same 7 button nodes across week changes (Sun→Mon swipe, arrows).
+     Destroy/recreate made Monday flash as the strip remounted. */
+  if (existing.length === 7) {
+    existing.forEach((btn, i) => paintDayButton(btn, i));
+  } else {
     existing.forEach((b) => b.remove());
     const frag = document.createDocumentFragment();
     for (let i = 0; i < 7; i += 1) {
-      const d = addDays(ws, i);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.dataset.dateIndex = String(i);
-      btn.dataset.date = iso(d);
-      if (i === selectedIndex) btn.classList.add("is-selected");
-      if (sameDay(d, today)) btn.classList.add("is-today");
-      if (isDayOff(d)) btn.classList.add("is-day-off");
-      btn.innerHTML = `<span>${SHORT[i]}</span><strong>${d.getDate()}</strong>${dotsHtml(d)}`;
+      btn.innerHTML = `<span></span><strong></strong>`;
+      paintDayButton(btn, i);
       frag.appendChild(btn);
     }
     strip.insertBefore(frag, nextArrow);
-  } else {
-    existing.forEach((btn, i) => {
-      const d = addDays(ws, i);
-      btn.classList.toggle("is-selected", i === selectedIndex);
-      btn.classList.toggle("is-today", sameDay(d, today));
-      btn.classList.toggle("is-day-off", isDayOff(d));
-      btn.classList.toggle("is-today", sameDay(d, today));
-      btn.classList.toggle("is-day-off", isDayOff(d));
-      const dotsEl = btn.querySelector(".date-lesson-dots");
-      const lessons = lessonsFor(d);
-      const dotCount = Math.min(lessons.length, 6);
-      if (dotsEl) {
-        if (dotsEl.childElementCount !== dotCount) {
-          dotsEl.innerHTML = "<i></i>".repeat(dotCount);
-        }
-      } else {
-        btn.insertAdjacentHTML("beforeend", dotsHtml(d));
-      }
-    });
   }
 
   const prevIndex = Number(strip.dataset.selectedIndex);
@@ -1579,10 +1581,17 @@ function selectDate(d, direction, options) {
   }
   if (weekChanged) {
     const sel = $("#selection");
+    /* Snap the pill Sun→Mon without flying across the strip; skip forced
+       reflow when the change came from day-swipe (finish layer already covers). */
     sel.classList.add("is-week-reset");
+    sel.style.removeProperty("transform");
     render(dir);
-    void sel.offsetWidth;
-    window.setTimeout(() => $("#selection").classList.remove("is-week-reset"), 40);
+    if (options?.fromSwipe) {
+      requestAnimationFrame(() => sel.classList.remove("is-week-reset"));
+    } else {
+      void sel.offsetWidth;
+      window.setTimeout(() => $("#selection").classList.remove("is-week-reset"), 40);
+    }
   } else {
     render(dir);
   }

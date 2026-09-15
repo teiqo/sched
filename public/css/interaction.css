@@ -1006,6 +1006,18 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   transform: translate3d(-50%, -50%, 0) !important;
 }
 
+
+/* Done-day / completed accordion: no expand/collapse transitions while the
+   day is cascading in — those transitions read as a second blink. */
+.sched-swipe-panel.is-entering .t-acc-panel,
+.sched-swipe-panel.is-entering .t-acc-panel-inner,
+.sched-cascade-finish .sched-swipe-panel.is-entering .t-acc-panel,
+.sched-cascade-finish .sched-swipe-panel.is-entering .t-acc-panel-inner,
+.sched-active-day-scene.is-entering .t-acc-panel,
+.sched-active-day-scene.is-entering .t-acc-panel-inner {
+  transition: none !important;
+}
+
 /* Parked mid-cascade days from prior swipes — cover live until cascade ends.
    Former carousel reclassified in place (no reparent → no animation restart). */
 .sched-days-scene {

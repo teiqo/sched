@@ -44,12 +44,18 @@ export function bindDaySwipe({
       if (done) return;
       done = true;
       panel.removeEventListener("animationend", onAnimEnd);
-      /* Class removal after the cascade: fill:both already at rest; static CSS
-         keeps pairs visible (rule 11). No cancel()/finish()/currentTime. */
-      panel.classList.remove("is-entering");
+      /* Remove the finish layer BEFORE dropping is-entering. Otherwise
+         :has(.is-entering) stops hiding #day-scene for one frame and the
+         live scene flashes under the parked panel (worst on done-days /
+         week-boundary Mondays with a short cascade). */
       const layer = panel.closest(".sched-cascade-finish");
-      if (layer && !layer.querySelector(".sched-swipe-panel.is-entering")) {
-        layer.remove();
+      if (layer) {
+        const still = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
+          .filter((node) => node !== panel);
+        if (!still.length) layer.remove();
+        else panel.classList.remove("is-entering");
+      } else {
+        panel.classList.remove("is-entering");
       }
     };
     const onAnimEnd = (event) => {
