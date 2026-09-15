@@ -7653,7 +7653,6 @@ svg.is-spinning {
   position: absolute;
   background: transparent;
   box-shadow:
-    0 0 0 150vmax #080b1445,
     0 0 26px 8px #080b1414;
   pointer-events: none;
   transition:
@@ -7666,7 +7665,6 @@ svg.is-spinning {
 }
 :root[data-theme="dark"] .sched-tour-spotlight {
   box-shadow:
-    0 0 0 150vmax #00000057,
     0 0 28px 9px #0000001a;
 }
 .sched-tour-copy {

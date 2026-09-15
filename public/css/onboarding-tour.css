@@ -124,8 +124,8 @@
 .sched-tour-spotlight {
   border: 0;
   background: color-mix(in srgb, var(--sched-blue) 18%, transparent);
+  /* No page dim — only a local ring around the target. */
   box-shadow:
-    0 0 0 150vmax #080b1457,
     0 0 0 6px color-mix(in srgb, var(--sched-blue) 11%, transparent),
     0 12px 34px color-mix(in srgb, var(--sched-blue) 24%, transparent);
   transition:
@@ -171,7 +171,6 @@
 :root[data-theme="dark"] .sched-tour-spotlight {
   background: color-mix(in srgb, var(--sched-blue) 22%, transparent);
   box-shadow:
-    0 0 0 150vmax #00000070,
     0 0 0 6px color-mix(in srgb, var(--sched-blue) 14%, transparent),
     0 12px 38px color-mix(in srgb, var(--sched-blue) 30%, transparent);
 }
@@ -273,7 +272,6 @@ body.is-tour-scroll-lock {
   transition: none !important;
 }
 
-/* Tour chrome below sheets; sheets above the 150vmax dim. */
 body.is-tour-active #basics-tour,
 body.is-tour-active .sched-tour {
   z-index: 500 !important;
