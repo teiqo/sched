@@ -198,13 +198,17 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      clearAllEntering();
-      handoff = null;
+      /* ROOT CAUSE FIX: never remove is-entering while the panel is still visible.
+         Hide the carousel first (is-warmed → opacity 0), THEN clear entering.
+         Clearing while visible is what forcibly ended the cascade on fast flings. */
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
       carousel.style.removeProperty("--blocked-reveal");
       carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
+      void carousel.offsetWidth;
+      clearAllEntering();
+      handoff = null;
     }
     setActive(false);
   };
