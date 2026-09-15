@@ -48,14 +48,6 @@ export function bindDaySwipe({
     carousel?.querySelectorAll(".sched-swipe-panel").forEach(stopPanelCascade);
   };
 
-  const incomingCascadeAnims = () => {
-    const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-    if (!panel) return [];
-    return Array.from(panel.querySelectorAll("[data-swipe-cascade]")).flatMap(
-      (el) => el.getAnimations?.() || [],
-    );
-  };
-
   /* Cascade on the day being swiped TO — same curve/stagger as desktop scene enter. */
   const startIncomingCascade = (direction) => {
     if (!carousel || reduced() || !direction) {
@@ -287,37 +279,13 @@ export function bindDaySwipe({
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-
-    const finish = () => {
-      resetVisuals();
-      if (target) onCommit(target);
-      onFinish?.();
-      // The selected date may have changed synchronously in onCommit.
-      prewarm();
-    };
-
-    /* On commit, let the incoming-day cascade reach fill:forwards before ripping
-       the carousel away — that abrupt cancel was the “кривая / резко кончается” feel. */
-    if (target && !reduced()) {
-      const anims = incomingCascadeAnims().filter((a) => a.playState !== "finished");
-      if (anims.length) {
-        gesture = null;
-        settling = null;
-        let done = false;
-        const once = () => {
-          if (done) return;
-          done = true;
-          clearTimeout(settleTimer);
-          settleTimer = null;
-          finish();
-        };
-        Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
-        settleTimer = setTimeout(once, cascadeDur + cascadeBaseDelay + cascadeStagger * 8 + 80);
-        return;
-      }
-    }
-
-    finish();
+    /* Never wait on pair-cascade: holding the carousel blocked the next swipe.
+       onCommit continues the cascade on the live scene instead. */
+    resetVisuals();
+    if (target) onCommit(target);
+    onFinish?.();
+    // The selected date may have changed synchronously in onCommit.
+    prewarm();
   };
 
   scene.addEventListener("touchstart", event => {
