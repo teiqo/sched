@@ -40,22 +40,42 @@ export function bindDaySwipe({
     if (!panel || panel.dataset.cascadeWatch === "1") return;
     panel.dataset.cascadeWatch = "1";
     let done = false;
+    let safetyTimer = null;
+    let minTimer = null;
+
+    const busyAnims = () => {
+      if (typeof panel.getAnimations !== "function") return [];
+      /* Delayed stagger rows are often still "pending", not "running".
+         Finishing on !running cut pairs 3+ short and the live day popped in. */
+      return panel.getAnimations({ subtree: true }).filter(
+        (a) => a.playState === "running" || a.playState === "pending",
+      );
+    };
+
+    const cascadeWaitMs = () => {
+      const rows = panel.querySelectorAll(
+        ".agenda-list .agenda-row, .live-host .live-lesson-card, .completed-lessons",
+      ).length;
+      const stagger = 70;
+      const baseDelay = 45;
+      const dur = 400;
+      return baseDelay + stagger * Math.max(rows - 1, 0) + dur + 120;
+    };
+
     const finish = () => {
       if (done) return;
       done = true;
       panel.removeEventListener("animationend", onAnimEnd);
+      if (safetyTimer !== null) clearTimeout(safetyTimer);
+      if (minTimer !== null) clearTimeout(minTimer);
       /* Remove the finish layer BEFORE dropping is-entering. Otherwise
-         :has(.is-entering) stops hiding #day-scene for one frame and the
-         live scene flashes under the parked panel (worst on done-days /
-         week-boundary Mondays with a short cascade). */
+         :has(.is-entering) stops hiding #day-scene for one frame. */
       const layer = panel.closest(".sched-cascade-finish");
       const root = panel.closest(".sched-days-scene") || scene;
       if (layer) {
         const still = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
           .filter((node) => node !== panel);
         if (!still.length) {
-          /* Keep live hidden for this turn until the parked layer is gone —
-             otherwise one frame can show the previous day under a short cascade. */
           root.classList.add("is-swipe-handoff");
           layer.remove();
           requestAnimationFrame(() => root.classList.remove("is-swipe-handoff"));
@@ -66,16 +86,23 @@ export function bindDaySwipe({
         panel.classList.remove("is-entering");
       }
     };
+
+    const tryFinish = () => {
+      if (done) return;
+      if (busyAnims().length) return;
+      finish();
+    };
+
     const onAnimEnd = (event) => {
       if (!panel.contains(event.target)) return;
-      const running = typeof panel.getAnimations === "function"
-        ? panel.getAnimations({ subtree: true }).filter((a) => a.playState === "running")
-        : [];
-      if (!running.length) finish();
+      /* Let the next delayed keyframes register before we decide we're idle. */
+      requestAnimationFrame(() => requestAnimationFrame(tryFinish));
     };
+
     panel.addEventListener("animationend", onAnimEnd);
-    /* Desktop setScene clears is-entering around 1200ms; match that hard cap. */
-    setTimeout(finish, 1300);
+    const wait = cascadeWaitMs();
+    minTimer = setTimeout(tryFinish, wait);
+    safetyTimer = setTimeout(finish, Math.max(1300, wait + 200));
   };
 
   /* Arm once per concrete panel instance. No remove+reflow, no WAAPI. */
