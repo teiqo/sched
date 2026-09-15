@@ -1144,58 +1144,6 @@ function setScene(html, direction) {
 
 
 
-let swipeCascadeGen = 0;
-let swipeCascadeTimer = null;
-
-function cancelSwipePairCascade() {
-  swipeCascadeGen += 1;
-  if (swipeCascadeTimer !== null) {
-    window.clearTimeout(swipeCascadeTimer);
-    swipeCascadeTimer = null;
-  }
-  const target = $("#day-scene");
-  if (target?.classList.contains("is-entering") && !target.getAttribute("data-direction")) {
-    target.classList.remove("is-entering");
-    if (sceneTimer !== null) {
-      window.clearTimeout(sceneTimer);
-      sceneTimer = null;
-    }
-  }
-}
-
-function playPairCascadeEntrance() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  if (daySwipeActive) return;
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
-/* After a settled swipe, play the same CSS cascade as desktop — but only if the
-   user is not already flinging to the next day. */
-function scheduleSwipePairCascade() {
-  cancelSwipePairCascade();
-  const gen = swipeCascadeGen;
-  /* Same turn as commit when possible; rAF only to land after carousel hide. */
-  window.requestAnimationFrame(() => {
-    if (gen !== swipeCascadeGen) return;
-    if (daySwipeActive) return;
-    playPairCascadeEntrance();
-  });
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2385,15 +2333,11 @@ function bindEvents() {
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
     contentKey: () => sceneRevision,
-    onActiveChange: active => {
-      daySwipeActive = active;
-      /* Fast flings: kill any pending/live pair cascade so gestures stay clean. */
-      if (active) cancelSwipePairCascade();
-    },
+    onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
+      // Pair cascade runs on the incoming carousel panel during the gesture only.
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
-      scheduleSwipePairCascade();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
