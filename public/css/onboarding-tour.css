@@ -252,6 +252,27 @@
   }
 }
 
+
+/* Keep the page from scrolling under the fixed tour hole. */
+html.is-tour-scroll-lock,
+body.is-tour-scroll-lock {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+body.is-tour-scroll-lock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+/* Instant retarget while the viewport moves — no 0.42s lag behind the strip. */
+.sched-tour-spotlight.is-tracking,
+.sched-tour-copy.is-tracking {
+  transition: none !important;
+}
+
 body.is-tour-active .sched-replace-backdrop {
   z-index: 550 !important;
   background: transparent !important;

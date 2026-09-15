@@ -3082,6 +3082,9 @@ var basicsTourTemporaryGroup = false;
 var basicsTourSavedGroup = null;
 var basicsTourSavedDraftGroup = null;
 var basicsTourSavedDate = null;
+var basicsTourViewportBound = false;
+var basicsTourScrollY = 0;
+var basicsTourTrackTimer = null;
 
 function tourLessonStillOpen(slot, day) {
   if (!slot || slot.window || slot.empty || !slot.subject || slot.hidden) return false;
@@ -3444,7 +3447,7 @@ function triggerTourRoulette(clickedDate) {
   startBasicsTourRoulette({ delay: 180, keepDate: true });
 }
 
-function updateBasicsTourSpotlight() {
+function positionBasicsTourChrome(options = {}) {
   const host = document.getElementById("basics-tour");
   if (!host || basicsTourStep < 0) return;
   if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
@@ -3452,6 +3455,7 @@ function updateBasicsTourSpotlight() {
   }
   const step = BASICS_TOUR[basicsTourStep];
   const spotlight = host.querySelector(".sched-tour-spotlight");
+  const copy = host.querySelector(".sched-tour-copy");
   // While the add-pair sheet is open, hide the orphan spotlight — the sheet is the demo focus.
   if (basicsTourStep === TOUR_STEP_ADD_PAIR && document.getElementById("add-pair-backdrop")) {
     if (spotlight) spotlight.style.visibility = "hidden";
@@ -3462,9 +3466,15 @@ function updateBasicsTourSpotlight() {
     if (spotlight) spotlight.style.visibility = "hidden";
     return;
   }
-  const { left, top, width, height, spotRadius } = computeTourGeometry(target);
+  const { left, top, width, height, spotRadius, rect } = computeTourGeometry(target);
+  const copyWidth = Math.min(340, innerWidth - 24);
+  const below = top + height + 14;
+  const copyTop = below + 190 < innerHeight ? below : Math.max(12, top - 190);
+  const copyLeft = Math.max(12, Math.min(innerWidth - copyWidth - 12, rect.left + rect.width / 2 - copyWidth / 2));
+  const tracking = Boolean(options.tracking);
   if (spotlight) {
     spotlight.classList.toggle("is-tight", basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR);
+    spotlight.classList.toggle("is-tracking", tracking);
     spotlight.style.visibility = "visible";
     spotlight.style.setProperty("--tour-radius", `${spotRadius}px`);
     spotlight.style.borderRadius = `${spotRadius}px`;
@@ -3473,7 +3483,75 @@ function updateBasicsTourSpotlight() {
     spotlight.style.width = `${width}px`;
     spotlight.style.height = `${height}px`;
   }
+  if (copy) {
+    copy.classList.toggle("is-tracking", tracking);
+    copy.style.left = `${copyLeft}px`;
+    copy.style.top = `${copyTop}px`;
+    copy.style.width = `${copyWidth}px`;
+  }
+  if (tracking) {
+    if (basicsTourTrackTimer !== null) clearTimeout(basicsTourTrackTimer);
+    basicsTourTrackTimer = window.setTimeout(() => {
+      basicsTourTrackTimer = null;
+      spotlight?.classList.remove("is-tracking");
+      copy?.classList.remove("is-tracking");
+    }, 120);
+  }
 }
+
+function updateBasicsTourSpotlight() {
+  positionBasicsTourChrome();
+}
+
+function onBasicsTourViewportChange() {
+  if (basicsTourStep < 0) return;
+  positionBasicsTourChrome({ tracking: true });
+}
+
+function lockBasicsTourPageScroll() {
+  if (document.documentElement.dataset.tourScrollLock === "1") return;
+  basicsTourScrollY = window.scrollY || window.pageYOffset || 0;
+  document.documentElement.dataset.tourScrollLock = "1";
+  document.documentElement.classList.add("is-tour-scroll-lock");
+  document.body.classList.add("is-tour-scroll-lock");
+  document.body.style.top = `-${basicsTourScrollY}px`;
+}
+
+function unlockBasicsTourPageScroll() {
+  if (document.documentElement.dataset.tourScrollLock !== "1") return;
+  document.documentElement.dataset.tourScrollLock = "";
+  document.documentElement.classList.remove("is-tour-scroll-lock");
+  document.body.classList.remove("is-tour-scroll-lock");
+  document.body.style.top = "";
+  window.scrollTo(0, basicsTourScrollY || 0);
+}
+
+function bindBasicsTourViewport() {
+  if (basicsTourViewportBound) return;
+  basicsTourViewportBound = true;
+  window.addEventListener("scroll", onBasicsTourViewportChange, true);
+  window.addEventListener("resize", onBasicsTourViewportChange);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", onBasicsTourViewportChange);
+    window.visualViewport.addEventListener("scroll", onBasicsTourViewportChange);
+  }
+}
+
+function unbindBasicsTourViewport() {
+  if (!basicsTourViewportBound) return;
+  basicsTourViewportBound = false;
+  window.removeEventListener("scroll", onBasicsTourViewportChange, true);
+  window.removeEventListener("resize", onBasicsTourViewportChange);
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener("resize", onBasicsTourViewportChange);
+    window.visualViewport.removeEventListener("scroll", onBasicsTourViewportChange);
+  }
+  if (basicsTourTrackTimer !== null) {
+    clearTimeout(basicsTourTrackTimer);
+    basicsTourTrackTimer = null;
+  }
+}
+
 
 function stopBasicsTourSwapDemo() {
   while (basicsTourSwapTimers.length) {
@@ -3763,6 +3841,8 @@ function finishBasicsTour() {
   stopBasicsTourSwapDemo();
   stopBasicsTourAddPairDemo();
   stopBasicsTourRoulette();
+  unbindBasicsTourViewport();
+  unlockBasicsTourPageScroll();
   document.getElementById("basics-tour")?.remove();
   basicsTourStep = -1;
   document.body.classList.remove("is-tour-active", "is-tour-roulette-active");
@@ -3980,6 +4060,9 @@ function startBasicsTour() {
   basicsTourStep = TOUR_STEP_STRIP;
   document.body.classList.add("is-tour-active");
   applyPerfMode();
+  try { window.scrollTo({ top: 0, behavior: "auto" }); } catch (_) { window.scrollTo(0, 0); }
+  lockBasicsTourPageScroll();
+  bindBasicsTourViewport();
   renderBasicsTour();
 }
 if (typeof window !== "undefined") {
