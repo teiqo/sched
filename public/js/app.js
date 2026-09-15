@@ -9053,15 +9053,23 @@ function updateMaintenanceUI(active) {
   }
 }
 
+let maintenanceStatusCooldownUntil = 0;
+
 async function refreshMaintenanceStatus() {
   if (LOCAL_PREVIEW) return;
+  if (Date.now() < maintenanceStatusCooldownUntil) return;
   try {
-    const res = await botRequest("maintenance/status", {}, "", { timeout: 4000 });
+    const session = tgSession?.session_token || "";
+    const res = await botRequest("maintenance/status", {}, session, { retries: 0, timeout: 4000 });
     if (res && typeof res.maintenance === "boolean") {
       updateMaintenanceUI(res.maintenance);
     }
-  } catch (_) {
-    // Fail-open: offline / error does not block schedule
+  } catch (err) {
+    // Fail-open: offline / error does not block schedule. Back off hard on 429.
+    if (err && err.status === 429) {
+      const seconds = Number(err.retry_after || 60);
+      maintenanceStatusCooldownUntil = Date.now() + Math.max(30, seconds) * 1000;
+    }
   }
 }
 

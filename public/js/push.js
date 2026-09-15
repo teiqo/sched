@@ -6,6 +6,7 @@ export class BotApiError extends Error {
     this.status = status;
     this.code = code;
     this.permanent = status >= 400 && status < 500 && status !== 429;
+    this.retry_after = 0;
   }
 }
 
@@ -45,7 +46,8 @@ export async function botRequest(path, body = {}, token = "", { retries = 0, tim
       const error = new BotApiError(result?.error || fallback, response.status, result?.code || "http_error");
       if (response.status === 429) {
         const seconds = Number(response.headers.get("Retry-After") || result?.retry_after || 1);
-        if (seconds > 5) throw error;
+        error.retry_after = seconds;
+        if (seconds > 5 || attempt === retries) throw error;
         delay = Math.max(1000, seconds * 1000);
       }
       // Never retry 401 or 403. The caller invalidates a rejected session once.

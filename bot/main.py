@@ -1132,10 +1132,17 @@ def handler_for(app):
                     status = 200
                 else:
                     who = app.identity(self.headers)
-                    rate_key = who or self.client_address[0]
-                    if not app.limit(rate_key, 120 if who else 10):
-                        self.respond(429, {"ok": False, "error": "Too many requests"})
-                        return
+                    # Public maintenance poll must not share the tiny anonymous bucket
+                    # (site calls it without a session every ~45s; Firebase retries used to burn the 10/min IP limit).
+                    if route == "/maintenance/status":
+                        if not app.limit("maint-status:" + self.client_address[0], 60):
+                            self.respond(429, {"ok": False, "error": "Too many requests", "retry_after": 60})
+                            return
+                    else:
+                        rate_key = who or self.client_address[0]
+                        if not app.limit(rate_key, 120 if who else 10):
+                            self.respond(429, {"ok": False, "error": "Too many requests"})
+                            return
                     if route == "/stats/visit":
                         visitor_id = data.get("visitor_id")
                         if not app.limit("visit:" + self.client_address[0], 30):
