@@ -28,13 +28,26 @@ export function bindDaySwipe({
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
 
-  const clearIncomingCascade = () => {
-    carousel?.querySelectorAll(".sched-swipe-panel.is-entering").forEach((panel) => {
-      panel.classList.remove("is-entering");
+  const cascadeEase = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+  const stopPanelCascade = (panel) => {
+    panel?.querySelectorAll?.("[data-swipe-cascade]").forEach((el) => {
+      el.getAnimations?.().forEach((a) => {
+        try { a.cancel(); } catch (_) {}
+      });
+      el.removeAttribute("data-swipe-cascade");
+      el.style.removeProperty("opacity");
+      el.style.removeProperty("transform");
     });
+    panel?.classList?.remove("is-entering");
   };
 
-  /* Cascade on the day being swiped TO (left/right panel), never the current one. */
+  const clearIncomingCascade = () => {
+    carousel?.querySelectorAll(".sched-swipe-panel").forEach(stopPanelCascade);
+  };
+
+  /* Cascade on the day being swiped TO (left/right panel), never the current one.
+     Uses Web Animations API so CSS animation:none / !important opacity cannot kill it. */
   const startIncomingCascade = (direction) => {
     if (!carousel || reduced() || !direction) {
       clearIncomingCascade();
@@ -44,13 +57,74 @@ export function bindDaySwipe({
     carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
       const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
       if (!hit) {
-        panel.classList.remove("is-entering");
+        stopPanelCascade(panel);
         return;
       }
       if (panel.classList.contains("is-entering")) return;
-      panel.classList.remove("is-entering");
-      void panel.offsetWidth;
+      stopPanelCascade(panel);
       panel.classList.add("is-entering");
+
+      const live = panel.querySelectorAll(".live-host, .live-lesson-card");
+      live.forEach((el) => {
+        el.setAttribute("data-swipe-cascade", "1");
+        el.animate(
+          [
+            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
+            { opacity: 1, transform: "translateZ(0)" },
+          ],
+          { duration: 400, delay: 35, easing: cascadeEase, fill: "both" },
+        );
+      });
+
+      const rows = panel.querySelectorAll(".agenda-list .agenda-row, .agenda-list .agenda-break");
+      rows.forEach((el) => {
+        if (el.closest(".completed-lessons:not(.is-expanding)")) return;
+        const rowI = Number.parseFloat(el.style.getPropertyValue("--row-i"));
+        const delay = 45 + 55 * (Number.isFinite(rowI) ? rowI : 0);
+        el.setAttribute("data-swipe-cascade", "1");
+        if (el.classList.contains("agenda-break")) {
+          el.animate(
+            [{ opacity: 0 }, { opacity: 1 }],
+            { duration: 350, delay, easing: cascadeEase, fill: "both" },
+          );
+        } else {
+          el.animate(
+            [
+              { opacity: 0, transform: "translate3d(0, -10px, 0)" },
+              { opacity: 1, transform: "translateZ(0)" },
+            ],
+            { duration: 400, delay, easing: cascadeEase, fill: "both" },
+          );
+        }
+      });
+
+      const completed = panel.querySelector(".completed-lessons");
+      if (completed) {
+        completed.setAttribute("data-swipe-cascade", "1");
+        completed.animate(
+          [
+            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
+            { opacity: 1, transform: "translateZ(0)" },
+          ],
+          { duration: 400, delay: 25, easing: cascadeEase, fill: "both" },
+        );
+      }
+
+      panel.querySelectorAll(".sched-future-days > .sched-day-block").forEach((el, idx) => {
+        el.setAttribute("data-swipe-cascade", "1");
+        el.animate(
+          [
+            { opacity: 0, transform: "translate3d(0, 8px, 0)" },
+            { opacity: 1, transform: "none" },
+          ],
+          {
+            duration: 450,
+            delay: 80 + Math.min(idx, 5) * 40,
+            easing: cascadeEase,
+            fill: "both",
+          },
+        );
+      });
     });
   };
 

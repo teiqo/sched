@@ -946,51 +946,11 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 }
 
 
-/* Phone day-swipe: pair cascade on the day being swiped TO, starting with the gesture. */
-.sched-swipe-panel.is-entering :is(.live-host, .live-lesson-card) {
-  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: 35ms !important;
-  opacity: unset !important;
-  transform: unset !important;
-}
-.sched-swipe-panel.is-entering .agenda-list .agenda-row {
-  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
-  opacity: unset !important;
-  transform: unset !important;
-}
-.sched-swipe-panel.is-entering .agenda-list .agenda-break {
-  animation: sched-break-fade-in var(--duration-fast, 0.35s) var(--ease-smooth-out) both !important;
-  animation-delay: calc(45ms + var(--duration-stagger, 55ms) * var(--row-i, 0)) !important;
-  opacity: unset !important;
-}
-.sched-swipe-panel.is-entering .completed-lessons {
-  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out) both !important;
-  animation-delay: 25ms !important;
-  opacity: unset !important;
-  transform: unset !important;
-}
-.sched-swipe-panel.is-entering .completed-lessons:not(.is-expanding) .agenda-row {
-  animation: none !important;
-  opacity: 1 !important;
-  transform: none !important;
-}
+/* Phone day-swipe: incoming panel marked is-entering; pair cascade is driven by WAAPI in day-swipe.js
+   (CSS animation:none / opacity !important on swipe clones would otherwise kill keyframes). */
 .sched-swipe-panel.is-entering .agenda-break-chip {
-  animation: none !important;
-  opacity: 1 !important;
   transform: translate3d(-50%, -50%, 0) !important;
 }
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block {
-  animation: sched-future-in 0.45s var(--ease-smooth-out) both !important;
-  opacity: unset !important;
-  transform: unset !important;
-}
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) { animation-delay: 80ms !important; }
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) { animation-delay: 120ms !important; }
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) { animation-delay: 160ms !important; }
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(4) { animation-delay: 200ms !important; }
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(5) { animation-delay: 240ms !important; }
-.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 6) { animation-delay: 280ms !important; }
 
 .sched-swipe-panel.is-blocked {
   min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
