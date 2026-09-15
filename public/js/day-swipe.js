@@ -49,11 +49,19 @@ export function bindDaySwipe({
          live scene flashes under the parked panel (worst on done-days /
          week-boundary Mondays with a short cascade). */
       const layer = panel.closest(".sched-cascade-finish");
+      const root = panel.closest(".sched-days-scene") || scene;
       if (layer) {
         const still = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
           .filter((node) => node !== panel);
-        if (!still.length) layer.remove();
-        else panel.classList.remove("is-entering");
+        if (!still.length) {
+          /* Keep live hidden for this turn until the parked layer is gone —
+             otherwise one frame can show the previous day under a short cascade. */
+          root.classList.add("is-swipe-handoff");
+          layer.remove();
+          requestAnimationFrame(() => root.classList.remove("is-swipe-handoff"));
+        } else {
+          panel.classList.remove("is-entering");
+        }
       } else {
         panel.classList.remove("is-entering");
       }
@@ -282,7 +290,9 @@ export function bindDaySwipe({
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
 
     if (target) {
-      /* Park first so the same panel keeps cascading while live updates under it. */
+      /* Commit live UNDER the still-covering carousel first, then park the
+         cascading panel. Parking/removing before onCommit flashed the previous
+         day for a frame whenever the finish layer dropped. */
       clearTimeout(settleTimer);
       settleTimer = null;
       stopFrame();
@@ -291,9 +301,11 @@ export function bindDaySwipe({
       scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
       strip.classList.remove("is-swipe-linked", "is-swipe-settling");
       selection.style.removeProperty("transform");
-      parkEnteringCascades();
+      scene.classList.add("is-swipe-handoff");
       setActive(false);
       onCommit(target);
+      parkEnteringCascades();
+      scene.classList.remove("is-swipe-handoff");
       onFinish?.();
       prewarm();
       return;
