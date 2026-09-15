@@ -1141,6 +1141,29 @@ function setScene(html, direction) {
   }, total);
 }
 
+
+function playPairCascadeEntrance() {
+  const target = $("#day-scene");
+  if (!target) return;
+  if (state.perfMode) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const scene = $("#scene");
+  /* Swipe commit used to hold is-motion-lite, which kills all #stage animations. */
+  scene?.classList.remove("is-motion-lite");
+  target.classList.remove("is-entering", "is-leaving");
+  target.removeAttribute("data-direction");
+  void target.offsetWidth;
+  target.classList.add("is-entering");
+  if (sceneTimer !== null) {
+    window.clearTimeout(sceneTimer);
+    sceneTimer = null;
+  }
+  sceneTimer = window.setTimeout(() => {
+    target.classList.remove("is-entering");
+    sceneTimer = null;
+  }, 1200);
+}
+
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2341,16 +2364,16 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      // The neighbour has already slid into place: do not play a second entrance.
-      holdMotionLite();
+      // Carousel already slid the day — no second scene FLIP, but pairs still cascade.
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
+      playPairCascadeEntrance();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
         daySwipeRenderPending = false;
-        holdMotionLite();
         render();
+        playPairCascadeEntrance();
       }
     },
   });
