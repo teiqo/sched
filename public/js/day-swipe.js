@@ -5,7 +5,7 @@
    moves one compositor layer only. */
 export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
-  renderDay, onCommit, onActiveChange, onFinish, contentKey,
+  renderDay, onCommit, onCascadePreview, onActiveChange, onFinish, contentKey,
 }) {
   let gesture = null;
   let carousel = null;
@@ -198,8 +198,8 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      /* Hide before clearing panel is-entering. Live day (already cascading from
-         onCommit) becomes visible and keeps playing — fast fling must not kill it. */
+      /* Hide panel first, then clear PANEL entering only.
+         Live #day-scene.is-entering must keep running (fast fling → no kill, no re-arm). */
       carousel.style.setProperty("opacity", "0", "important");
       carousel.style.setProperty("visibility", "hidden", "important");
       carousel.classList.remove("is-active", "is-settling");
@@ -320,11 +320,12 @@ export function bindDaySwipe({
     if (event.cancelable) event.preventDefault();
 
     const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
+    g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     if (direction && g.cascadeDir !== direction) {
       g.cascadeDir = direction;
       startIncomingCascade(direction);
+      if (!g.blocked) onCascadePreview?.(addDays(g.date, direction));
     }
-    g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
     requestPaint();
