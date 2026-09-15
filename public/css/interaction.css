@@ -952,12 +952,6 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 .sched-days-scene.is-carousel-swiping #day-scene {
   visibility: hidden !important;
 }
-/* Hide live for one commit/teardown turn — no previous-day frame. */
-.sched-days-scene.is-swipe-handoff #stage,
-.sched-days-scene.is-swipe-handoff #day-scene {
-  visibility: hidden !important;
-}
-
 /* Keep live covered while a parked panel is still cascading. */
 .sched-days-scene:has(.sched-cascade-finish .sched-swipe-panel.is-entering) #stage,
 .sched-days-scene:has(.sched-cascade-finish .sched-swipe-panel.is-entering) #day-scene {

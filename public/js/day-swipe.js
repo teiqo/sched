@@ -44,12 +44,10 @@ export function bindDaySwipe({
       if (done) return;
       done = true;
       panel.removeEventListener("animationend", onAnimEnd);
-      /* Drop the covering layer in the same hidden turn as revealing live.
-         Do not strip is-entering first — that disables :has(...is-entering)
-         and can flash live for one frame. No cancel()/finish()/currentTime. */
+      /* Drop covering layer while is-entering still matches :has(...), so live
+         never paints one frame under an empty finish shell. Do not strip
+         is-entering first. No cancel()/finish()/currentTime, no handoff hide. */
       const layer = panel.closest(".sched-cascade-finish");
-      const root = panel.closest(".sched-days-scene") || scene;
-      root.classList.add("is-swipe-handoff");
       if (layer) {
         const others = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
           .filter((node) => node !== panel);
@@ -58,9 +56,6 @@ export function bindDaySwipe({
       } else {
         panel.classList.remove("is-entering");
       }
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => root.classList.remove("is-swipe-handoff"));
-      });
     };
     const onAnimEnd = (event) => {
       if (!panel.contains(event.target)) return;
@@ -286,9 +281,7 @@ export function bindDaySwipe({
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
 
     if (target) {
-      /* Keep cascade architecture: same panel parks and keeps is-entering.
-         Only fix flash: hide live for this turn, commit NEW day under the
-         cover, then park. Old live must never paint between covers. */
+      /* Park first so the same panel keeps cascading while live updates under it. */
       clearTimeout(settleTimer);
       settleTimer = null;
       stopFrame();
@@ -297,16 +290,9 @@ export function bindDaySwipe({
       scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
       strip.classList.remove("is-swipe-linked", "is-swipe-settling");
       selection.style.removeProperty("transform");
-      scene.classList.add("is-swipe-handoff");
+      parkEnteringCascades();
       setActive(false);
       onCommit(target);
-      parkEnteringCascades();
-      if (!scene.querySelector(".sched-cascade-finish .sched-swipe-panel.is-entering")) {
-        /* No covering cascade — reveal on next frame after live already new. */
-        requestAnimationFrame(() => scene.classList.remove("is-swipe-handoff"));
-      } else {
-        scene.classList.remove("is-swipe-handoff");
-      }
       onFinish?.();
       prewarm();
       return;
@@ -325,7 +311,6 @@ export function bindDaySwipe({
       return;
     }
     complete(true);
-    scene.classList.add("is-swipe-handoff");
     const date = new Date(getDate());
     /* Панель только готовится. Показываем её исключительно после того, как
        жест признан горизонтальным: обычное нажатие, скролл или удержание
@@ -363,7 +348,6 @@ export function bindDaySwipe({
         track.classList.add("is-active");
         g.width = carouselWidth || g.width;
         setActive(true);
-        scene.classList.remove("is-swipe-handoff");
         scene.classList.add("is-swiping");
         strip.classList.add("is-swipe-linked");
         strip.classList.remove("is-hop", "is-releasing");

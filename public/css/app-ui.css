@@ -1679,8 +1679,6 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    /* Must match post-animation static computed transform (none).
-       translateZ(0) left a compositor layer and caused a 1px snap on end. */
     transform: none;
   }
 }
@@ -1701,7 +1699,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: translateZ(0);
+    transform: none;
   }
 }
 @keyframes sched-live-card-in {
