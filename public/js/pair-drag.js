@@ -300,6 +300,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   };
   scene.addEventListener('pointerdown', e => {
     if (!e.isPrimary || e.button !== 0 || drag) return;
+    if (e.target.closest('.lesson-swap-btn')) return;
     const source = sourceFor(e.target);
     if (!source) return;
     /* На пк вне редактора зажатая пара больше не предлагает переместить себя:
@@ -316,6 +317,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   });
   scene.addEventListener('touchstart', e => {
     if (drag || pending || e.touches.length !== 1) return;
+    if (e.target.closest('.lesson-swap-btn')) return;
     /* Удержание самой карточки на телефоне оставляем только редактору:
        у остальных перенос начинается с кнопки, иначе ломается скролл. */
     if (!editorMode()) return;

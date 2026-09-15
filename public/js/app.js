@@ -1026,18 +1026,18 @@ function setScene(html, direction) {
     (!isLearning && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
     Boolean(scene && scene.classList.contains("is-motion-lite") && !isLearning);
 
-  if (!old) {
-    const first = document.createElement("div");
-    first.className = "sched-active-day-scene is-entering";
-    first.id = "day-scene";
-    first._schedHtml = html;
-    first.innerHTML = html;
-    stage.appendChild(first);
+  if (!old || !old._schedHtml) {
+    const target = old || document.createElement("div");
+    target.className = "sched-active-day-scene is-entering";
+    target.id = "day-scene";
+    target._schedHtml = html;
+    target.innerHTML = html;
+    if (!old) stage.appendChild(target);
     setupLazyDays();
     sceneTimer = window.setTimeout(() => {
-      first.classList.remove("is-entering");
+      target.classList.remove("is-entering");
       sceneTimer = null;
-    }, 650);
+    }, 1200);
     return;
   }
 
@@ -1087,9 +1087,9 @@ function setScene(html, direction) {
   stage.appendChild(next);
   setupLazyDays();
 
-  const dist = cssVar("--page-slide-distance", "28px");
+  const dist = cssVar("--page-slide-distance", "8px");
   const ease = cssVar("--page-slide-ease", "cubic-bezier(0.22, 1, 0.36, 1)");
-  const dur = cssTimeMs("--page-slide-dur", 320);
+  const dur = cssTimeMs("--page-slide-dur", 250);
   const outX =
     direction === "forward"
       ? `translate3d(calc(${dist} * -1), 0, 0)`
@@ -1115,9 +1115,9 @@ function setScene(html, direction) {
   );
 
   /* Каскадные анимации строк длятся дольше смены подложки */
-  const rowDur = cssTimeMs("--duration-fast", 360);
+  const rowDur = cssTimeMs("--duration-fast", 320);
   const rowStep = cssTimeMs("--duration-stagger", 55);
-  const total = Math.max(dur + 80, rowDur + rowStep * 8 + 80);
+  const total = Math.max(dur + 80, rowDur + rowStep * 10 + 120);
 
   /* Уходящая сцена быстро освобождает место новому дню */
   sceneOutTimer = window.setTimeout(() => {
@@ -2466,6 +2466,8 @@ function futureDaysHtml(forDate = state.selected) {
         'px" aria-hidden="true"></div>'
       : cachedFutureDay(d),
   );
+  /* Обёртка нужна, чтобы будущие дни проявлялись каскадом,
+     а не возникали резко вместе со сменой сцены. */
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
