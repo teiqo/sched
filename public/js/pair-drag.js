@@ -336,7 +336,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   window.addEventListener('blur', () => finish(false));
   let lastWidth = innerWidth;
   window.addEventListener('resize', () => {
-    /* Клавиатура и адресная строка меняют только ��ысоту — из-за этого
+    /* Клавиатура и адресная строка меняют только высоту — из-за этого
        перенос срывался прямо во время удержания пары. */
     if (innerWidth === lastWidth) return;
     lastWidth = innerWidth;

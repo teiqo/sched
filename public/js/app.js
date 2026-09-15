@@ -1651,7 +1651,7 @@ function scrubFrameStep(now) {
       /* Доводка после тапа: пилюля уже стоит ровно на новом дне, поэтому
          инлайн-трансформ снимается в этом же кадре без видимого скачка,
          а опускание идёт по сценарию отпускания вождения. Рендер не нужен —
-         selectDate уже отработал в момент отпускан������������я. */
+         selectDate уже отработал в момент отпускания. */
       if (scrub.tapGlide) endScrub({ skipRender: true });
       else endScrub();
       return;
@@ -2071,7 +2071,7 @@ function bindStrip() {
       else endScrub();
     }
   });
-  /* Отпустили курсор вне полосы или ушли из окна — состояние всё ра��но чистим / д��в��дим. */
+  /* Отпустили курсор вне полосы или ушли из окна — состояние всё равно чистим / доводим. */
   window.addEventListener("pointerup", (e) => {
     if (scrub && scrub.pointerId === e.pointerId) {
       if (scrub.active) release(e);
@@ -2492,7 +2492,7 @@ function futureDaysHtml(forDate = state.selected) {
   return `<div class="sched-future-days">${out.join("")}</div>`;
 }
 
-/* Отл��женная дорисовка наблюдает только текущую сцену, а не каждую мута��ию
+/* Отложенная дорисовка наблюдает только текущую сцену, а не каждую мутацию
    секундомера/анимации. Не больше одного невидимого дня за кадр. */
 let lazyDayObserver = null;
 let lazyDayFrame = null;
@@ -2632,15 +2632,12 @@ function toggleProfileNotifs(button) {
   panel.classList.toggle("is-open", open);
 }
 
-function closeNotifsSheet() {
-  const backdrop = document.getElementById("notifs-backdrop");
-  if (!backdrop) return;
-  backdrop.classList.remove("is-open");
-  window.setTimeout(() => backdrop.remove(), 180);
+function closeNotifsSheet(onComplete, immediate = false) {
+  closeSheetAnimated("notifs-backdrop", onComplete, immediate);
 }
 
 function openNotifsSheet() {
-  closeNotifsSheet();
+  closeNotifsSheet(null, true);
   const backdrop = document.createElement("div");
   backdrop.id = "notifs-backdrop";
   backdrop.className = "sched-replace-backdrop";
@@ -3088,9 +3085,60 @@ var basicsTourTrackTimer = null;
 
 function tourLessonStillOpen(slot, day) {
   if (!slot || slot.window || slot.empty || !slot.subject || slot.hidden) return false;
-  if (!sameDay(day, new Date())) return true;
+  const today = startOfDay(currentDate());
+  const d0 = startOfDay(day);
+  if (d0.getTime() < today.getTime()) return false; // past weekday: all finished
+  if (d0.getTime() > today.getTime()) return true; // future: none completed yet
   if (!slot.to) return true;
-  return mins(slot.to) > nowMins(new Date());
+  return mins(slot.to) > nowMins(currentDate());
+}
+
+function dayHasTourLessons(day) {
+  return slotsFor(day).some((s) => s && !s.window && !s.empty && s.subject && !s.hidden);
+}
+
+function dayHasCompletedTourLessons(day) {
+  if (!day) return false;
+  const today = startOfDay(currentDate());
+  const d0 = startOfDay(day);
+  if (d0.getTime() < today.getTime()) return true;
+  if (d0.getTime() > today.getTime()) return false;
+  const cur = nowMins(currentDate());
+  return slotsFor(day).some((s) => {
+    if (!s || s.window || s.empty || !s.subject || s.hidden) return false;
+    return Boolean(s.to) && mins(s.to) <= cur;
+  });
+}
+
+function pickCleanTourDay() {
+  const today = startOfDay(currentDate());
+  const candidates = [];
+  // Prefer tomorrow / upcoming weekdays with open lessons and zero completed.
+  for (let i = 1; i <= 14; i++) candidates.push(addDays(today, i));
+  candidates.push(today);
+  const mon = weekStart(state.selected || today);
+  for (let i = 0; i < 6; i++) candidates.push(addDays(mon, i));
+  const nextMon = addDays(mon, 7);
+  for (let i = 0; i < 6; i++) candidates.push(addDays(nextMon, i));
+
+  const seen = new Set();
+  const ranked = [];
+  for (const cand of candidates) {
+    const key = iso(cand);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (cand.getDay() === 0) continue;
+    if (startOfDay(cand).getTime() < today.getTime()) continue;
+    if (!dayHasTourLessons(cand)) continue;
+    if (dayHasCompletedTourLessons(cand)) continue;
+    ranked.push({
+      cand,
+      open: dayHasOpenTourLesson(cand),
+      dist: Math.abs(startOfDay(cand).getTime() - today.getTime()),
+    });
+  }
+  ranked.sort((a, b) => Number(b.open) - Number(a.open) || a.dist - b.dist);
+  return ranked.length ? ranked[0].cand : null;
 }
 
 function dayHasOpenTourLesson(day) {
@@ -3100,7 +3148,6 @@ function dayHasOpenTourLesson(day) {
 function getTourSwapTarget() {
   const scene = document.querySelector("#stage .sched-active-day-scene");
   if (!scene) return null;
-  expandCompletedLessonsForTour();
 
   const visibleBtn = (root) => {
     if (!root) return null;
@@ -3296,17 +3343,22 @@ function startBasicsTourRoulette(options = {}) {
   const originalWeek = weekStart(originalDate);
   basicsTourRouletteOriginalDate = originalDate;
 
-  const today = startOfDay(currentDate());
-  const todayIndex = Math.max(0, Math.min(6, Math.round((today - originalWeek) / 86400000)));
+  const dayHasUsefulTourSlots = (idx) => {
+    const day = addDays(originalWeek, idx);
+    return slotsFor(day).some((s) => s && !s.window && !s.empty && s.subject && !s.hidden);
+  };
 
-  // Рулетка дней должна доходить до сегодняшнего дня:
-  let targetIndex;
-  if (current !== todayIndex) {
-    targetIndex = todayIndex;
-  } else {
-    // Есл�� уже на сегодняшнем дне — идём к началу недели (понедельник 0) и возвращаемся в сегодня.
-    // Если сегодня понедельник (0) — идём к пятнице (4) и возвращаемся в сегодня.
-    targetIndex = todayIndex === 0 ? 4 : 0;
+  // Go to the farther week edge (Sat=6 preferred when tied), then return home.
+  const distToStart = current;
+  const distToEnd = 6 - current;
+  let targetIndex = distToEnd >= distToStart ? 6 : 0;
+  if (targetIndex === 6 && !dayHasUsefulTourSlots(6) && dayHasUsefulTourSlots(0)) {
+    targetIndex = 0;
+  } else if (targetIndex === 0 && !dayHasUsefulTourSlots(0) && dayHasUsefulTourSlots(6)) {
+    targetIndex = 6;
+  }
+  if (targetIndex === current) {
+    targetIndex = current === 0 ? 6 : 0;
   }
   const distance = Math.max(1, Math.abs(targetIndex - current));
 
@@ -3325,34 +3377,19 @@ function startBasicsTourRoulette(options = {}) {
       strip.classList.add("is-scrubbing");
       selection.style.willChange = "transform";
 
-      const reducedMotion = false;
-      // Long coast with clear deceleration — same gesture family as before, px-accurate.
-      const duration = Math.max(2400, 2000 + distance * 120);
+      // Continuous out-and-back (no dwell at the far edge), finger-scrub feel.
+      const duration = Math.max(2200, 1800 + distance * 220);
       const cellWidth = selection.getBoundingClientRect().width || (strip.clientWidth / 7);
       const startedAt = performance.now();
       let lastIndex = current;
       let lastUnderIndex = current;
 
-      // Момент разворота (44% времени на путь туда, 56% на возвращение с длинным замедлением)
-      const turnPoint = 0.46;
-
       const paintFingerSwipe = now => {
         if (!selection.isConnected || basicsTourStep !== TOUR_STEP_STRIP) return;
         const progress = Math.min(1, (now - startedAt) / duration);
 
-        let factor;
-        if (reducedMotion) {
-          factor = Math.sin(progress * Math.PI);
-        } else if (progress <= turnPoint) {
-          // Outbound smootherstep: accelerates then clearly decelerates into the far day.
-          const u = progress / turnPoint;
-          factor = u * u * u * (u * (u * 6 - 15) + 10);
-        } else {
-          // Return: ease-out into the home day (slow landing).
-          const v = (progress - turnPoint) / (1 - turnPoint);
-          const landed = 1 - Math.pow(1 - v, 3);
-          factor = 1 - landed;
-        }
+        // Smooth continuous motion: 0 → 1 → 0 without pausing at the apex.
+        const factor = Math.sin(progress * Math.PI);
 
         const position = current + (targetIndex - current) * factor;
         selection.style.transform = `translate3d(${(position * cellWidth).toFixed(2)}px,0,0)`;
@@ -3370,14 +3407,14 @@ function startBasicsTourRoulette(options = {}) {
           lastUnderIndex = nearestIndex;
         }
 
-        // Обновляем превью расписания с полноценной анимацией появления пар
+        // Cascade matches real press-and-drag scrub.
         if (nearestIndex !== lastIndex) {
           const dir = nearestIndex > lastIndex ? "forward" : "backward";
           lastIndex = nearestIndex;
           selectDate(addDays(originalWeek, nearestIndex), dir, {
             silent: true,
             preview: true,
-            animated: false,
+            animated: true,
           });
         }
 
@@ -3509,7 +3546,14 @@ function onBasicsTourViewportChange() {
 }
 
 function lockBasicsTourPageScroll() {
-  if (document.documentElement.dataset.tourScrollLock === "1") return;
+  if (document.documentElement.dataset.tourScrollLock === "1") {
+    document.documentElement.classList.add("is-tour-scroll-lock");
+    document.body.classList.add("is-tour-scroll-lock");
+    if (!document.body.style.top) {
+      document.body.style.top = `-${basicsTourScrollY || 0}px`;
+    }
+    return;
+  }
   basicsTourScrollY = window.scrollY || window.pageYOffset || 0;
   document.documentElement.dataset.tourScrollLock = "1";
   document.documentElement.classList.add("is-tour-scroll-lock");
@@ -3526,11 +3570,26 @@ function unlockBasicsTourPageScroll() {
   window.scrollTo(0, basicsTourScrollY || 0);
 }
 
+function onBasicsTourBlockScroll(e) {
+  if (basicsTourStep < 0) return;
+  const t = e && e.target;
+  const sheet = t && t.closest && t.closest(".sched-replace-sheet, .sched-tour-copy");
+  if (sheet && sheet.scrollHeight > sheet.clientHeight + 1) {
+    // Allow scrolling inside tour sheets / copy cards only.
+    return;
+  }
+  if (e.cancelable) e.preventDefault();
+}
+
 function bindBasicsTourViewport() {
   if (basicsTourViewportBound) return;
   basicsTourViewportBound = true;
   window.addEventListener("scroll", onBasicsTourViewportChange, true);
   window.addEventListener("resize", onBasicsTourViewportChange);
+  window.addEventListener("wheel", onBasicsTourBlockScroll, { capture: true, passive: false });
+  window.addEventListener("touchmove", onBasicsTourBlockScroll, { capture: true, passive: false });
+  document.addEventListener("wheel", onBasicsTourBlockScroll, { capture: true, passive: false });
+  document.addEventListener("touchmove", onBasicsTourBlockScroll, { capture: true, passive: false });
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", onBasicsTourViewportChange);
     window.visualViewport.addEventListener("scroll", onBasicsTourViewportChange);
@@ -3542,6 +3601,10 @@ function unbindBasicsTourViewport() {
   basicsTourViewportBound = false;
   window.removeEventListener("scroll", onBasicsTourViewportChange, true);
   window.removeEventListener("resize", onBasicsTourViewportChange);
+  window.removeEventListener("wheel", onBasicsTourBlockScroll, true);
+  window.removeEventListener("touchmove", onBasicsTourBlockScroll, true);
+  document.removeEventListener("wheel", onBasicsTourBlockScroll, true);
+  document.removeEventListener("touchmove", onBasicsTourBlockScroll, true);
   if (window.visualViewport) {
     window.visualViewport.removeEventListener("resize", onBasicsTourViewportChange);
     window.visualViewport.removeEventListener("scroll", onBasicsTourViewportChange);
@@ -3697,37 +3760,48 @@ function expandCompletedLessonsForTour() {
 }
 
 function ensureTourDayWithLessons() {
-  if (getTourSwapTarget()) return true;
-  if (expandCompletedLessonsForTour() && getTourSwapTarget()) return true;
+  // Prefer a clean day (zero completed lessons) — do not expand-completed first.
+  if (getTourSwapTarget() && !dayHasCompletedTourLessons(state.selected)) return true;
 
-  const isSunday = state.selected.getDay() === 0;
-  const candidates = [
-    defaultSelectedDate(),
-    addDays(state.selected, isSunday ? 1 : 1),
-    addDays(state.selected, isSunday ? 2 : -1),
-  ];
-  const mon = weekStart(state.selected);
-  for (let i = 0; i < 6; i++) {
-    candidates.push(addDays(mon, i));
+  const clean = pickCleanTourDay();
+  if (clean && (!state.selected || !sameDay(clean, state.selected))) {
+    selectDate(clean, null, { silent: true, preview: true, animated: false });
+    render();
   }
+  if (getTourSwapTarget() && !dayHasCompletedTourLessons(state.selected)) return true;
+
+  const today = startOfDay(currentDate());
+  const candidates = [];
+  for (let i = 1; i <= 14; i++) candidates.push(addDays(today, i));
+  candidates.push(today);
+  const mon = weekStart(state.selected || today);
+  for (let i = 0; i < 6; i++) candidates.push(addDays(mon, i));
   const nextMon = addDays(mon, 7);
-  for (let i = 0; i < 6; i++) {
-    candidates.push(addDays(nextMon, i));
-  }
+  for (let i = 0; i < 6; i++) candidates.push(addDays(nextMon, i));
 
   const ranked = [];
+  const seen = new Set();
   for (const cand of candidates) {
+    const key = iso(cand);
+    if (seen.has(key)) continue;
+    seen.add(key);
     if (cand.getDay() === 0) continue;
-    if (!slotsFor(cand).some((s) => !s.window && !s.empty && s.subject)) continue;
-    ranked.push({ cand, open: dayHasOpenTourLesson(cand) });
+    if (startOfDay(cand).getTime() < today.getTime()) continue;
+    if (!dayHasTourLessons(cand)) continue;
+    ranked.push({
+      cand,
+      clean: !dayHasCompletedTourLessons(cand),
+      open: dayHasOpenTourLesson(cand),
+    });
   }
-  ranked.sort((a, b) => Number(b.open) - Number(a.open));
+  ranked.sort((a, b) => Number(b.clean) - Number(a.clean) || Number(b.open) - Number(a.open));
   for (const { cand } of ranked) {
     selectDate(cand, null, { silent: true, preview: true, animated: false });
     render();
-    expandCompletedLessonsForTour();
     if (getTourSwapTarget()) return true;
   }
+  // Last resort only: expand completed accordion on the current day.
+  if (expandCompletedLessonsForTour() && getTourSwapTarget()) return true;
   return Boolean(getTourSwapTarget());
 }
 
@@ -3808,7 +3882,7 @@ function startBasicsTourAddPairDemo() {
     const freeNum = [1, 2, 3, 4, 5, 6].find(num => {
       const s = slots.find(slot => slot.n === num);
       return !s || s.window || s.cancelled || s.empty || s.hidden;
-    }) || (slots.length ? slots[slots.length - 1].n + 1 : 1);
+    }) || Math.min(6, slots.length ? slots[slots.length - 1].n + 1 : 1);
 
     basicsTourAddPairOverride = {
       [swapKey(dIso, freeNum)]: {
@@ -3818,7 +3892,7 @@ function startBasicsTourAddPairDemo() {
         updatedAt: Date.now(),
       }
     };
-    closeSheetAnimated(document.getElementById("add-pair-backdrop"), null, true);
+    closeSheetAnimated(document.getElementById("add-pair-backdrop"), null, false);
     render();
     updateBasicsTourSpotlight();
   }, 3200);
@@ -3874,6 +3948,19 @@ function renderBasicsTour() {
   stopBasicsTourRoulette();
   stopBasicsTourSwapDemo();
   stopBasicsTourAddPairDemo();
+
+  lockBasicsTourPageScroll();
+  if (!basicsTourViewportBound) bindBasicsTourViewport();
+
+  if (basicsTourStep === TOUR_STEP_STRIP) {
+    if (dayHasCompletedTourLessons(state.selected)) {
+      const clean = pickCleanTourDay();
+      if (clean && !sameDay(clean, state.selected)) {
+        selectDate(clean, null, { silent: true, preview: true, animated: false });
+        render();
+      }
+    }
+  }
 
   if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
     if (!state.group && typeof GROUPS !== "undefined" && GROUPS.length) {
@@ -4055,6 +4142,11 @@ function startBasicsTour() {
   if (basicsTourTemporaryGroup && typeof GROUPS !== "undefined" && GROUPS.length) {
     state.group = GROUPS[0].id;
     state.draftGroup = GROUPS[0].id;
+    render();
+  }
+  const cleanStart = pickCleanTourDay();
+  if (cleanStart && (!state.selected || !sameDay(cleanStart, state.selected))) {
+    selectDate(cleanStart, null, { silent: true, preview: true, animated: false });
     render();
   }
   basicsTourStep = TOUR_STEP_STRIP;
@@ -4289,7 +4381,7 @@ function syncCompactHeader() {
   if (!brand) return;
   brand.setAttribute("role", "button");
   brand.setAttribute("tabindex", "0");
-  brand.setAttribute("aria-label", "��оспроизвести анимацию sched");
+  brand.setAttribute("aria-label", "Воспроизвести анимацию sched");
   brand.removeAttribute("aria-disabled");
 }
 
@@ -4525,7 +4617,7 @@ function undoEditorAction() {
 function resetEditorDay(dIso) {
   if (!state.editorMode || !editorSession || !dIso) return;
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
-  /* ��Исходн��й день» = базовое расписание парсера: сносим все правки дня,
+  /* «Исходный день» = базовое расписание парсера: сносим все правки дня,
      а не возвращаем уже подтверждённые замены из baseline. */
   const dayKeys = Object.keys(editorSession.draft).filter(key => key.startsWith(prefix));
   const live = dayKeys.filter(key => editorSession.draft[key] && !editorSession.draft[key].deleted);
@@ -5238,7 +5330,7 @@ function openAddPairSheet(dIso) {
     return !s || s.window || s.cancelled || s.empty || s.hidden;
   }) || 1;
 
-  const numOptions = [1, 2, 3, 4, 5, 6, 7].map(num => {
+  const numOptions = [1, 2, 3, 4, 5, 6].map(num => {
     const s = slots.find(slot => slot.n === num);
     const times = sat ? TIMES[num]?.sat : TIMES[num]?.week;
     const timeStr = times ? ` (${times[0]}–${times[1]})` : "";
@@ -5865,7 +5957,7 @@ var SCHEDULE_TTL = 3 * 60 * 60 * 1000;
 var scheduleFetchedAt = 0;
 var SCHEDULE_CHECKED_KEY = "sched:schedule-checked-at:v1";
 /* Момент последней удачной проверки данных — его показывает штамп «обн.».
-   Хра��им в localStorage, чтобы после перезапуска было видно, когда данные проверялись. */
+   Храним в localStorage, чтобы после перезапуска было видно, когда данные проверялись. */
 var scheduleCheckedAt = (function () {
   try {
     const v = Number(localStorage.getItem(SCHEDULE_CHECKED_KEY));
@@ -5974,7 +6066,7 @@ function refreshSchedule(force) {
     .catch(() => false);
 }
 
-/* Пока на сервере ��усто, проверяем каждые 5 минут, а не раз в час. */
+/* Пока на сервере пусто, проверяем каждые 5 минут, а не раз в час. */
 var scheduleRetryTimer = null;
 
 function planScheduleRetry() {
@@ -6780,7 +6872,7 @@ function cloudWrite(path, body, options = {}) {
       if (!response?.ok) {
         if ([401, 403, 429].includes(response?.status)) cloudWriteRetryAt = Date.now() + 60000;
         lastCloudMessage = response?.status === 401
-          ? "firebase не принял обновлённые права — опубликуй config/firebase.rules.json и проверь, что Web API key относится �� этой базе"
+          ? "firebase не принял обновлённые права — опубликуй config/firebase.rules.json и проверь, что Web API key относится к этой базе"
           : "база отклонила запись — проверь config/firebase.rules.json и серверный ключ firebase";
         return false;
       }
@@ -7246,7 +7338,7 @@ async function pullSharedSwapsOnce() {
         /* Один раз за сессию подсвечиваем в консоли, почему облако молчит. */
         pullSharedSwaps._warned = true;
         console.warn(
-          "sched: облако отклоняе�� чтение (" +
+          "sched: облако отклоняет чтение (" +
             resp.status +
             ") — опубликуй config/firebase.rules.json и войди через телеграм заново",
         );
@@ -7297,7 +7389,7 @@ function updateTgButton() {
   renderAccountRow();
 }
 
-/* Аватар из Telegram вместо шестерёнки на��троек. */
+/* Аватар из Telegram вместо шестерёнки настроек. */
 function tgAvatarInitial(user = tgSession) {
   return (tgDisplayName(user) || "?").trim().charAt(0).toUpperCase() || "?";
 }
@@ -7557,7 +7649,7 @@ function tgSheetBodyHtml(inline) {
     html += '<div class="sched-tg-section is-editors"><span>редакторы</span>';
     if (!ids.length)
       html +=
-        '<p class="sched-replace-hint">пока нет. добавь по id ниже или кнопко�� «+ редактор» в любой заявке.</p>';
+        '<p class="sched-replace-hint">пока нет. добавь по id ниже или кнопкой «+ редактор» в любой заявке.</p>';
     ids.forEach((tg) => {
       html +=
         '<div class="sched-tg-row"><div class="sched-tg-row-text"><strong>' +
@@ -7657,7 +7749,7 @@ var NOTIF_SEEN_SCHEDULE_KEY = "sched:notif-seen-schedule:v1";
 var NOTIF_SEEN_PENDING_KEY = "sched:notif-seen-pending:v1";
 var notifList = null;
 
-/* Настройки уведомлений: что показывать в колокольчике и дублирова��ь в Telegram. */
+/* Настройки уведомлений: что показывать в колокольчике и дублировать в Telegram. */
 var NOTIF_PREFS_KEY = LOCAL_PREVIEW ? "sched:notif-prefs:local:v1" : "sched:notif-prefs:v1";
 var notifPrefs = null;
 
@@ -8048,7 +8140,7 @@ function notifyAboutScheduleStamp(updatedAt, groups) {
   } catch (e) {}
 }
 
-/* Визуальный тип записи ленты: от��ена — красным, замена — синим и т.д.
+/* Визуальный тип записи ленты: отмена — красным, замена — синим и т.д.
    У старых записей без tone определяем тип по тексту. */
 function notifTone(n) {
   if (n && n.tone) return n.tone;
@@ -8133,7 +8225,7 @@ function lessonDurationLabel(dIso, n) {
 }
 
 /* Мини-карточка дня в уведомлении: дата, время и сама пара —
-   отменённая зачёркнута. Вместо «по��отна текста». */
+   отменённая зачёркнута. Вместо «полотна текста». */
 function notifLessonHtml(f, lesson, cancelled) {
   const d = dateFromIso(f.d);
   const bell = BELLS.find((b) => b.n === Number(f.n));
@@ -8399,7 +8491,7 @@ function manualRefresh(btn) {
   btn.disabled = true;
   const icon = btn.querySelector(".sched-settings-icon svg") || btn.querySelector("svg");
   if (icon) icon.classList.add("is-spinning");
-  /* Штамп под расписани��м на время обновления показывает «обновляем…». */
+  /* Штамп под расписанием на время обновления показывает «обновляем…». */
   dataRefreshing = true;
   renderDataStamp();
   /* Замены тянем параллельно, у них своя защита от ошибок сети. */

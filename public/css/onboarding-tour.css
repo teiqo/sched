@@ -273,19 +273,40 @@ body.is-tour-scroll-lock {
   transition: none !important;
 }
 
+body.is-tour-active #basics-tour,
+body.is-tour-active .sched-tour {
+  z-index: 4900 !important;
+}
+
 body.is-tour-active .sched-replace-backdrop {
-  z-index: 550 !important;
+  z-index: 4800 !important;
   background: transparent !important;
+  opacity: 1 !important;
+  filter: none !important;
   pointer-events: none !important;
 }
 
 body.is-tour-active .sched-replace-sheet {
+  z-index: 5000 !important;
+  opacity: 1 !important;
+  filter: none !important;
   pointer-events: auto !important;
   box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45) !important;
 }
 
-body.is-tour-active .sched-tour-copy {
-  z-index: 650 !important;
+body.is-tour-active .sched-tour-copy,
+#basics-tour .sched-tour-copy {
+  z-index: 5000 !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+#basics-tour .sched-tour-spotlight {
+  z-index: 1;
+}
+
+#basics-tour .sched-tour-copy {
+  z-index: 2;
 }
 
 body.is-tour-active :is(.sched-move-target, [data-add-pair-send]).is-tour-picked {
@@ -325,14 +346,6 @@ body.is-tour-active :is(.sched-move-target, [data-add-pair-send]).is-tour-picked
     transform: translate3d(0, 0, 0);
   }
 }
-
-/* Анимация появления пар при прокрутке рулетки в обучении */
-100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 
 @media (max-height: 720px) {
   .sched-onboarding-telegram-mark { width: 68px; height: 68px; margin: 4px auto 10px; border-radius: 22px; }
