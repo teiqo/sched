@@ -28,7 +28,11 @@ export function bindDaySwipe({
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
 
+  /* Match #stage .sched-active-day-scene.is-entering cascade (app-ui.css). */
   const cascadeEase = "cubic-bezier(0.22, 1, 0.36, 1)";
+  const cascadeDur = 400;
+  const cascadeStagger = 70;
+  const cascadeBaseDelay = 45;
 
   const stopPanelCascade = (panel) => {
     panel?.querySelectorAll?.("[data-swipe-cascade]").forEach((el) => {
@@ -36,8 +40,6 @@ export function bindDaySwipe({
         try { a.cancel(); } catch (_) {}
       });
       el.removeAttribute("data-swipe-cascade");
-      el.style.removeProperty("opacity");
-      el.style.removeProperty("transform");
     });
     panel?.classList?.remove("is-entering");
   };
@@ -46,8 +48,15 @@ export function bindDaySwipe({
     carousel?.querySelectorAll(".sched-swipe-panel").forEach(stopPanelCascade);
   };
 
-  /* Cascade on the day being swiped TO (left/right panel), never the current one.
-     Uses Web Animations API so CSS animation:none / !important opacity cannot kill it. */
+  const incomingCascadeAnims = () => {
+    const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
+    if (!panel) return [];
+    return Array.from(panel.querySelectorAll("[data-swipe-cascade]")).flatMap(
+      (el) => el.getAnimations?.() || [],
+    );
+  };
+
+  /* Cascade on the day being swiped TO — same curve/stagger as desktop scene enter. */
   const startIncomingCascade = (direction) => {
     if (!carousel || reduced() || !direction) {
       clearIncomingCascade();
@@ -64,23 +73,22 @@ export function bindDaySwipe({
       stopPanelCascade(panel);
       panel.classList.add("is-entering");
 
-      const live = panel.querySelectorAll(".live-host, .live-lesson-card");
-      live.forEach((el) => {
+      panel.querySelectorAll(".live-host, .live-lesson-card").forEach((el) => {
         el.setAttribute("data-swipe-cascade", "1");
         el.animate(
           [
             { opacity: 0, transform: "translate3d(0, -10px, 0)" },
             { opacity: 1, transform: "translateZ(0)" },
           ],
-          { duration: 400, delay: 35, easing: cascadeEase, fill: "both" },
+          { duration: cascadeDur, delay: 35, easing: cascadeEase, fill: "both" },
         );
       });
 
-      const rows = panel.querySelectorAll(".agenda-list .agenda-row, .agenda-list .agenda-break");
-      rows.forEach((el) => {
+      Array.from(panel.querySelectorAll(".agenda-list .agenda-row, .agenda-list .agenda-break")).forEach((el, idx) => {
         if (el.closest(".completed-lessons:not(.is-expanding)")) return;
-        const rowI = Number.parseFloat(el.style.getPropertyValue("--row-i"));
-        const delay = 45 + 55 * (Number.isFinite(rowI) ? rowI : 0);
+        const raw = el.style.getPropertyValue("--row-i").trim();
+        const rowI = raw === "" ? idx : Number.parseFloat(raw);
+        const delay = cascadeBaseDelay + cascadeStagger * (Number.isFinite(rowI) ? rowI : idx);
         el.setAttribute("data-swipe-cascade", "1");
         if (el.classList.contains("agenda-break")) {
           el.animate(
@@ -93,7 +101,7 @@ export function bindDaySwipe({
               { opacity: 0, transform: "translate3d(0, -10px, 0)" },
               { opacity: 1, transform: "translateZ(0)" },
             ],
-            { duration: 400, delay, easing: cascadeEase, fill: "both" },
+            { duration: cascadeDur, delay, easing: cascadeEase, fill: "both" },
           );
         }
       });
@@ -106,7 +114,7 @@ export function bindDaySwipe({
             { opacity: 0, transform: "translate3d(0, -10px, 0)" },
             { opacity: 1, transform: "translateZ(0)" },
           ],
-          { duration: 400, delay: 25, easing: cascadeEase, fill: "both" },
+          { duration: cascadeDur, delay: 25, easing: cascadeEase, fill: "both" },
         );
       }
 
@@ -279,11 +287,37 @@ export function bindDaySwipe({
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-    resetVisuals();
-    if (target) onCommit(target);
-    onFinish?.();
-    // The selected date may have changed synchronously in onCommit.
-    prewarm();
+
+    const finish = () => {
+      resetVisuals();
+      if (target) onCommit(target);
+      onFinish?.();
+      // The selected date may have changed synchronously in onCommit.
+      prewarm();
+    };
+
+    /* On commit, let the incoming-day cascade reach fill:forwards before ripping
+       the carousel away — that abrupt cancel was the “кривая / резко кончается” feel. */
+    if (target && !reduced()) {
+      const anims = incomingCascadeAnims().filter((a) => a.playState !== "finished");
+      if (anims.length) {
+        gesture = null;
+        settling = null;
+        let done = false;
+        const once = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(settleTimer);
+          settleTimer = null;
+          finish();
+        };
+        Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
+        settleTimer = setTimeout(once, cascadeDur + cascadeBaseDelay + cascadeStagger * 8 + 80);
+        return;
+      }
+    }
+
+    finish();
   };
 
   scene.addEventListener("touchstart", event => {
