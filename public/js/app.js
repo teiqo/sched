@@ -1142,28 +1142,6 @@ function setScene(html, direction) {
 }
 
 
-function playPairCascadeEntrance() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const scene = $("#scene");
-  /* Swipe commit used to hold is-motion-lite, which kills all #stage animations. */
-  scene?.classList.remove("is-motion-lite");
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2342,7 +2320,7 @@ function bindEvents() {
     if (e.key === "ArrowLeft") shiftDay(-1);
   });
 
-  /* Свайпы используют только transform; каскад пар — после commit (playPairCascadeEntrance). */
+  /* Свайпы используют только transform; каскад пар — на входящей панели day-swipe. */
   const scene = $("#scene");
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
@@ -2355,16 +2333,14 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      // Carousel already slid the day — no second scene FLIP, but pairs still cascade.
+      // Cascade already played on the incoming swipe panel; live scene stays quiet.
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
-      playPairCascadeEntrance();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
         daySwipeRenderPending = false;
         render();
-        playPairCascadeEntrance();
       }
     },
   });

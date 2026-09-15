@@ -27,6 +27,33 @@ export function bindDaySwipe({
   const selectionOffset = progress =>
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
+
+  const clearIncomingCascade = () => {
+    carousel?.querySelectorAll(".sched-swipe-panel.is-entering").forEach((panel) => {
+      panel.classList.remove("is-entering");
+    });
+  };
+
+  /* Cascade on the day being swiped TO (left/right panel), never the current one. */
+  const startIncomingCascade = (direction) => {
+    if (!carousel || reduced() || !direction) {
+      clearIncomingCascade();
+      return;
+    }
+    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
+    carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
+      const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
+      if (!hit) {
+        panel.classList.remove("is-entering");
+        return;
+      }
+      if (panel.classList.contains("is-entering")) return;
+      panel.classList.remove("is-entering");
+      void panel.offsetWidth;
+      panel.classList.add("is-entering");
+    });
+  };
+
   const setActive = value => {
     if (active === value) return;
     active = value;
@@ -163,6 +190,7 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
+      clearIncomingCascade();
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -237,7 +265,11 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : -1;
+    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
+    if (direction && g.cascadeDir !== direction) {
+      g.cascadeDir = direction;
+      startIncomingCascade(direction);
+    }
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
