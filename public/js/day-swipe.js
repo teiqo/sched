@@ -198,9 +198,10 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      /* ROOT CAUSE FIX: never remove is-entering while the panel is still visible.
-         Hide the carousel first (is-warmed → opacity 0), THEN clear entering.
-         Clearing while visible is what forcibly ended the cascade on fast flings. */
+      /* Hide before clearing panel is-entering. Live day (already cascading from
+         onCommit) becomes visible and keeps playing — fast fling must not kill it. */
+      carousel.style.setProperty("opacity", "0", "important");
+      carousel.style.setProperty("visibility", "hidden", "important");
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -209,6 +210,8 @@ export function bindDaySwipe({
       void carousel.offsetWidth;
       clearAllEntering();
       handoff = null;
+      carousel.style.removeProperty("opacity");
+      carousel.style.removeProperty("visibility");
     }
     setActive(false);
   };
