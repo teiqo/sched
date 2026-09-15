@@ -1,4 +1,4 @@
-export const BUILD = '1.4.0 · 2026-09-08.7';
+export const BUILD = '1.4.1 · 2026-09-15.bell';
 export const MAX_REPORT_FILE_SIZE = 20 * 1024 * 1024;
 const recent = [];
 export function redact(text) {

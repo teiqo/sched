@@ -2032,16 +2032,12 @@ body.is-dragging-pair {
   letter-spacing: 0;
 }
 
-/* Окно колокольчика открывается сверху вниз */
+/* Колокольчик — нижняя шторка, как «что изменилось». */
+
+/* Колокольчик: нижняя шторка (как suggest / «что изменилось»). */
 #bell-backdrop {
-  align-items: flex-start;
-  padding-top: calc(12px + env(safe-area-inset-top, 0px));
-}
-#bell-backdrop .sched-replace-sheet {
-  transform: translate3d(0, -24px, 0);
-}
-#bell-backdrop.is-open .sched-replace-sheet {
-  transform: translate3d(0, 0, 0);
+  align-items: flex-end;
+  justify-content: center;
 }
 
 /* Окна заявок/редакторов и отчётов открываются по центру с анимацией расширения.

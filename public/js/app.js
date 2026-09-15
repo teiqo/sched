@@ -6713,7 +6713,7 @@ function buildDayTablePayload(dIso) {
     }
 
     // Окна в таблице расписаний в боте должны быть (пары 1..6)
-    const maxN = Math.max(6, ...allSlots.map(s => s.n || 0));
+    const maxN = 6; // пары только 1..6
     const rows = [];
 
     for (let n = 1; n <= maxN; n++) {
@@ -8271,13 +8271,9 @@ function notifFragHtml(n) {
   );
 }
 
-function closeBellSheet() {
-  var backdrop = document.getElementById("bell-backdrop");
-  if (!backdrop) return;
-  backdrop.classList.remove("is-open");
-  window.setTimeout(function () {
-    backdrop.remove();
-  }, 160);
+function closeBellSheet(onComplete, immediate) {
+  if (immediate === void 0) immediate = false;
+  closeSheetAnimated("bell-backdrop", onComplete, immediate);
 }
 
 function notifTitle(n, tone) {
@@ -8326,7 +8322,7 @@ function renderBellBody() {
 }
 
 function openBellSheet() {
-  closeBellSheet();
+  closeBellSheet(null, true);
   var backdrop = document.createElement("div");
   backdrop.id = "bell-backdrop";
   backdrop.className = "sched-replace-backdrop";
