@@ -42,31 +42,36 @@ export function bindDaySwipe({
     let done = false;
 
     const cascadeWaitMs = () => {
-      const rows = panel.querySelectorAll(
-        ".agenda-list .agenda-row, .live-host .live-lesson-card, .completed-lessons",
-      ).length;
-      /* Match PC: 45ms base + 70ms * row-i + 400ms duration (+buffer).
-         Do NOT trust animationend/getAnimations for "all done" — on iOS
-         delayed stagger rows are often absent until they start, so an early
-         idle check removes the finish layer and pairs 3+ pop on live. */
-      return 45 + 70 * Math.max(rows - 1, 0) + 400 + 160;
+      let maxI = 0;
+      let counted = 0;
+      panel.querySelectorAll(".agenda-row, .live-lesson-card, .completed-lessons, .agenda-break").forEach((el) => {
+        counted += 1;
+        const attr = el.getAttribute("style") || "";
+        const match = /--row-i\s*:\s*([0-9.]+)/.exec(attr);
+        if (match) maxI = Math.max(maxI, Number(match[1]));
+        else maxI = Math.max(maxI, counted - 1);
+      });
+      /* Full PC stagger budget from the moment we PARK (cascade already
+         running from arm). Floor 1400ms so slow swipes never under-wait. */
+      return Math.max(1400, 45 + 70 * maxI + 400 + 200);
     };
 
     const finish = () => {
       if (done) return;
-      done = true;
+      /* Only tear down after park. If we somehow fire early, keep waiting. */
       const layer = panel.closest(".sched-cascade-finish");
+      if (!layer) {
+        setTimeout(finish, 250);
+        return;
+      }
+      done = true;
       const root = panel.closest(".sched-days-scene") || scene;
-      if (layer) {
-        const still = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
-          .filter((node) => node !== panel);
-        if (!still.length) {
-          root.classList.add("is-swipe-handoff");
-          layer.remove();
-          requestAnimationFrame(() => root.classList.remove("is-swipe-handoff"));
-        } else {
-          panel.classList.remove("is-entering");
-        }
+      const still = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
+        .filter((node) => node !== panel);
+      if (!still.length) {
+        root.classList.add("is-swipe-handoff");
+        layer.remove();
+        requestAnimationFrame(() => root.classList.remove("is-swipe-handoff"));
       } else {
         panel.classList.remove("is-entering");
       }
@@ -84,7 +89,9 @@ export function bindDaySwipe({
     if (panel.dataset.cascadeArmed === "1") return;
     panel.dataset.cascadeArmed = "1";
     panel.classList.add("is-entering");
-    watchPanelCascadeEnd(panel);
+    /* Do NOT start the finish timer here — a slow gesture outlives the
+       stagger budget and watch used to strip is-entering pre-park, so
+       pairs 3+ lost t-row-in and popped in. Timer starts in park only. */
   };
 
   /* Promote in place: reclassify the same carousel shell, drop non-entering
