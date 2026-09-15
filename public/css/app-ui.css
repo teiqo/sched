@@ -2103,7 +2103,7 @@ body.is-dragging-pair {
   z-index: 0;
   background: rgba(0, 0, 0, 0.45);
   opacity: 0;
-  transition: opacity 0.28s ease;
+  transition: opacity 0.34s ease;
   pointer-events: none;
 }
 .sched-replace-backdrop > * {
@@ -2132,7 +2132,7 @@ body.is-dragging-pair {
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box !important;
   transform: translate3d(0, 100dvh, 0);
-  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sched-replace-sheet,
 .sched-replace-sheet * {
@@ -2196,11 +2196,11 @@ body.is-dragging-pair {
 }
 .sched-replace-backdrop.is-closing::before {
   opacity: 0 !important;
-  transition: opacity 0.36s ease !important;
+  transition: opacity 0.42s ease !important;
 }
 .sched-replace-backdrop.is-closing .sched-replace-sheet {
   transform: translate3d(0, 100dvh, 0) !important;
-  transition: transform 0.42s cubic-bezier(0.32, 0, 0.67, 0) !important;
+  transition: transform 0.48s cubic-bezier(0.32, 0, 0.67, 0) !important;
 }
 .sched-replace-head {
   display: grid;

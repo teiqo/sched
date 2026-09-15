@@ -1837,6 +1837,27 @@ function bindStrip() {
     if (basicsTourStep === TOUR_STEP_STRIP) return;
     /* Предыдущий жест мог не успеть доиграть (резко отпустили и сразу нажали
        другой день) — завершаем его, чтобы квадратик и блюр не залипали. */
+    if (scrub && scrub.tapGlide && !scrub.pointerDown) {
+      /* Rapid retap while the pill is still coasting: retarget the glide, don't teleport. */
+      const retargetBtn = e.target.closest("button[data-date-index]");
+      if (retargetBtn) {
+        const retargetIdx = Number(retargetBtn.dataset.dateIndex);
+        scrub.targetIndex = retargetIdx;
+        scrub.target = retargetIdx * scrub.step;
+        scrub.settleStartPos = scrub.position;
+        scrub.settleStartTime = performance.now();
+        const glideDist = Math.abs(scrub.target - scrub.settleStartPos);
+        scrub.settleDuration = Math.max(220, Math.min(360, 180 + glideDist * 2.5));
+        dragClick = true;
+        const retargetDate = addDays(scrub.week, retargetIdx);
+        const retargetDir = retargetIdx > Number(strip.dataset.selectedIndex) ? "forward" : retargetIdx < Number(strip.dataset.selectedIndex) ? "backward" : null;
+        if (!sameDay(retargetDate, state.selected)) {
+          selectDate(retargetDate, retargetDir, { silent: true, preview: true, animated: true });
+        }
+        startScrubLoop();
+        return;
+      }
+    }
     if (scrub || scrubFrame !== null) endScrub({ keepVisual: true, skipRender: true });
     dragClick = false;
     const index = Number(btn.dataset.dateIndex);
@@ -2029,7 +2050,7 @@ function bindStrip() {
       strip.classList.remove("is-pressing");
       strip.classList.add("is-settling");
       if (!sameDay(targetDate, state.selected)) {
-        selectDate(targetDate, dir);
+        selectDate(targetDate, dir, { silent: true, preview: true, animated: true });
       }
       startScrubLoop();
       return;
@@ -3303,7 +3324,7 @@ function startBasicsTourRoulette(options = {}) {
 
       const reducedMotion = false;
       // Long coast with clear deceleration — same gesture family as before, px-accurate.
-      const duration = Math.max(2100, 1750 + distance * 110);
+      const duration = Math.max(2400, 2000 + distance * 120);
       const cellWidth = selection.getBoundingClientRect().width || (strip.clientWidth / 7);
       const startedAt = performance.now();
       let lastIndex = current;
@@ -4699,7 +4720,7 @@ function closeSheetAnimated(elOrId, onComplete, immediate = false) {
     if (onComplete) onComplete();
   };
   backdrop.addEventListener("transitionend", finish, { once: true });
-  setTimeout(finish, 450);
+  setTimeout(finish, 520);
 }
 
 function bindSheetKeyboard(backdrop, sheet) {
@@ -7073,7 +7094,8 @@ function copyTextToClipboard(text) {
 
 /* ---------- тосты ---------- */
 function toast(text) {
-  const dialog = document.querySelector('#move-backdrop .sched-replace-sheet, #suggest-backdrop .sched-replace-sheet, #bot-login-backdrop .sched-replace-sheet');
+  if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return;
+  const dialog = document.querySelector("#bot-login-backdrop .sched-replace-sheet");
   if (dialog) {
     let notice = dialog.querySelector('.sched-inline-notice');
     if (!notice) { notice = document.createElement('p'); notice.className = 'sched-inline-notice'; notice.setAttribute('role', 'status'); dialog.appendChild(notice); }
