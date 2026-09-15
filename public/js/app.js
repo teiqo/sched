@@ -2342,17 +2342,8 @@ function bindEvents() {
     if (e.key === "ArrowLeft") shiftDay(-1);
   });
 
-  /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
+  /* Свайпы используют только transform; каскад пар — после commit (playPairCascadeEntrance). */
   const scene = $("#scene");
-  let motionLiteTimer = null;
-  const holdMotionLite = (ms = 420) => {
-    scene.classList.add("is-motion-lite");
-    window.clearTimeout(motionLiteTimer);
-    motionLiteTimer = window.setTimeout(() => {
-      scene.classList.remove("is-motion-lite");
-      motionLiteTimer = null;
-    }, ms);
-  };
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
