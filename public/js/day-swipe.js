@@ -28,123 +28,6 @@ export function bindDaySwipe({
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
 
-  /* Match #stage .sched-active-day-scene.is-entering cascade (app-ui.css). */
-  const cascadeEase = "cubic-bezier(0.22, 1, 0.36, 1)";
-  const cascadeDur = 400;
-  const cascadeStagger = 70;
-  const cascadeBaseDelay = 45;
-
-  const stopPanelCascade = (panel, { snap = false } = {}) => {
-    panel?.querySelectorAll?.("[data-swipe-cascade]").forEach((el) => {
-      el.getAnimations?.().forEach((a) => {
-        try {
-          if (snap) a.finish();
-          else a.cancel();
-        } catch (_) {
-          try { a.cancel(); } catch (_) {}
-        }
-      });
-      el.removeAttribute("data-swipe-cascade");
-    });
-    panel?.classList?.remove("is-entering");
-  };
-
-  const clearIncomingCascade = ({ snap = false } = {}) => {
-    carousel?.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
-      stopPanelCascade(panel, { snap });
-    });
-  };
-
-  const incomingCascadeAnims = () => {
-    const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-    if (!panel) return [];
-    return Array.from(panel.querySelectorAll("[data-swipe-cascade]")).flatMap(
-      (el) => el.getAnimations?.() || [],
-    );
-  };
-
-  let handoff = null;
-
-  /* Cascade on the day being swiped TO — same curve/stagger as desktop scene enter. */
-  const startIncomingCascade = (direction) => {
-    if (!carousel || reduced() || !direction) {
-      clearIncomingCascade();
-      return;
-    }
-    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
-    carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
-      const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
-      if (!hit) {
-        stopPanelCascade(panel);
-        return;
-      }
-      if (panel.classList.contains("is-entering")) return;
-      stopPanelCascade(panel);
-      panel.classList.add("is-entering");
-
-      panel.querySelectorAll(".live-host, .live-lesson-card").forEach((el) => {
-        el.setAttribute("data-swipe-cascade", "1");
-        el.animate(
-          [
-            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
-            { opacity: 1, transform: "translateZ(0)" },
-          ],
-          { duration: cascadeDur, delay: 35, easing: cascadeEase, fill: "both" },
-        );
-      });
-
-      Array.from(panel.querySelectorAll(".agenda-list .agenda-row, .agenda-list .agenda-break")).forEach((el, idx) => {
-        if (el.closest(".completed-lessons:not(.is-expanding)")) return;
-        const raw = el.style.getPropertyValue("--row-i").trim();
-        const rowI = raw === "" ? idx : Number.parseFloat(raw);
-        const delay = cascadeBaseDelay + cascadeStagger * (Number.isFinite(rowI) ? rowI : idx);
-        el.setAttribute("data-swipe-cascade", "1");
-        if (el.classList.contains("agenda-break")) {
-          el.animate(
-            [{ opacity: 0 }, { opacity: 1 }],
-            { duration: 350, delay, easing: cascadeEase, fill: "both" },
-          );
-        } else {
-          el.animate(
-            [
-              { opacity: 0, transform: "translate3d(0, -10px, 0)" },
-              { opacity: 1, transform: "translateZ(0)" },
-            ],
-            { duration: cascadeDur, delay, easing: cascadeEase, fill: "both" },
-          );
-        }
-      });
-
-      const completed = panel.querySelector(".completed-lessons");
-      if (completed) {
-        completed.setAttribute("data-swipe-cascade", "1");
-        completed.animate(
-          [
-            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
-            { opacity: 1, transform: "translateZ(0)" },
-          ],
-          { duration: cascadeDur, delay: 25, easing: cascadeEase, fill: "both" },
-        );
-      }
-
-      panel.querySelectorAll(".sched-future-days > .sched-day-block").forEach((el, idx) => {
-        el.setAttribute("data-swipe-cascade", "1");
-        el.animate(
-          [
-            { opacity: 0, transform: "translate3d(0, 8px, 0)" },
-            { opacity: 1, transform: "none" },
-          ],
-          {
-            duration: 450,
-            delay: 80 + Math.min(idx, 5) * 40,
-            easing: cascadeEase,
-            fill: "both",
-          },
-        );
-      });
-    });
-  };
-
   const setActive = value => {
     if (active === value) return;
     active = value;
@@ -281,8 +164,6 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      clearIncomingCascade({ snap: true });
-      handoff = null;
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -292,55 +173,15 @@ export function bindDaySwipe({
     setActive(false);
   };
 
-  const flushHandoff = () => {
-    if (!handoff) return false;
-    const target = handoff.target;
-    handoff = null;
-    clearTimeout(settleTimer);
-    settleTimer = null;
-    resetVisuals();
-    if (target) onCommit(target);
-    onFinish?.();
-    prewarm();
-    return true;
-  };
-
   const complete = (allowCommit = true) => {
-    /* A new touch during cascade-hold must free the gesture immediately. */
-    if (handoff) {
-      flushHandoff();
-      if (!gesture && !settling && !active) return;
-    }
-
     if (!gesture && !settling && !active) return;
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-
-    /* Let later staggered pairs finish, but keep the hold interruptible. */
-    if (target && !reduced()) {
-      const anims = incomingCascadeAnims().filter((a) => a.playState !== "finished");
-      if (anims.length) {
-        gesture = null;
-        settling = null;
-        handoff = { target };
-        const token = target;
-        const once = () => {
-          if (!handoff || handoff.target !== token) return;
-          flushHandoff();
-        };
-        Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
-        settleTimer = setTimeout(
-          once,
-          cascadeDur + cascadeBaseDelay + cascadeStagger * 8 + 120,
-        );
-        return;
-      }
-    }
-
     resetVisuals();
     if (target) onCommit(target);
     onFinish?.();
+    // The selected date may have changed synchronously in onCommit.
     prewarm();
   };
 
@@ -397,11 +238,7 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
-    if (direction && g.cascadeDir !== direction) {
-      g.cascadeDir = direction;
-      startIncomingCascade(direction);
-    }
+    const direction = dx < 0 ? 1 : -1;
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
