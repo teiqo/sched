@@ -5,7 +5,7 @@
    moves one compositor layer only. */
 export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
-  renderDay, onCommit, onCascadePreview, onActiveChange, onFinish, contentKey,
+  renderDay, onCommit, onActiveChange, onFinish, contentKey,
 }) {
   let gesture = null;
   let carousel = null;
@@ -26,41 +26,6 @@ export function bindDaySwipe({
   const selectedIndex = () => Number(strip.dataset.selectedIndex) || 0;
   const selectionOffset = progress =>
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
-
-
-  /* Cascade DURING the swipe on the incoming panel (real CSS is-entering).
-     No second cascade after the live day is revealed. */
-  let handoff = null;
-
-  const clearPanelEntering = (panel) => {
-    panel?.classList?.remove("is-entering");
-  };
-
-  const clearAllEntering = () => {
-    carousel?.querySelectorAll(".sched-swipe-panel.is-entering").forEach(clearPanelEntering);
-  };
-
-  const incomingCascadeAnims = () => {
-    const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-    if (!panel || typeof panel.getAnimations !== "function") return [];
-    return panel.getAnimations({ subtree: true }).filter((a) => a.playState !== "finished");
-  };
-
-  const startIncomingCascade = (direction) => {
-    if (!carousel || reduced() || !direction) return;
-    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
-    carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
-      const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
-      if (!hit) {
-        clearPanelEntering(panel);
-        return;
-      }
-      if (panel.classList.contains("is-entering")) return;
-      panel.classList.remove("is-entering");
-      void panel.offsetWidth;
-      panel.classList.add("is-entering");
-    });
-  };
 
   const setActive = value => {
     if (active === value) return;
@@ -198,71 +163,24 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      /* Hide panel first, then clear PANEL entering only.
-         Live #day-scene.is-entering must keep running (fast fling → no kill, no re-arm). */
-      carousel.style.setProperty("opacity", "0", "important");
-      carousel.style.setProperty("visibility", "hidden", "important");
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
       carousel.style.removeProperty("--blocked-reveal");
       carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
-      void carousel.offsetWidth;
-      clearAllEntering();
-      handoff = null;
-      carousel.style.removeProperty("opacity");
-      carousel.style.removeProperty("visibility");
     }
     setActive(false);
   };
 
-  const flushHandoff = () => {
-    if (!handoff) return false;
-    handoff = null;
-    clearTimeout(settleTimer);
-    settleTimer = null;
-    resetVisuals();
-    onFinish?.();
-    prewarm();
-    return true;
-  };
-
   const complete = (allowCommit = true) => {
-    if (handoff) {
-      flushHandoff();
-      if (!gesture && !settling && !active) return;
-    }
-
     if (!gesture && !settling && !active) return;
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-
-    /* Sync live under the panel; keep panel up until cascade finishes (pairs 3/4). */
-    if (target) onCommit(target);
-
-    if (target && !reduced()) {
-      const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-      if (panel) {
-        const anims = incomingCascadeAnims();
-        gesture = null;
-        settling = null;
-        handoff = { target };
-        const token = target;
-        const once = () => {
-          if (!handoff || handoff.target !== token) return;
-          flushHandoff();
-        };
-        if (anims.length) {
-          Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
-        }
-        settleTimer = setTimeout(once, anims.length ? 1200 : 850);
-        return;
-      }
-    }
-
     resetVisuals();
+    if (target) onCommit(target);
     onFinish?.();
+    // The selected date may have changed synchronously in onCommit.
     prewarm();
   };
 
@@ -319,13 +237,8 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
+    const direction = dx < 0 ? 1 : -1;
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
-    if (direction && g.cascadeDir !== direction) {
-      g.cascadeDir = direction;
-      startIncomingCascade(direction);
-      if (!g.blocked) onCascadePreview?.(addDays(g.date, direction));
-    }
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
     requestPaint();

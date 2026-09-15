@@ -1141,64 +1141,6 @@ function setScene(html, direction) {
   }, total);
 }
 
-
-
-
-
-
-
-
-
-let swipeCascadeGen = 0;
-let swipeCascadeDateKey = null;
-
-function armSwipePairCascade(dateKey) {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  /* Same day already entering — do not restart (fixes “заново начинается”). */
-  if (
-    dateKey &&
-    swipeCascadeDateKey === dateKey &&
-    target.classList.contains("is-entering")
-  ) {
-    return;
-  }
-  swipeCascadeGen += 1;
-  const gen = swipeCascadeGen;
-  swipeCascadeDateKey = dateKey || swipeCascadeDateKey;
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    if (gen !== swipeCascadeGen) return;
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
-/* Fill live day under the covering carousel and start the SAME cascade clock
-   as the incoming panel — so a fast fling can reveal live mid-cascade without
-   killing or restarting it. Does not change state.selected. */
-function previewSwipeCascade(date) {
-  const target = $("#day-scene");
-  if (!target) return;
-  const key = iso(date);
-  const html = dayHtml(date, true) + futureDaysHtml(date);
-  if (target._schedHtml !== html) {
-    target._schedHtml = html;
-    target.innerHTML = html;
-    setupLazyDays?.();
-  }
-  armSwipePairCascade(key);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2377,8 +2319,17 @@ function bindEvents() {
     if (e.key === "ArrowLeft") shiftDay(-1);
   });
 
-  /* Свайпы используют только transform; каскад пар — на входящей панели day-swipe. */
+  /* Свайпы используют только transform; экономичный режим сохраняет плавную доводку. */
   const scene = $("#scene");
+  let motionLiteTimer = null;
+  const holdMotionLite = (ms = 420) => {
+    scene.classList.add("is-motion-lite");
+    window.clearTimeout(motionLiteTimer);
+    motionLiteTimer = window.setTimeout(() => {
+      scene.classList.remove("is-motion-lite");
+      motionLiteTimer = null;
+    }, ms);
+  };
   daySwipeController = bindDaySwipe({
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
@@ -2389,22 +2340,16 @@ function bindEvents() {
        (например, расписание без открытого редактора). */
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
-    onCascadePreview: d => { previewSwipeCascade(d); },
     onCommit: d => {
-      /* Finalize selection; cascade already armed in preview — never re-arm. */
+      // The neighbour has already slid into place: do not play a second entrance.
+      holdMotionLite();
       daySwipeRenderPending = false;
-      const held = daySwipeActive;
-      daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
-      daySwipeActive = held;
-      const el = $("#day-scene");
-      if (el && !el.classList.contains("is-entering")) {
-        armSwipePairCascade(iso(d));
-      }
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
         daySwipeRenderPending = false;
+        holdMotionLite();
         render();
       }
     },
