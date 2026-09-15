@@ -5802,7 +5802,7 @@ var TELEGRAM_ADMIN_IDS = String(window.TELEGRAM_ADMIN_IDS || "")
     return s.trim();
   })
   .filter(Boolean);
-var sharedSync = { pushing: false, again: false, poll: null };
+var sharedSync = { pushing: false, again: false, poll: null, pullInFlight: null };
 
 /* Firebase uses server-signed Telegram identities, never anonymous device bindings. */
 var fbAuth = { token: null, uid: null, telegramId: null, expiresAt: 0, pending: null };
@@ -6969,6 +6969,18 @@ function toast(text) {
 }
 
 async function pullSharedSwaps() {
+  if (sharedSync.pullInFlight) return sharedSync.pullInFlight;
+  sharedSync.pullInFlight = (async () => {
+    try {
+      await pullSharedSwapsOnce();
+    } finally {
+      sharedSync.pullInFlight = null;
+    }
+  })();
+  return sharedSync.pullInFlight;
+}
+
+async function pullSharedSwapsOnce() {
   const url = sharedSwapsUrl();
   if (!url) return;
   /* Пока открыт редактор замены, сеть не дёргаем, чтобы не потерять ввод. */
