@@ -3382,19 +3382,32 @@ function startBasicsTourRoulette(options = {}) {
       strip.classList.add("is-scrubbing");
       selection.style.willChange = "transform";
 
-      // Continuous out-and-back (no dwell at the far edge), finger-scrub feel.
-      const duration = Math.max(2200, 1800 + distance * 220);
+      // Motion curve from the reference tour roulette: accel out, soft apex,
+      // longer silky decelerate on the way home (not a plain sine).
+      const duration = Math.max(2400, 1900 + distance * 160);
       const cellWidth = selection.getBoundingClientRect().width || (strip.clientWidth / 7);
       const startedAt = performance.now();
       let lastIndex = current;
       let lastUnderIndex = current;
+      // ~44% outbound (smootherstep), ~56% return with long ease-out.
+      const turnPoint = 0.44;
 
       const paintFingerSwipe = now => {
         if (!selection.isConnected || basicsTourStep !== TOUR_STEP_STRIP) return;
         const progress = Math.min(1, (now - startedAt) / duration);
 
-        // Smooth continuous motion: 0 → 1 → 0 without pausing at the apex.
-        const factor = Math.sin(progress * Math.PI);
+        let factor;
+        if (progress <= turnPoint) {
+          // Outbound: smooth accel, near-zero velocity into the turn.
+          const u = progress / turnPoint;
+          factor = u * u * u * (u * (u * 6 - 15) + 10);
+        } else {
+          // Return: soft pull-away from the edge, then long decelerate home.
+          const v = (progress - turnPoint) / (1 - turnPoint);
+          const w = 1 - Math.pow(1 - v, 2.2);
+          const retEase = w * w * (3 - 2 * w);
+          factor = 1 - retEase;
+        }
 
         const position = current + (targetIndex - current) * factor;
         selection.style.transform = `translate3d(${(position * cellWidth).toFixed(2)}px,0,0)`;
