@@ -272,45 +272,57 @@ body.is-tour-scroll-lock {
   transition: none !important;
 }
 
+/* Tour tip above sheet veils; host is click-through except the tip. */
 body.is-tour-active #basics-tour,
 body.is-tour-active .sched-tour {
-  z-index: 500 !important;
+  z-index: 10000 !important;
+  background: transparent !important;
+  pointer-events: none !important;
 }
 
+body.is-tour-active .sched-tour-spotlight {
+  z-index: 1;
+  pointer-events: none !important;
+}
+
+body.is-tour-active .sched-tour-copy,
+#basics-tour .sched-tour-copy {
+  z-index: 10001 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  isolation: isolate;
+  pointer-events: auto !important;
+  background: color-mix(in srgb, var(--sched-raised) 96%, var(--sched-blue) 4%) !important;
+  box-shadow:
+    0 18px 48px #00000066,
+    inset 0 0 0 1px color-mix(in srgb, var(--sched-blue) 22%, var(--sched-separator)) !important;
+}
+
+/* No page veil from sheet backdrops during the tour. */
 body.is-tour-active .sched-replace-backdrop {
-  z-index: 5100 !important;
+  z-index: 5200 !important;
   background: transparent !important;
   opacity: 1 !important;
   filter: none !important;
   pointer-events: none !important;
 }
-
+body.is-tour-active .sched-replace-backdrop::before {
+  opacity: 0 !important;
+  background: transparent !important;
+}
 body.is-tour-active .sched-replace-sheet {
-  z-index: 5200 !important;
+  z-index: 5300 !important;
   opacity: 1 !important;
   filter: none !important;
+  mix-blend-mode: normal !important;
   pointer-events: auto !important;
   box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45) !important;
-}
-
-body.is-tour-active .sched-tour-copy,
-#basics-tour .sched-tour-copy {
-  z-index: 2 !important;
-  opacity: 1 !important;
-  filter: none !important;
 }
 
 body.is-tour-roulette-active .sched-tour-spotlight,
 body.is-tour-roulette-active .sched-tour-copy {
   transition: none !important;
-}
-
-#basics-tour .sched-tour-spotlight {
-  z-index: 1;
-}
-
-#basics-tour .sched-tour-copy {
-  z-index: 2;
 }
 
 body.is-tour-active :is(.sched-move-target, [data-add-pair-send]).is-tour-picked {
