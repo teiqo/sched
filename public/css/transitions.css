@@ -228,7 +228,11 @@
 @keyframes t-row-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, var(--distance-medium), 0);
+    transform: translate3d(0, var(--distance-medium, -10px), 0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

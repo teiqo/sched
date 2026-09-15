@@ -1679,7 +1679,9 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: translateZ(0);
+    /* Must match post-animation static computed transform (none).
+       translateZ(0) left a compositor layer and caused a 1px snap on end. */
+    transform: none;
   }
 }
 @keyframes t-stagger-line-in {
@@ -1689,7 +1691,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: translateZ(0);
+    transform: none;
   }
 }
 @keyframes sched-completed-row-in {
