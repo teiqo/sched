@@ -234,10 +234,12 @@ export function bindDaySwipe({
     /* Commit under the covering carousel first (no back-teleport). */
     if (target) onCommit(target);
 
-    /* Keep the panel up until CSS stagger finishes — otherwise pair 3/4 pops in. */
+    /* Keep the panel up until CSS stagger finishes — otherwise pair 3/4 pops in.
+       Some WebKits report no getAnimations(); still hold while is-entering is on. */
     if (target && !reduced()) {
-      const anims = incomingCascadeAnims();
-      if (anims.length) {
+      const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
+      if (panel) {
+        const anims = incomingCascadeAnims();
         gesture = null;
         settling = null;
         handoff = { target };
@@ -246,8 +248,11 @@ export function bindDaySwipe({
           if (!handoff || handoff.target !== token) return;
           flushHandoff();
         };
-        Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
-        settleTimer = setTimeout(once, 1200);
+        if (anims.length) {
+          Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
+        }
+        /* 45 + 70*5 + 400 ≈ 800ms; pad for 6 pairs / future blocks */
+        settleTimer = setTimeout(once, anims.length ? 1200 : 850);
         return;
       }
     }
