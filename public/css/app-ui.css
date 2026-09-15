@@ -4031,12 +4031,12 @@ a.sched-settings-row.sched-settings-link strong {
 }
 .agenda-row.is-window-row:hover,
 .agenda-row.is-window-row:active {
-  background: transparent !important;
+  background: var(--sched-window-bg) !important;
   cursor: default !important;
 }
 .agenda-row.is-window-row:hover .lesson-swap-btn {
-  opacity: 1;
-  color: var(--sched-blue);
+  opacity: inherit;
+  color: inherit;
 }
 
 /* ---------- форма сообщения об ошибке (увеличенные отступы) ---------- */
@@ -5160,8 +5160,16 @@ a.sched-settings-row,
   pointer-events: none;
 }
 :root #stage .agenda-row.is-window-row:hover,
+:root #stage .agenda-row.is-window-row:active,
 :root #stage .agenda-row.is-window-row:focus-visible {
-  background: transparent !important;
+  background: var(--sched-window-bg) !important;
+}
+:root:not([data-editor-mode="true"]) #stage .agenda-row.is-window-row {
+  cursor: default !important;
+}
+:root:not([data-editor-mode="true"]) #stage .agenda-row.is-window-row:hover .lesson-swap-btn {
+  opacity: inherit !important;
+  color: inherit !important;
 }
 .agenda-row.is-window-row:focus-visible,
 #brand:focus-visible,

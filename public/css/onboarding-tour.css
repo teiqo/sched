@@ -215,6 +215,7 @@
 :root #strip.is-tour-demo #selection {
   transition: none !important;
 }
+/* Tour roulette keeps normal setScene motion (no per-row pair-in) so the strip feels like a real scrub. */
 
 :root :is(.lesson-suggest-btn, .sched-add-pair-btn).is-tour-highlight {
   opacity: 1 !important;
@@ -297,20 +298,7 @@ body.is-tour-active :is(.sched-move-target, [data-add-pair-send]).is-tour-picked
 }
 
 /* Анимация появления пар при прокрутке рулетки в обучении */
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row,
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .live-lesson-card,
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .sched-empty-day {
-  animation: sched-tour-pair-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
-
-body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering :is(.agenda-row, .live-lesson-card, .sched-empty-day) { animation-delay: 0s !important; }
-
-@keyframes sched-tour-pair-in {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, -12px, 0);
-  }
-  100% {
+100% {
     opacity: 1;
     transform: translate3d(0, 0, 0);
   }
@@ -356,14 +344,6 @@ body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering :is(.age
 :root[data-perf] .sched-tour-spotlight rect {
   animation: sched-tour-dashes 1.15s linear infinite !important;
 }
-
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .agenda-row,
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .live-lesson-card,
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering .sched-empty-day {
-  animation: sched-tour-pair-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
-
-:root[data-perf] body.is-tour-roulette-active #stage .sched-active-day-scene.is-entering :is(.agenda-row, .live-lesson-card, .sched-empty-day) { animation-delay: 0s !important; }
 
 :root[data-perf] body.is-tour-active .sched-editor-toolbar {
   animation: sched-editor-toolbar-slide-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) both !important;

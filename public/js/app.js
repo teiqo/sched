@@ -3302,13 +3302,15 @@ function startBasicsTourRoulette(options = {}) {
       selection.style.willChange = "transform";
 
       const reducedMotion = false;
-      const duration = Math.max(2200, 1850 + distance * 110);
+      // Match real strip scrub timing more closely — long out-and-back felt wooden.
+      const duration = Math.max(1180, 980 + distance * 90);
+      const cellWidth = selection.getBoundingClientRect().width || (strip.clientWidth / 7);
       const startedAt = performance.now();
       let lastIndex = current;
       let lastUnderIndex = current;
 
       // Момент разворота (44% времени на путь туда, 56% на возвращение с длинным замедлением)
-      const turnPoint = 0.44;
+      const turnPoint = 0.42;
 
       const paintFingerSwipe = now => {
         if (!selection.isConnected || basicsTourStep !== TOUR_STEP_STRIP) return;
@@ -3318,19 +3320,18 @@ function startBasicsTourRoulette(options = {}) {
         if (reducedMotion) {
           factor = Math.sin(progress * Math.PI);
         } else if (progress <= turnPoint) {
-          // Путь туда: плавный разгон (smootherstep) и мягкий выход в точку разворота с нулевой скоростью
+          // Outbound: same progressive ease-out family as strip scrub settle.
           const u = progress / turnPoint;
-          factor = u * u * u * (u * (u * 6 - 15) + 10);
+          factor = 1 - Math.pow(1 - u, 2.8);
         } else {
-          // Путь обратно: плавный набор скорости от разворота и длительное шелковистое замедление
+          // Return: soft settle back under the finger-release curve.
           const v = (progress - turnPoint) / (1 - turnPoint);
-          const w = 1 - Math.pow(1 - v, 2.2);
-          const retEase = w * w * (3 - 2 * w);
-          factor = 1 - retEase;
+          factor = Math.pow(1 - v, 2.8);
         }
 
         const position = current + (targetIndex - current) * factor;
-        selection.style.transform = `translate3d(${(position * 100).toFixed(3)}%,0,0)`;
+        // Pixel travel matches real scrub (not % of the pill), so motion stays 1:1 with cells.
+        selection.style.transform = `translate3d(${(position * cellWidth).toFixed(2)}px,0,0)`;
 
         const nearestIndex = Math.max(0, Math.min(6, Math.round(position)));
 
@@ -3352,7 +3353,7 @@ function startBasicsTourRoulette(options = {}) {
           selectDate(addDays(originalWeek, nearestIndex), dir, {
             silent: true,
             preview: true,
-            animated: true,
+            animated: false,
           });
         }
 
