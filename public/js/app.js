@@ -548,7 +548,7 @@ function breakCardHtml(live, dIso) {
   const s = live.slot;
   const title = live.total >= 30 ? "большой перерыв" : "перерыв";
   const dateStr = dIso || iso(live.now || state.selected || currentDate());
-  const swapBtn = swapButtonHtml(dateStr, s.n);
+  const swapBtn = `${swapButtonHtml(dateStr, s.n)}${suggestButtonHtml(dateStr, s)}`;
   const room = s.room
     ? ` · <span class="lesson-room">ауд. ${escapeHtml(s.room)}</span>`
     : "";
@@ -578,7 +578,7 @@ function liveCardHtml(live, dIso) {
   const s = live.slot;
   const current = live.kind === "current";
   const dateStr = dIso || iso(live.now || state.selected || currentDate());
-  const swapBtn = swapButtonHtml(dateStr, s.n);
+  const swapBtn = `${swapButtonHtml(dateStr, s.n)}${suggestButtonHtml(dateStr, s)}`;
   const swapMark = s.swapped
     ? `<span class="lesson-origin-mark is-swap">${changeLabel(s)}</span>`
     : "";

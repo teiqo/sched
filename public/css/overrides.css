@@ -6129,30 +6129,40 @@ a.sched-settings-row,
   align-items: center;
   gap: 8px;
 }
-.live-lesson-card .lesson-swap-btn {
-  position: static;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
+:root .live-lesson-card :is(.lesson-swap-btn, .lesson-suggest-btn) {
+  position: static !important;
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  flex: 0 0 24px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: inherit !important;
   opacity: 0.65;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: opacity 0.16s ease, background 0.16s ease;
-  padding: 0;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
+  padding: 0 !important;
+  margin: 0 !important;
+  align-self: center !important;
+  transform: none !important;
 }
-.live-lesson-card .lesson-swap-btn svg {
-  width: 15px;
-  height: 15px;
+:root .live-lesson-card :is(.lesson-swap-btn, .lesson-suggest-btn) svg {
+  width: 14px !important;
+  height: 14px !important;
+  pointer-events: none;
 }
-.live-lesson-card .lesson-swap-btn:hover,
-.live-lesson-card .lesson-swap-btn:active {
+:root .live-lesson-card :is(.lesson-swap-btn, .lesson-suggest-btn):hover,
+:root .live-lesson-card :is(.lesson-swap-btn, .lesson-suggest-btn):active {
   opacity: 1;
-  background: color-mix(in srgb, currentColor 14%, transparent);
+  background: color-mix(in srgb, currentColor 14%, transparent) !important;
+  color: inherit !important;
+}
+:root .live-lesson-card .lesson-suggest-btn::after {
+  display: none !important;
 }
 
 /* Действие сброса в настройках владельца */
