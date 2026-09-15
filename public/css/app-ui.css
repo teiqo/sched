@@ -2019,7 +2019,7 @@ body.is-dragging-pair {
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
   opacity: 0;
-  transition: opacity 0.16s ease;
+  transition: opacity 0.28s ease;
   /* Панель вешается на body мимо .sched-app, поэтому шрифт задаём явно —
      тот же стек, что у основного приложения. */
   font-family:
@@ -2117,8 +2117,8 @@ body.is-dragging-pair {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box !important;
-  transform: translate3d(0, calc(100% + 24px), 0);
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translate3d(0, calc(100% + 48px), 0);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sched-replace-sheet,
 .sched-replace-sheet * {
@@ -2180,11 +2180,11 @@ body.is-dragging-pair {
 .sched-replace-backdrop.is-closing {
   opacity: 0 !important;
   pointer-events: auto !important;
-  transition: opacity 0.2s ease !important;
+  transition: opacity 0.34s ease !important;
 }
 .sched-replace-backdrop.is-closing .sched-replace-sheet {
-  transform: translate3d(0, calc(100% + 32px), 0) !important;
-  transition: transform 0.22s cubic-bezier(0.32, 0, 0.67, 0) !important;
+  transform: translate3d(0, calc(100% + 64px), 0) !important;
+  transition: transform 0.38s cubic-bezier(0.32, 0, 0.67, 0) !important;
 }
 .sched-replace-head {
   display: grid;

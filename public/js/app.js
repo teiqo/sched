@@ -3798,7 +3798,7 @@ function renderBasicsTour() {
         <strong class="sched-tour-title">${step.title}</strong>
         <small class="sched-tour-text">${step.text}</small>
       </div>
-      <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
+      <div class="sched-tour-actions"><button type="button" data-tour="skip">пропустить</button><button type="button" data-tour="back"${basicsTourStep === 0 ? " hidden" : ""}>назад</button><button class="is-primary" type="button" data-tour="next">${basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше"}</button></div>
     </div>`;
     spotlight = host.querySelector(".sched-tour-spotlight");
     copy = host.querySelector(".sched-tour-copy");
@@ -3814,6 +3814,8 @@ function renderBasicsTour() {
     if (stepText) stepText.innerHTML = step.text;
     const nextBtn = copy.querySelector('[data-tour="next"]');
     if (nextBtn) nextBtn.textContent = basicsTourStep + 1 === BASICS_TOUR.length ? "готово" : "дальше";
+    const backBtn = copy.querySelector('[data-tour="back"]');
+    if (backBtn) backBtn.hidden = basicsTourStep === 0;
 
     const inner = copy.querySelector(".sched-tour-copy-inner");
     if (inner) {
@@ -3837,6 +3839,14 @@ function renderBasicsTour() {
   host.onclick = event => {
     const action = event.target.closest("[data-tour]")?.dataset.tour;
     if (action === "skip") { finishBasicsTour(); return; }
+    if (action === "back") {
+      if (basicsTourStep <= 0) return;
+      stopBasicsTourSwapDemo();
+      stopBasicsTourAddPairDemo();
+      basicsTourStep -= 1;
+      renderBasicsTour();
+      return;
+    }
     if (action === "next") {
       stopBasicsTourSwapDemo();
       stopBasicsTourAddPairDemo();
@@ -4655,7 +4665,7 @@ function closeSheetAnimated(elOrId, onComplete, immediate = false) {
     if (onComplete) onComplete();
   };
   backdrop.addEventListener("transitionend", finish, { once: true });
-  setTimeout(finish, 240);
+  setTimeout(finish, 420);
 }
 
 function bindSheetKeyboard(backdrop, sheet) {

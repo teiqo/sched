@@ -174,7 +174,14 @@
   display: flex;
   margin-top: 10px;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+}
+.sched-tour-actions [data-tour="skip"] {
+  margin-right: auto;
+}
+.sched-tour-actions [data-tour="back"][hidden] {
+  display: none !important;
 }
 .sched-tour-actions button {
   min-height: 40px;
