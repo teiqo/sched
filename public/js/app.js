@@ -1050,7 +1050,9 @@ function setScene(html, direction) {
       window.clearTimeout(sceneOutTimer);
       sceneOutTimer = null;
     }
-    old.getAnimations().forEach((a) => a.cancel());
+    /* No animation.cancel()/finish() here — swipe finish layers and any
+       in-flight CSS cascades must not be reset. Swipe commits use motion-lite
+       and only replace live HTML under the covering panel. */
     old.classList.remove("is-leaving", "is-entering");
     old.removeAttribute("data-direction");
     old.style.cssText = "";

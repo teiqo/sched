@@ -40,36 +40,21 @@ export function bindDaySwipe({
     if (!panel || panel.dataset.cascadeWatch === "1") return;
     panel.dataset.cascadeWatch = "1";
     let done = false;
-    let safetyTimer = null;
-    let minTimer = null;
-
-    const busyAnims = () => {
-      if (typeof panel.getAnimations !== "function") return [];
-      /* Delayed stagger rows are often still "pending", not "running".
-         Finishing on !running cut pairs 3+ short and the live day popped in. */
-      return panel.getAnimations({ subtree: true }).filter(
-        (a) => a.playState === "running" || a.playState === "pending",
-      );
-    };
 
     const cascadeWaitMs = () => {
       const rows = panel.querySelectorAll(
         ".agenda-list .agenda-row, .live-host .live-lesson-card, .completed-lessons",
       ).length;
-      const stagger = 70;
-      const baseDelay = 45;
-      const dur = 400;
-      return baseDelay + stagger * Math.max(rows - 1, 0) + dur + 120;
+      /* Match PC: 45ms base + 70ms * row-i + 400ms duration (+buffer).
+         Do NOT trust animationend/getAnimations for "all done" — on iOS
+         delayed stagger rows are often absent until they start, so an early
+         idle check removes the finish layer and pairs 3+ pop on live. */
+      return 45 + 70 * Math.max(rows - 1, 0) + 400 + 160;
     };
 
     const finish = () => {
       if (done) return;
       done = true;
-      panel.removeEventListener("animationend", onAnimEnd);
-      if (safetyTimer !== null) clearTimeout(safetyTimer);
-      if (minTimer !== null) clearTimeout(minTimer);
-      /* Remove the finish layer BEFORE dropping is-entering. Otherwise
-         :has(.is-entering) stops hiding #day-scene for one frame. */
       const layer = panel.closest(".sched-cascade-finish");
       const root = panel.closest(".sched-days-scene") || scene;
       if (layer) {
@@ -87,22 +72,7 @@ export function bindDaySwipe({
       }
     };
 
-    const tryFinish = () => {
-      if (done) return;
-      if (busyAnims().length) return;
-      finish();
-    };
-
-    const onAnimEnd = (event) => {
-      if (!panel.contains(event.target)) return;
-      /* Let the next delayed keyframes register before we decide we're idle. */
-      requestAnimationFrame(() => requestAnimationFrame(tryFinish));
-    };
-
-    panel.addEventListener("animationend", onAnimEnd);
-    const wait = cascadeWaitMs();
-    minTimer = setTimeout(tryFinish, wait);
-    safetyTimer = setTimeout(finish, Math.max(1300, wait + 200));
+    setTimeout(finish, cascadeWaitMs());
   };
 
   /* Arm once per concrete panel instance. No remove+reflow, no WAAPI. */
