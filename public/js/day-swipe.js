@@ -28,128 +28,6 @@ export function bindDaySwipe({
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
 
-  /* Incoming-day cascade during the gesture (same timing as desktop enter). */
-  const cascadeEase = "cubic-bezier(0.22, 1, 0.36, 1)";
-  const cascadeDur = 400;
-  const cascadeStagger = 70;
-  const cascadeBaseDelay = 45;
-  const chainMs = 340;
-  let handoff = null;
-  let lastCommitAt = 0;
-
-  const stopPanelCascade = (panel, { snap = false } = {}) => {
-    panel?.querySelectorAll?.("[data-swipe-cascade]").forEach((el) => {
-      el.getAnimations?.().forEach((a) => {
-        try {
-          if (snap) a.finish();
-          else a.cancel();
-        } catch (_) {
-          try { a.cancel(); } catch (_) {}
-        }
-      });
-      el.removeAttribute("data-swipe-cascade");
-    });
-    panel?.classList?.remove("is-entering");
-  };
-
-  const clearIncomingCascade = ({ snap = false } = {}) => {
-    carousel?.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
-      stopPanelCascade(panel, { snap });
-    });
-  };
-
-  const incomingCascadeAnims = () => {
-    const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-    if (!panel) return [];
-    return Array.from(panel.querySelectorAll("[data-swipe-cascade]")).flatMap(
-      (el) => el.getAnimations?.() || [],
-    );
-  };
-
-  const startIncomingCascade = (direction) => {
-    if (!carousel || reduced() || !direction) {
-      clearIncomingCascade();
-      return;
-    }
-    /* Rapid flings: skip pair cascade so commits stay instant and don’t fight. */
-    if (performance.now() - lastCommitAt < chainMs) {
-      clearIncomingCascade({ snap: true });
-      return;
-    }
-    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
-    carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
-      const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
-      if (!hit) {
-        stopPanelCascade(panel, { snap: true });
-        return;
-      }
-      if (panel.classList.contains("is-entering")) return;
-      stopPanelCascade(panel);
-      panel.classList.add("is-entering");
-
-      panel.querySelectorAll(".live-host, .live-lesson-card").forEach((el) => {
-        el.setAttribute("data-swipe-cascade", "1");
-        el.animate(
-          [
-            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
-            { opacity: 1, transform: "translateZ(0)" },
-          ],
-          { duration: cascadeDur, delay: 35, easing: cascadeEase, fill: "both" },
-        );
-      });
-
-      Array.from(panel.querySelectorAll(".agenda-list .agenda-row, .agenda-list .agenda-break")).forEach((el, idx) => {
-        if (el.closest(".completed-lessons:not(.is-expanding)")) return;
-        const raw = el.style.getPropertyValue("--row-i").trim();
-        const rowI = raw === "" ? idx : Number.parseFloat(raw);
-        const delay = cascadeBaseDelay + cascadeStagger * (Number.isFinite(rowI) ? rowI : idx);
-        el.setAttribute("data-swipe-cascade", "1");
-        if (el.classList.contains("agenda-break")) {
-          el.animate(
-            [{ opacity: 0 }, { opacity: 1 }],
-            { duration: 350, delay, easing: cascadeEase, fill: "both" },
-          );
-        } else {
-          el.animate(
-            [
-              { opacity: 0, transform: "translate3d(0, -10px, 0)" },
-              { opacity: 1, transform: "translateZ(0)" },
-            ],
-            { duration: cascadeDur, delay, easing: cascadeEase, fill: "both" },
-          );
-        }
-      });
-
-      const completed = panel.querySelector(".completed-lessons");
-      if (completed) {
-        completed.setAttribute("data-swipe-cascade", "1");
-        completed.animate(
-          [
-            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
-            { opacity: 1, transform: "translateZ(0)" },
-          ],
-          { duration: cascadeDur, delay: 25, easing: cascadeEase, fill: "both" },
-        );
-      }
-
-      panel.querySelectorAll(".sched-future-days > .sched-day-block").forEach((el, idx) => {
-        el.setAttribute("data-swipe-cascade", "1");
-        el.animate(
-          [
-            { opacity: 0, transform: "translate3d(0, 8px, 0)" },
-            { opacity: 1, transform: "none" },
-          ],
-          {
-            duration: 450,
-            delay: 80 + Math.min(idx, 5) * 40,
-            easing: cascadeEase,
-            fill: "both",
-          },
-        );
-      });
-    });
-  };
-
   const setActive = value => {
     if (active === value) return;
     active = value;
@@ -286,8 +164,6 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      clearIncomingCascade({ snap: true });
-      handoff = null;
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -297,66 +173,14 @@ export function bindDaySwipe({
     setActive(false);
   };
 
-  const flushHandoff = () => {
-    if (!handoff) return false;
-    const target = handoff.target;
-    const already = handoff.committed;
-    handoff = null;
-    clearTimeout(settleTimer);
-    settleTimer = null;
-    /* Commit before teardown so the live scene never flashes the previous day. */
-    if (target && !already) {
-      lastCommitAt = performance.now();
-      onCommit(target);
-    }
-    resetVisuals();
-    onFinish?.();
-    prewarm();
-    return true;
-  };
-
   const complete = (allowCommit = true) => {
-    /* Next swipe / tap during cascade-hold: free the gesture without a back-teleport. */
-    if (handoff) {
-      flushHandoff();
-      if (!gesture && !settling && !active) return;
-    }
-
     if (!gesture && !settling && !active) return;
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-
-    const chaining = performance.now() - lastCommitAt < chainMs;
-
-    /* Calm swipe: keep the panel up until stagger finishes (interruptible).
-       Fast chain: commit under the carousel immediately, no cascade hold. */
-    if (target && !reduced() && !chaining) {
-      const anims = incomingCascadeAnims().filter((a) => a.playState !== "finished");
-      if (anims.length) {
-        gesture = null;
-        settling = null;
-        lastCommitAt = performance.now();
-        onCommit(target);
-        handoff = { target, committed: true };
-        const token = target;
-        const once = () => {
-          if (!handoff || handoff.target !== token) return;
-          flushHandoff();
-        };
-        Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
-        settleTimer = setTimeout(
-          once,
-          cascadeDur + cascadeBaseDelay + cascadeStagger * 8 + 120,
-        );
-        return;
-      }
-    }
-
-    if (target) {
-      lastCommitAt = performance.now();
-      onCommit(target);
-    }
+    /* Commit live day while carousel still covers the stage, then tear down.
+       Avoids a 1-frame flash of the previous day on fast flings. */
+    if (target) onCommit(target);
     resetVisuals();
     onFinish?.();
     prewarm();
@@ -415,11 +239,7 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
-    if (direction && g.cascadeDir !== direction) {
-      g.cascadeDir = direction;
-      startIncomingCascade(direction);
-    }
+    const direction = dx < 0 ? 1 : -1;
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
