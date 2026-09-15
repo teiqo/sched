@@ -1145,33 +1145,6 @@ function setScene(html, direction) {
 
 
 
-let swipeCascadeGen = 0;
-
-/* Arm cascade on the live day WHILE the swipe carousel still covers #stage,
-   so the first painted frame after teardown is already mid-enter — no blink,
-   no teleport. Never cancel this from a new gesture. */
-function armSwipePairCascade() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  swipeCascadeGen += 1;
-  const gen = swipeCascadeGen;
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    if (gen !== swipeCascadeGen) return;
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2363,15 +2336,13 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      /* 1) Update live HTML under the covering carousel
-         2) Arm CSS pair cascade before the stage is shown
-         3) day-swipe then tears the carousel down — first paint is the cascade */
+      /* Update live HTML under the covering carousel so teardown never
+         flashes the previous day — even across 10 flings in 5 seconds. */
       daySwipeRenderPending = false;
       const held = daySwipeActive;
       daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
       daySwipeActive = held;
-      armSwipePairCascade();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {

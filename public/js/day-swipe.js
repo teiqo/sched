@@ -28,6 +28,106 @@ export function bindDaySwipe({
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
 
+  /* Pair cascade lives ONLY on the incoming carousel panel.
+     Live #day-scene stays static after commit (no second enter = no blink).
+     We never cancel mid-flight — teardown uses finish() so rows land at rest. */
+  const cascadeEase = "cubic-bezier(0.22, 1, 0.36, 1)";
+  const cascadeDur = 400;
+  const cascadeStagger = 70;
+  const cascadeBaseDelay = 45;
+
+  const finishPanelCascade = (panel) => {
+    panel?.querySelectorAll?.("[data-swipe-cascade]").forEach((el) => {
+      el.getAnimations?.().forEach((a) => {
+        try { a.finish(); } catch (_) {
+          try { a.cancel(); } catch (_) {}
+        }
+      });
+      el.removeAttribute("data-swipe-cascade");
+    });
+    panel?.classList?.remove("is-entering");
+  };
+
+  const finishAllCascades = () => {
+    carousel?.querySelectorAll(".sched-swipe-panel").forEach(finishPanelCascade);
+  };
+
+  const startIncomingCascade = (direction) => {
+    if (!carousel || reduced() || !direction) return;
+    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
+    carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
+      const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
+      if (!hit) {
+        finishPanelCascade(panel);
+        return;
+      }
+      if (panel.classList.contains("is-entering")) return;
+      finishPanelCascade(panel);
+      panel.classList.add("is-entering");
+
+      panel.querySelectorAll(".live-host, .live-lesson-card").forEach((el) => {
+        el.setAttribute("data-swipe-cascade", "1");
+        el.animate(
+          [
+            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
+            { opacity: 1, transform: "translateZ(0)" },
+          ],
+          { duration: cascadeDur, delay: 35, easing: cascadeEase, fill: "forwards" },
+        );
+      });
+
+      Array.from(panel.querySelectorAll(".agenda-list .agenda-row, .agenda-list .agenda-break")).forEach((el, idx) => {
+        if (el.closest(".completed-lessons:not(.is-expanding)")) return;
+        const raw = el.style.getPropertyValue("--row-i").trim();
+        const rowI = raw === "" ? idx : Number.parseFloat(raw);
+        const delay = cascadeBaseDelay + cascadeStagger * (Number.isFinite(rowI) ? rowI : idx);
+        el.setAttribute("data-swipe-cascade", "1");
+        if (el.classList.contains("agenda-break")) {
+          el.animate(
+            [{ opacity: 0 }, { opacity: 1 }],
+            { duration: 350, delay, easing: cascadeEase, fill: "forwards" },
+          );
+        } else {
+          el.animate(
+            [
+              { opacity: 0, transform: "translate3d(0, -10px, 0)" },
+              { opacity: 1, transform: "translateZ(0)" },
+            ],
+            { duration: cascadeDur, delay, easing: cascadeEase, fill: "forwards" },
+          );
+        }
+      });
+
+      const completed = panel.querySelector(".completed-lessons");
+      if (completed) {
+        completed.setAttribute("data-swipe-cascade", "1");
+        completed.animate(
+          [
+            { opacity: 0, transform: "translate3d(0, -10px, 0)" },
+            { opacity: 1, transform: "translateZ(0)" },
+          ],
+          { duration: cascadeDur, delay: 25, easing: cascadeEase, fill: "forwards" },
+        );
+      }
+
+      panel.querySelectorAll(".sched-future-days > .sched-day-block").forEach((el, idx) => {
+        el.setAttribute("data-swipe-cascade", "1");
+        el.animate(
+          [
+            { opacity: 0, transform: "translate3d(0, 8px, 0)" },
+            { opacity: 1, transform: "none" },
+          ],
+          {
+            duration: 450,
+            delay: 80 + Math.min(idx, 5) * 40,
+            easing: cascadeEase,
+            fill: "forwards",
+          },
+        );
+      });
+    });
+  };
+
   const setActive = value => {
     if (active === value) return;
     active = value;
@@ -164,6 +264,8 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
+      /* finish() → rest opacity/transform, then hide — matches static live scene */
+      finishAllCascades();
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -239,7 +341,11 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : -1;
+    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
+    if (direction && g.cascadeDir !== direction) {
+      g.cascadeDir = direction;
+      startIncomingCascade(direction);
+    }
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
