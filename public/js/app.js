@@ -1188,12 +1188,12 @@ function playPairCascadeEntrance() {
 function scheduleSwipePairCascade() {
   cancelSwipePairCascade();
   const gen = swipeCascadeGen;
-  swipeCascadeTimer = window.setTimeout(() => {
-    swipeCascadeTimer = null;
+  /* Same turn as commit when possible; rAF only to land after carousel hide. */
+  window.requestAnimationFrame(() => {
     if (gen !== swipeCascadeGen) return;
     if (daySwipeActive) return;
     playPairCascadeEntrance();
-  }, 96);
+  });
 }
 
 function renderStrip() {
