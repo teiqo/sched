@@ -3513,14 +3513,27 @@ function startBasicsTourSwapDemo() {
   }, 9500);
 }
 
+function expandCompletedLessonsForTour() {
+  const scene = document.querySelector("#stage .sched-active-day-scene");
+  if (!scene) return false;
+  let changed = false;
+  scene.querySelectorAll(".completed-lessons.t-acc").forEach((acc) => {
+    if (acc.dataset.open === "true") return;
+    acc.dataset.open = "true";
+    const toggle = acc.querySelector(".completed-lessons-toggle");
+    const panel = acc.querySelector(".completed-lessons-panel");
+    if (toggle) toggle.setAttribute("aria-expanded", "true");
+    if (panel) panel.setAttribute("aria-hidden", "false");
+    changed = true;
+  });
+  return changed;
+}
+
 function ensureTourDayWithLessons() {
-  if (getTourSwapTarget()) return;
+  if (getTourSwapTarget()) return true;
+  if (expandCompletedLessonsForTour() && getTourSwapTarget()) return true;
+
   const isSunday = state.selected.getDay() === 0;
-  const currentSlots = slotsFor(state.selected);
-  const hasLessons = currentSlots.some(s => !s.window && !s.empty && s.subject);
-
-  if (!isSunday && hasLessons) return;
-
   const candidates = [
     defaultSelectedDate(),
     addDays(state.selected, isSunday ? 1 : 1),
@@ -3538,12 +3551,13 @@ function ensureTourDayWithLessons() {
   for (const cand of candidates) {
     if (cand.getDay() === 0) continue;
     const slots = slotsFor(cand);
-    if (slots.some(s => !s.window && !s.empty && s.subject)) {
-      selectDate(cand, null, { silent: true, preview: true, animated: false });
-      render();
-      return;
-    }
+    if (!slots.some(s => !s.window && !s.empty && s.subject)) continue;
+    selectDate(cand, null, { silent: true, preview: true, animated: false });
+    render();
+    if (expandCompletedLessonsForTour() && getTourSwapTarget()) return true;
+    if (getTourSwapTarget()) return true;
   }
+  return Boolean(getTourSwapTarget());
 }
 
 function stopBasicsTourAddPairDemo() {
@@ -3703,8 +3717,19 @@ function renderBasicsTour() {
   }
 
   const step = BASICS_TOUR[basicsTourStep];
-  const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
-  if (!step || !target) { finishBasicsTour(); return; }
+  let target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
+  if (!step) { finishBasicsTour(); return; }
+  if (!target) {
+    /* Don't abort the whole tour when a step has no spotlight target
+       (e.g. all lessons finished and collapsed). Skip to the next step. */
+    if (basicsTourStep < BASICS_TOUR.length - 1) {
+      basicsTourStep += 1;
+      renderBasicsTour();
+      return;
+    }
+    finishBasicsTour();
+    return;
+  }
   let host = document.getElementById("basics-tour");
   if (!host) {
     host = document.createElement("div");
