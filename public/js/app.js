@@ -1147,32 +1147,6 @@ function setScene(html, direction) {
 
 
 
-let swipeCascadeGen = 0;
-
-/* Real CSS cascade on #day-scene, armed under the covering carousel.
-   Not cancelled when the next swipe starts (is-day-swiping keeps it running). */
-function armSwipePairCascade() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  swipeCascadeGen += 1;
-  const gen = swipeCascadeGen;
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    if (gen !== swipeCascadeGen) return;
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2364,14 +2338,12 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      /* Update live day under the carousel, arm cascade once, then reveal.
-         Next swipe must not pause/kill this enter (see interaction.css). */
+      /* Live day stays static — cascade already ran on the incoming panel. */
       daySwipeRenderPending = false;
       const held = daySwipeActive;
       daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
       daySwipeActive = held;
-      armSwipePairCascade();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
