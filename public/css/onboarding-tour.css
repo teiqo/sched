@@ -215,6 +215,14 @@
 :root #strip.is-tour-demo #selection {
   transition: none !important;
 }
+
+/* Tour-owned sheets: visible demo only — real taps/scrolls do not reach controls. */
+.sched-replace-backdrop.is-tour-locked,
+.sched-replace-backdrop.is-tour-locked * {
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
 /* Tour roulette keeps normal setScene motion (no per-row pair-in) so the strip feels like a real scrub. */
 
 :root :is(.lesson-suggest-btn, .sched-add-pair-btn).is-tour-highlight {

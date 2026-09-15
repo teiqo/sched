@@ -3302,15 +3302,15 @@ function startBasicsTourRoulette(options = {}) {
       selection.style.willChange = "transform";
 
       const reducedMotion = false;
-      // Match real strip scrub timing more closely — long out-and-back felt wooden.
-      const duration = Math.max(1180, 980 + distance * 90);
+      // Long coast with clear deceleration — same gesture family as before, px-accurate.
+      const duration = Math.max(2100, 1750 + distance * 110);
       const cellWidth = selection.getBoundingClientRect().width || (strip.clientWidth / 7);
       const startedAt = performance.now();
       let lastIndex = current;
       let lastUnderIndex = current;
 
       // Момент разворота (44% времени на путь туда, 56% на возвращение с длинным замедлением)
-      const turnPoint = 0.42;
+      const turnPoint = 0.46;
 
       const paintFingerSwipe = now => {
         if (!selection.isConnected || basicsTourStep !== TOUR_STEP_STRIP) return;
@@ -3320,17 +3320,17 @@ function startBasicsTourRoulette(options = {}) {
         if (reducedMotion) {
           factor = Math.sin(progress * Math.PI);
         } else if (progress <= turnPoint) {
-          // Outbound: same progressive ease-out family as strip scrub settle.
+          // Outbound smootherstep: accelerates then clearly decelerates into the far day.
           const u = progress / turnPoint;
-          factor = 1 - Math.pow(1 - u, 2.8);
+          factor = u * u * u * (u * (u * 6 - 15) + 10);
         } else {
-          // Return: soft settle back under the finger-release curve.
+          // Return: ease-out into the home day (slow landing).
           const v = (progress - turnPoint) / (1 - turnPoint);
-          factor = Math.pow(1 - v, 2.8);
+          const landed = 1 - Math.pow(1 - v, 3);
+          factor = 1 - landed;
         }
 
         const position = current + (targetIndex - current) * factor;
-        // Pixel travel matches real scrub (not % of the pill), so motion stays 1:1 with cells.
         selection.style.transform = `translate3d(${(position * cellWidth).toFixed(2)}px,0,0)`;
 
         const nearestIndex = Math.max(0, Math.min(6, Math.round(position)));
@@ -3511,14 +3511,14 @@ function startBasicsTourSwapDemo() {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     getTargetBtn()?.classList.remove("is-tour-pressed");
     openSuggestSheet(dIso, n);
-  }, 1350);
+  }, 1680);
 
   // 4. Подсветка варианта «пары не будет»
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     const opt = document.querySelector("#suggest-backdrop [data-suggest-pick=\"cancelled\"]");
     opt?.classList.add("is-tour-picked");
-  }, 2600);
+  }, 3000);
 
   // 5. Клик по «пары не будет» -> шторка закрывается, пара отменена
   scheduleTimer(() => {
@@ -3528,31 +3528,34 @@ function startBasicsTourSwapDemo() {
       opt.click();
     } else {
       basicsTourSwapOverride = { [swapKey(dIso, n)]: { cancelled: true, updatedAt: Date.now() } };
-      closeSuggestSheet();
-      render();
-      updateBasicsTourSpotlight();
+      window.setTimeout(() => {
+        if (basicsTourStep !== TOUR_STEP_SWAP) return;
+        closeSuggestSheet();
+        render();
+        updateBasicsTourSpotlight();
+      }, 340);
     }
-  }, 2900);
+  }, 3350);
 
   // 6. Пауза (пользователь видит отменённую пару в расписании), затем снова жмём ↔
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     getTargetBtn()?.classList.add("is-tour-pressed");
-  }, 5300);
+  }, 5900);
 
   // 7. Открытие шторки во второй раз (теперь с кнопкой «вернуть как было»)
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     getTargetBtn()?.classList.remove("is-tour-pressed");
     openSuggestSheet(dIso, n);
-  }, 5550);
+  }, 6480);
 
   // 8. Подсветка кнопки «вернуть как было»
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     const revertBtn = document.querySelector("#suggest-backdrop [data-suggest-pick=\"revert\"]");
     revertBtn?.classList.add("is-tour-picked");
-  }, 6800);
+  }, 7800);
 
   // 9. Клик по «вернуть как было» -> шторка закрывается, пара восстановлена
   scheduleTimer(() => {
@@ -3562,17 +3565,20 @@ function startBasicsTourSwapDemo() {
       revertBtn.click();
     } else {
       basicsTourSwapOverride = null;
-      closeSuggestSheet();
-      render();
-      updateBasicsTourSpotlight();
+      window.setTimeout(() => {
+        if (basicsTourStep !== TOUR_STEP_SWAP) return;
+        closeSuggestSheet();
+        render();
+        updateBasicsTourSpotlight();
+      }, 340);
     }
-  }, 7100);
+  }, 8150);
 
   // 10. Повтор цикла
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
     startBasicsTourSwapDemo();
-  }, 9500);
+  }, 10800);
 }
 
 function expandCompletedLessonsForTour() {
@@ -3680,7 +3686,7 @@ function startBasicsTourAddPairDemo() {
     const b = getTourAddPairTarget();
     b?.classList.remove("is-tour-pressed");
     openAddPairSheet(dIso);
-  }, 1350);
+  }, 1680);
 
   // 4. Заполнение демо-данных
   scheduleTimer(() => {
@@ -4869,10 +4875,14 @@ function suggestSend(dIso, n, patch) {
     }
     render();
     expandCompletedLessonsForTour();
-    closeSuggestSheet(() => {
-      updateBasicsTourSpotlight();
-      requestAnimationFrame(() => updateBasicsTourSpotlight());
-    });
+    // Beat after the pick, then slide the sheet away (not instant).
+    window.setTimeout(() => {
+      if (basicsTourStep !== TOUR_STEP_SWAP) return;
+      closeSuggestSheet(() => {
+        updateBasicsTourSpotlight();
+        requestAnimationFrame(() => updateBasicsTourSpotlight());
+      });
+    }, 340);
     return;
   }
   const ok = patch === null
@@ -4903,6 +4913,9 @@ function openSuggestSheet(dIso, n) {
   const backdrop = document.createElement("div");
   backdrop.id = "suggest-backdrop";
   backdrop.className = "sched-replace-backdrop";
+  if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) {
+    backdrop.classList.add("is-tour-locked");
+  }
   backdrop.innerHTML = '<div class="sched-replace-sheet sched-move-sheet" role="dialog" aria-modal="true" aria-labelledby="suggest-title"></div>';
   document.body.appendChild(backdrop);
   const sheet = backdrop.firstElementChild;
@@ -5034,8 +5047,13 @@ function openSuggestSheet(dIso, n) {
     });
   };
 
-  bindBackdropDismiss(backdrop, () => closeSuggestSheet());
+  bindBackdropDismiss(backdrop, () => {
+    if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return;
+    closeSuggestSheet();
+  });
   backdrop.addEventListener("click", event => {
+    // Tour demo drives the sheet with synthetic clicks; block real user taps.
+    if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0 && event.isTrusted) return;
     if (event.target === backdrop) return;
     if (event.target.closest("[data-suggest-close]")) { closeSuggestSheet(); return; }
     if (event.target.closest("[data-suggest-back]")) { renderRoot(); return; }
@@ -5075,7 +5093,10 @@ function openSuggestSheet(dIso, n) {
   });
 
   backdrop.addEventListener("keydown", event => {
-    if (event.key === "Escape") { event.stopPropagation(); closeSuggestSheet(); return; }
+    if (event.key === "Escape") {
+      if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) { event.preventDefault(); event.stopPropagation(); return; }
+      event.stopPropagation(); closeSuggestSheet(); return;
+    }
     if (event.key === "Enter" && event.target.matches("input")) {
       event.preventDefault();
       sheet.querySelector("[data-suggest-send]")?.click();
@@ -5104,6 +5125,9 @@ function openAddPairSheet(dIso) {
   const backdrop = document.createElement("div");
   backdrop.id = "add-pair-backdrop";
   backdrop.className = "sched-replace-backdrop";
+  if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) {
+    backdrop.classList.add("is-tour-locked");
+  }
 
   const firstFree = [1, 2, 3, 4, 5, 6].find(num => {
     const s = slots.find(slot => slot.n === num);
@@ -5211,8 +5235,12 @@ function openAddPairSheet(dIso) {
     });
   };
 
-  bindBackdropDismiss(backdrop, () => closeSheetAnimated(backdrop));
+  bindBackdropDismiss(backdrop, () => {
+    if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0) return;
+    closeSheetAnimated(backdrop);
+  });
   backdrop.addEventListener("click", event => {
+    if (typeof basicsTourStep !== "undefined" && basicsTourStep >= 0 && event.isTrusted) return;
     if (event.target === backdrop) return;
     if (event.target.closest("[data-add-pair-close]")) {
       closeSheetAnimated(backdrop);
