@@ -3338,27 +3338,32 @@ function startBasicsTourRoulette(options = {}) {
   }
   document.body.classList.add("is-tour-roulette-active");
 
-  const current = Math.max(0, Math.min(6, Number(strip.dataset.selectedIndex) || 0));
-  const originalDate = new Date(state.selected);
-  const originalWeek = weekStart(originalDate);
+  const today = startOfDay(currentDate());
+  const originalWeek = weekStart(today);
+  // Always begin the demo on today (clamp into Mon–Sun strip indices).
+  let current = Math.max(0, Math.min(6, Math.round((today - originalWeek) / 86400000)));
+  const originalDate = addDays(originalWeek, current);
   basicsTourRouletteOriginalDate = originalDate;
+
+  if (!sameDay(state.selected, originalDate)) {
+    selectDate(originalDate, null, { silent: true, preview: true, animated: false });
+    strip.dataset.selectedIndex = String(current);
+  }
 
   const dayHasUsefulTourSlots = (idx) => {
     const day = addDays(originalWeek, idx);
     return slotsFor(day).some((s) => s && !s.window && !s.empty && s.subject && !s.hidden);
   };
 
-  // Go to the farther week edge (Sat=6 preferred when tied), then return home.
+  // Ride to the week edge that has more remaining days, then back to today.
   const distToStart = current;
   const distToEnd = 6 - current;
   let targetIndex = distToEnd >= distToStart ? 6 : 0;
-  if (targetIndex === 6 && !dayHasUsefulTourSlots(6) && dayHasUsefulTourSlots(0)) {
-    targetIndex = 0;
-  } else if (targetIndex === 0 && !dayHasUsefulTourSlots(0) && dayHasUsefulTourSlots(6)) {
-    targetIndex = 6;
+  if (targetIndex === 6 && !dayHasUsefulTourSlots(6) && dayHasUsefulTourSlots(5)) {
+    targetIndex = 5; // prefer Saturday over empty Sunday when useful
   }
   if (targetIndex === current) {
-    targetIndex = current === 0 ? 6 : 0;
+    targetIndex = current <= 3 ? 6 : 0;
   }
   const distance = Math.max(1, Math.abs(targetIndex - current));
 
@@ -3487,6 +3492,9 @@ function triggerTourRoulette(clickedDate) {
 function positionBasicsTourChrome(options = {}) {
   const host = document.getElementById("basics-tour");
   if (!host || basicsTourStep < 0) return;
+  // While the strip roulette demo runs, keep the hole pinned — moving it
+  // with the day cascade makes the whole-screen dim swim.
+  if (document.body.classList.contains("is-tour-roulette-active") && !options.force) return;
   if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
     expandCompletedLessonsForTour();
   }
@@ -4144,9 +4152,10 @@ function startBasicsTour() {
     state.draftGroup = GROUPS[0].id;
     render();
   }
-  const cleanStart = pickCleanTourDay();
-  if (cleanStart && (!state.selected || !sameDay(cleanStart, state.selected))) {
-    selectDate(cleanStart, null, { silent: true, preview: true, animated: false });
+  // Step 1 (roulette) always starts on today — clean-day pick is for later steps.
+  const todayStart = startOfDay(currentDate());
+  if (!state.selected || !sameDay(todayStart, state.selected)) {
+    selectDate(todayStart, null, { silent: true, preview: true, animated: false });
     render();
   }
   basicsTourStep = TOUR_STEP_STRIP;

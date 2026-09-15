@@ -273,13 +273,14 @@ body.is-tour-scroll-lock {
   transition: none !important;
 }
 
+/* Tour chrome below sheets; sheets above the 150vmax dim. */
 body.is-tour-active #basics-tour,
 body.is-tour-active .sched-tour {
-  z-index: 4900 !important;
+  z-index: 500 !important;
 }
 
 body.is-tour-active .sched-replace-backdrop {
-  z-index: 4800 !important;
+  z-index: 5100 !important;
   background: transparent !important;
   opacity: 1 !important;
   filter: none !important;
@@ -287,7 +288,7 @@ body.is-tour-active .sched-replace-backdrop {
 }
 
 body.is-tour-active .sched-replace-sheet {
-  z-index: 5000 !important;
+  z-index: 5200 !important;
   opacity: 1 !important;
   filter: none !important;
   pointer-events: auto !important;
@@ -296,9 +297,14 @@ body.is-tour-active .sched-replace-sheet {
 
 body.is-tour-active .sched-tour-copy,
 #basics-tour .sched-tour-copy {
-  z-index: 5000 !important;
+  z-index: 2 !important;
   opacity: 1 !important;
   filter: none !important;
+}
+
+body.is-tour-roulette-active .sched-tour-spotlight,
+body.is-tour-roulette-active .sched-tour-copy {
+  transition: none !important;
 }
 
 #basics-tour .sched-tour-spotlight {
