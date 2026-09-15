@@ -3128,6 +3128,28 @@ function getTourSwapTarget() {
   return null;
 }
 
+function getTourAddPairTarget() {
+  const scene = document.querySelector("#stage .sched-active-day-scene");
+  if (!scene) return null;
+  expandCompletedLessonsForTour();
+  const buttons = [...scene.querySelectorAll(".sched-add-pair-btn")];
+  if (!buttons.length) return null;
+  const isUsable = (btn) => {
+    if (!btn || btn.offsetParent === null) return false;
+    const r = btn.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const btn = buttons.find(isUsable) || null;
+  if (!btn) return null;
+  const r = btn.getBoundingClientRect();
+  const viewTop = 72;
+  const viewBottom = window.innerHeight - 120;
+  if (r.top < viewTop || r.bottom > viewBottom) {
+    try { btn.scrollIntoView({ block: "center", inline: "nearest" }); } catch (_) {}
+  }
+  return btn;
+}
+
 function getTourTarget(stepIndex) {
   if (stepIndex === TOUR_STEP_STRIP) {
     return document.querySelector("#strip");
@@ -3136,7 +3158,7 @@ function getTourTarget(stepIndex) {
     return getTourSwapTarget()?.btn || null;
   }
   if (stepIndex === TOUR_STEP_ADD_PAIR) {
-    return document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    return getTourAddPairTarget();
   }
   if (stepIndex === TOUR_STEP_SETTINGS) {
     return document.querySelector("#settings-trigger");
@@ -3188,7 +3210,7 @@ function computeTourGeometry(target) {
 const BASICS_TOUR = [
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
   { selector: "#stage .sched-active-day-scene :is(.live-lesson-card, .agenda-list:not(.is-completed) .agenda-row[data-row-n]:not(.is-window-row)) :is(.lesson-suggest-btn, .lesson-swap-btn)", title: "замена пары", text: "здесь можно в два тапа отметить <span class=\"sched-tour-accent\">отмену, перенос или новый кабинет</span>. изменения сразу увидят одногруппники." },
-  { selector: "#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn", title: "добавление пары", text: "нажми плюс, чтобы быстро добавить внеплановую пару или занятие в расписание дня." },
+  { selector: "#stage .sched-active-day-scene .sched-add-pair-btn", title: "добавление пары", text: "нажми плюс, чтобы быстро добавить внеплановую пару или занятие в расписание дня." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
 
@@ -3407,8 +3429,13 @@ function updateBasicsTourSpotlight() {
     expandCompletedLessonsForTour();
   }
   const step = BASICS_TOUR[basicsTourStep];
-  const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
   const spotlight = host.querySelector(".sched-tour-spotlight");
+  // While the add-pair sheet is open, hide the orphan spotlight — the sheet is the demo focus.
+  if (basicsTourStep === TOUR_STEP_ADD_PAIR && document.getElementById("add-pair-backdrop")) {
+    if (spotlight) spotlight.style.visibility = "hidden";
+    return;
+  }
+  const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
   if (!target) {
     if (spotlight) spotlight.style.visibility = "hidden";
     return;
@@ -3627,21 +3654,21 @@ function startBasicsTourAddPairDemo() {
     return t;
   };
 
-  const btn = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+  const btn = getTourAddPairTarget();
   if (!btn) return;
   const dIso = iso(state.selected);
 
   // 1. Мягкая подсветка кнопки «плюсик»
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
-    const b = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    const b = getTourAddPairTarget();
     b?.classList.add("is-tour-highlight");
   }, 400);
 
   // 2. Нажатие на «плюсик»
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
-    const b = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    const b = getTourAddPairTarget();
     b?.classList.remove("is-tour-highlight");
     b?.classList.add("is-tour-pressed");
   }, 1100);
@@ -3649,7 +3676,7 @@ function startBasicsTourAddPairDemo() {
   // 3. Открытие шторки добавления пары
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_ADD_PAIR) return;
-    const b = document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+    const b = getTourAddPairTarget();
     b?.classList.remove("is-tour-pressed");
     openAddPairSheet(dIso);
   }, 1350);
@@ -5133,7 +5160,12 @@ function openAddPairSheet(dIso) {
   document.body.appendChild(backdrop);
   const sheet = backdrop.firstElementChild;
   bindSheetKeyboard(backdrop, sheet);
-  requestAnimationFrame(() => backdrop.classList.add("is-open"));
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      backdrop.classList.add("is-open");
+      updateBasicsTourSpotlight();
+    });
+  });
 
   const numSelect = sheet.querySelector("#add-pair-num");
   const picker = sheet.querySelector("#add-pair-catalog");
