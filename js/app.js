@@ -1452,7 +1452,7 @@ function save() {
         tab: state.tab,
         light: state.light,
         scope: state.scope,
-        group: state.group,
+        group: (typeof basicsTourTemporaryGroup !== "undefined" && basicsTourTemporaryGroup) ? (basicsTourSavedGroup || "") : state.group,
         onboarded: state.onboarded,
       }),
     );
@@ -3057,9 +3057,110 @@ var basicsTourSwapTimers = [];
 var basicsTourSwapOverride = null;
 var basicsTourAddPairTimers = [];
 var basicsTourAddPairOverride = null;
+var basicsTourTemporaryGroup = false;
+var basicsTourSavedGroup = null;
+var basicsTourSavedDraftGroup = null;
+var basicsTourSavedDate = null;
+
+function getTourSwapTarget() {
+  const scene = document.querySelector("#stage .sched-active-day-scene");
+  if (!scene) return null;
+
+  // 1. If a tour swap override is active for a lesson n, target that lesson's button!
+  if (basicsTourSwapOverride) {
+    const overrideKey = Object.keys(basicsTourSwapOverride)[0];
+    if (overrideKey) {
+      const parts = overrideKey.split("|");
+      const targetN = Number(parts[parts.length - 1]);
+      const btn = scene.querySelector(`[data-row-n="${targetN}"] .lesson-suggest-btn, [data-row-n="${targetN}"] .lesson-swap-btn, .live-lesson-card[data-row-n="${targetN}"] .lesson-suggest-btn, .live-lesson-card[data-row-n="${targetN}"] .lesson-swap-btn`);
+      if (btn && btn.offsetParent !== null && btn.getBoundingClientRect().height > 0) {
+        const card = btn.closest(".live-lesson-card, .agenda-row");
+        return { btn, row: card, n: targetN };
+      }
+    }
+  }
+
+  // 2. If there's an active live lesson card with a button, prefer it!
+  const liveBtn = scene.querySelector(".live-lesson-card .lesson-suggest-btn, .live-lesson-card .lesson-swap-btn");
+  if (liveBtn && liveBtn.offsetParent !== null && liveBtn.getBoundingClientRect().height > 0) {
+    const card = liveBtn.closest(".live-lesson-card");
+    const n = Number(liveBtn.dataset.n || card?.dataset.rowN);
+    return { btn: liveBtn, row: card, n };
+  }
+
+  // 3. Otherwise find the first visible agenda row (exclude completed-lessons when collapsed!)
+  const rows = [...scene.querySelectorAll(".agenda-row[data-row-n]:not(.is-window-row)")];
+  for (const row of rows) {
+    const completed = row.closest(".completed-lessons");
+    if (completed && completed.dataset.open !== "true") continue;
+    const btn = row.querySelector(".lesson-suggest-btn, .lesson-swap-btn");
+    if (btn && btn.offsetParent !== null && btn.getBoundingClientRect().height > 0) {
+      const n = Number(btn.dataset.n || row.dataset.rowN);
+      return { btn, row, n };
+    }
+  }
+
+  return null;
+}
+
+function getTourTarget(stepIndex) {
+  if (stepIndex === TOUR_STEP_STRIP) {
+    return document.querySelector("#strip");
+  }
+  if (stepIndex === TOUR_STEP_SWAP) {
+    return getTourSwapTarget()?.btn || null;
+  }
+  if (stepIndex === TOUR_STEP_ADD_PAIR) {
+    return document.querySelector("#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn");
+  }
+  if (stepIndex === TOUR_STEP_SETTINGS) {
+    return document.querySelector("#settings-trigger");
+  }
+  return null;
+}
+
+function computeTourGeometry(target) {
+  const visualTarget = basicsTourStep === TOUR_STEP_SETTINGS && target.classList.contains("is-avatar")
+    ? target.querySelector(".sched-trigger-avatar") || target
+    : target;
+  const rect = visualTarget.getBoundingClientRect();
+  let left, top, width, height, spotRadius;
+
+  if (basicsTourStep === TOUR_STEP_SETTINGS) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const size = Math.round(Math.max(rect.width, rect.height) + 8);
+    left = Math.round(cx - size / 2);
+    top = Math.round(cy - size / 2);
+    width = size;
+    height = size;
+    spotRadius = Math.round(size / 2);
+  } else if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const size = Math.round(Math.max(rect.width, rect.height) + 10);
+    left = Math.round(cx - size / 2);
+    top = Math.round(cy - size / 2);
+    width = size;
+    height = size;
+    spotRadius = Math.round(size / 2);
+  } else {
+    const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : 3;
+    left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
+    top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
+    width = basicsTourStep === TOUR_STEP_STRIP
+      ? Math.min(innerWidth - left, rect.width)
+      : Math.min(innerWidth - left - 8, rect.width + pad * 2);
+    height = rect.height + pad * 2;
+    spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 14;
+  }
+
+  return { left, top, width, height, spotRadius, rect };
+}
+
 const BASICS_TOUR = [
   { selector: "#strip", title: "рулетка дней", text: "зажми даты и веди пальцем или мышью — неделя прокручивается вслед за движением. <span class=\"sched-tour-accent\">залипательно</span>." },
-  { selector: "#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn", title: "замена пары", text: "здесь можно в два тапа отметить <span class=\"sched-tour-accent\">отмену, перенос или новый кабинет</span>. изменения сразу увидят одногруппники." },
+  { selector: "#stage .sched-active-day-scene :is(.live-lesson-card, .agenda-list:not(.is-completed) .agenda-row[data-row-n]:not(.is-window-row)) :is(.lesson-suggest-btn, .lesson-swap-btn)", title: "замена пары", text: "здесь можно в два тапа отметить <span class=\"sched-tour-accent\">отмену, перенос или новый кабинет</span>. изменения сразу увидят одногруппники." },
   { selector: "#stage .sched-active-day-scene .sched-add-pair-btn, .sched-add-pair-btn", title: "добавление пары", text: "нажми плюс, чтобы быстро добавить внеплановую пару или занятие в расписание дня." },
   { selector: "#settings-trigger", title: "настройки", text: "здесь меняются группа, тема, вид расписания и уведомления." },
 ];
@@ -3276,42 +3377,9 @@ function updateBasicsTourSpotlight() {
   const host = document.getElementById("basics-tour");
   if (!host || basicsTourStep < 0) return;
   const step = BASICS_TOUR[basicsTourStep];
-  const target = step && document.querySelector(step.selector);
+  const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
   if (!target) return;
-  const visualTarget = basicsTourStep === TOUR_STEP_SETTINGS && target.classList.contains("is-avatar")
-    ? target.querySelector(".sched-trigger-avatar") || target
-    : target;
-  const rect = visualTarget.getBoundingClientRect();
-  let left, top, width, height, spotRadius;
-
-  if (basicsTourStep === TOUR_STEP_SETTINGS) {
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const size = Math.round(Math.max(rect.width, rect.height) + 8);
-    left = Math.round(cx - size / 2);
-    top = Math.round(cy - size / 2);
-    width = size;
-    height = size;
-    spotRadius = Math.round(size / 2);
-  } else if (basicsTourStep === TOUR_STEP_ADD_PAIR) {
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const size = Math.round(Math.max(rect.width, rect.height) + 10);
-    left = Math.round(cx - size / 2);
-    top = Math.round(cy - size / 2);
-    width = size;
-    height = size;
-    spotRadius = 12;
-  } else {
-    const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
-    left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-    top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-    width = basicsTourStep === TOUR_STEP_STRIP
-      ? Math.min(innerWidth - left, rect.width)
-      : Math.min(innerWidth - left - 8, rect.width + pad * 2);
-    height = rect.height + pad * 2;
-    spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 14;
-  }
+  const { left, top, width, height, spotRadius } = computeTourGeometry(target);
 
   const spotlight = host.querySelector(".sched-tour-spotlight");
   if (spotlight) {
@@ -3328,7 +3396,7 @@ function stopBasicsTourSwapDemo() {
   while (basicsTourSwapTimers.length) {
     clearTimeout(basicsTourSwapTimers.pop());
   }
-  closeSuggestSheet();
+  closeSuggestSheet(null, true);
   document.querySelectorAll(".lesson-suggest-btn.is-tour-highlight, .lesson-suggest-btn.is-tour-pressed").forEach(b => {
     b.classList.remove("is-tour-highlight", "is-tour-pressed");
   });
@@ -3343,6 +3411,11 @@ function startBasicsTourSwapDemo() {
   stopBasicsTourSwapDemo();
   if (basicsTourStep !== TOUR_STEP_SWAP) return;
 
+  const target = getTourSwapTarget();
+  if (!target) return;
+  const { n } = target;
+  const dIso = iso(state.selected);
+
   const scheduleTimer = (fn, delay) => {
     const t = window.setTimeout(() => {
       const idx = basicsTourSwapTimers.indexOf(t);
@@ -3353,22 +3426,20 @@ function startBasicsTourSwapDemo() {
     return t;
   };
 
-  const row = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row)");
-  if (!row) return;
-  const n = Number(row.dataset.rowN);
-  const dIso = iso(state.selected);
+  const getTargetBtn = () => {
+    return getTourSwapTarget()?.btn || null;
+  };
 
   // 1. Мягкая подсветка кнопки ↔ (пульсирующее синее свечение)
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
-    btn?.classList.add("is-tour-highlight");
+    getTargetBtn()?.classList.add("is-tour-highlight");
   }, 400);
 
   // 2. Визуальное нажатие на кнопку ↔
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
+    const btn = getTargetBtn();
     btn?.classList.remove("is-tour-highlight");
     btn?.classList.add("is-tour-pressed");
   }, 1100);
@@ -3376,8 +3447,7 @@ function startBasicsTourSwapDemo() {
   // 3. Открытие шторки замены (как открыл бы реальный человек)
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
-    btn?.classList.remove("is-tour-pressed");
+    getTargetBtn()?.classList.remove("is-tour-pressed");
     openSuggestSheet(dIso, n);
   }, 1350);
 
@@ -3405,15 +3475,13 @@ function startBasicsTourSwapDemo() {
   // 6. Пауза (пользователь видит отменённую пару в расписании), затем снова жмём ↔
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
-    btn?.classList.add("is-tour-pressed");
+    getTargetBtn()?.classList.add("is-tour-pressed");
   }, 5300);
 
   // 7. Открытие шторки во второй раз (теперь с кнопкой «вернуть как было»)
   scheduleTimer(() => {
     if (basicsTourStep !== TOUR_STEP_SWAP) return;
-    const btn = document.querySelector("#stage .sched-active-day-scene .agenda-row[data-row-n]:not(.is-window-row) .lesson-suggest-btn");
-    btn?.classList.remove("is-tour-pressed");
+    getTargetBtn()?.classList.remove("is-tour-pressed");
     openSuggestSheet(dIso, n);
   }, 5550);
 
@@ -3446,6 +3514,7 @@ function startBasicsTourSwapDemo() {
 }
 
 function ensureTourDayWithLessons() {
+  if (getTourSwapTarget()) return;
   const isSunday = state.selected.getDay() === 0;
   const currentSlots = slotsFor(state.selected);
   const hasLessons = currentSlots.some(s => !s.window && !s.empty && s.subject);
@@ -3591,6 +3660,27 @@ function finishBasicsTour() {
   basicsTourStep = -1;
   document.body.classList.remove("is-tour-active", "is-tour-roulette-active");
   applyPerfMode();
+
+  let needsRender = false;
+  if (basicsTourSavedDate && state.selected && iso(state.selected) !== iso(basicsTourSavedDate)) {
+    selectDate(basicsTourSavedDate, null, { silent: true, preview: true, animated: false });
+    needsRender = true;
+  }
+  basicsTourSavedDate = null;
+
+  if (basicsTourTemporaryGroup) {
+    state.group = basicsTourSavedGroup || "";
+    state.draftGroup = basicsTourSavedDraftGroup || "";
+    basicsTourTemporaryGroup = false;
+    basicsTourSavedGroup = null;
+    basicsTourSavedDraftGroup = null;
+    save();
+    needsRender = true;
+  }
+
+  if (needsRender) {
+    render();
+  }
 }
 
 function renderBasicsTour() {
@@ -3600,6 +3690,11 @@ function renderBasicsTour() {
 
   if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
     if (!state.group && typeof GROUPS !== "undefined" && GROUPS.length) {
+      if (!basicsTourTemporaryGroup) {
+        basicsTourTemporaryGroup = true;
+        basicsTourSavedGroup = "";
+        basicsTourSavedDraftGroup = "";
+      }
       state.group = GROUPS[0].id;
       state.draftGroup = GROUPS[0].id;
       render();
@@ -3608,7 +3703,7 @@ function renderBasicsTour() {
   }
 
   const step = BASICS_TOUR[basicsTourStep];
-  const target = step && document.querySelector(step.selector);
+  const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
   if (!step || !target) { finishBasicsTour(); return; }
   let host = document.getElementById("basics-tour");
   if (!host) {
@@ -3620,40 +3715,7 @@ function renderBasicsTour() {
     host.setAttribute("aria-label", "обучение");
     document.body.appendChild(host);
   }
-  const visualTarget = basicsTourStep === TOUR_STEP_SETTINGS && target.classList.contains("is-avatar")
-    ? target.querySelector(".sched-trigger-avatar") || target
-    : target;
-  const rect = visualTarget.getBoundingClientRect();
-  let left, top, width, height, spotRadius;
-
-  if (basicsTourStep === TOUR_STEP_SETTINGS) {
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const size = Math.round(Math.max(rect.width, rect.height) + 8);
-    left = Math.round(cx - size / 2);
-    top = Math.round(cy - size / 2);
-    width = size;
-    height = size;
-    spotRadius = Math.round(size / 2);
-  } else if (basicsTourStep === TOUR_STEP_ADD_PAIR) {
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const size = Math.round(Math.max(rect.width, rect.height) + 10);
-    left = Math.round(cx - size / 2);
-    top = Math.round(cy - size / 2);
-    width = size;
-    height = size;
-    spotRadius = 12;
-  } else {
-    const pad = basicsTourStep === TOUR_STEP_STRIP ? 0 : basicsTourStep === TOUR_STEP_SWAP ? 4 : 3;
-    left = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.left) : Math.max(8, rect.left - pad);
-    top = basicsTourStep === TOUR_STEP_STRIP ? Math.max(0, rect.top) : Math.max(8, rect.top - pad);
-    width = basicsTourStep === TOUR_STEP_STRIP
-      ? Math.min(innerWidth - left, rect.width)
-      : Math.min(innerWidth - left - 8, rect.width + pad * 2);
-    height = rect.height + pad * 2;
-    spotRadius = basicsTourStep === TOUR_STEP_STRIP ? 20 : 14;
-  }
+  const { left, top, width, height, spotRadius, rect } = computeTourGeometry(target);
 
   const copyWidth = Math.min(340, innerWidth - 24);
   const below = top + height + 14;
@@ -3751,6 +3813,12 @@ function renderBasicsTour() {
       startBasicsTourAddPairDemo();
       return;
     }
+    if (basicsTourStep === TOUR_STEP_SETTINGS) {
+      if (event.target.closest(".sched-tour-copy")) return;
+      finishBasicsTour();
+      openSettings();
+      return;
+    }
   };
 
   if (basicsTourStep === TOUR_STEP_STRIP) {
@@ -3769,6 +3837,17 @@ function startBasicsTour() {
   stopBasicsTourAddPairDemo();
   if (state.editorMode && !editorChangedEntries().length) {
     finishEditorMode();
+  }
+  if (!basicsTourTemporaryGroup) {
+    basicsTourTemporaryGroup = !state.group;
+    basicsTourSavedGroup = state.group || "";
+    basicsTourSavedDraftGroup = state.draftGroup || "";
+  }
+  basicsTourSavedDate = state.selected ? new Date(state.selected.getTime()) : null;
+  if (basicsTourTemporaryGroup && typeof GROUPS !== "undefined" && GROUPS.length) {
+    state.group = GROUPS[0].id;
+    state.draftGroup = GROUPS[0].id;
+    render();
   }
   basicsTourStep = TOUR_STEP_STRIP;
   document.body.classList.add("is-tour-active");

@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-15-v123-live-card-swap-suggest-button";
+const CACHE = CACHE_PREFIX + "2026-09-15-v124-fix-tour-spotlight-and-temp-group";
 const ASSETS = [
   "./",
   "./index.html",
