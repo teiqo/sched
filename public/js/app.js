@@ -3062,43 +3062,71 @@ var basicsTourSavedGroup = null;
 var basicsTourSavedDraftGroup = null;
 var basicsTourSavedDate = null;
 
+function tourLessonStillOpen(slot, day) {
+  if (!slot || slot.window || slot.empty || !slot.subject || slot.hidden) return false;
+  if (!sameDay(day, new Date())) return true;
+  if (!slot.to) return true;
+  return mins(slot.to) > nowMins(new Date());
+}
+
+function dayHasOpenTourLesson(day) {
+  return slotsFor(day).some((slot) => tourLessonStillOpen(slot, day));
+}
+
 function getTourSwapTarget() {
   const scene = document.querySelector("#stage .sched-active-day-scene");
   if (!scene) return null;
+  expandCompletedLessonsForTour();
 
-  // 1. If a tour swap override is active for a lesson n, target that lesson's button!
+  const visibleBtn = (root) => {
+    if (!root) return null;
+    if (root.matches?.(".lesson-suggest-btn, .lesson-swap-btn")) {
+      return root.offsetParent !== null && root.getBoundingClientRect().height > 0 ? root : null;
+    }
+    const btn = root.querySelector(".lesson-suggest-btn, .lesson-swap-btn");
+    return btn && btn.offsetParent !== null && btn.getBoundingClientRect().height > 0 ? btn : null;
+  };
+
+  // Keep spotlight on the same lesson while the cancel demo override is active.
   if (basicsTourSwapOverride) {
     const overrideKey = Object.keys(basicsTourSwapOverride)[0];
     if (overrideKey) {
       const parts = overrideKey.split("|");
       const targetN = Number(parts[parts.length - 1]);
-      const btn = scene.querySelector(`[data-row-n="${targetN}"] .lesson-suggest-btn, [data-row-n="${targetN}"] .lesson-swap-btn, .live-lesson-card[data-row-n="${targetN}"] .lesson-suggest-btn, .live-lesson-card[data-row-n="${targetN}"] .lesson-swap-btn`);
-      if (btn && btn.offsetParent !== null && btn.getBoundingClientRect().height > 0) {
-        const card = btn.closest(".live-lesson-card, .agenda-row");
+      const row = scene.querySelector(`.agenda-row[data-row-n="${targetN}"], .live-lesson-card[data-row-n="${targetN}"]`);
+      const btn = visibleBtn(row) || visibleBtn(scene.querySelector(`[data-row-n="${targetN}"]`));
+      if (btn) {
+        const card = btn.closest(".live-lesson-card, .agenda-row") || row;
         return { btn, row: card, n: targetN };
+      }
+      if (row && row.getBoundingClientRect().height > 0) {
+        return { btn: row, row, n: targetN };
       }
     }
   }
 
-  // 2. If there's an active live lesson card with a button, prefer it!
-  const liveBtn = scene.querySelector(".live-lesson-card .lesson-suggest-btn, .live-lesson-card .lesson-swap-btn");
-  if (liveBtn && liveBtn.offsetParent !== null && liveBtn.getBoundingClientRect().height > 0) {
+  // Prefer a live / still-open lesson card, not a finished one in the accordion.
+  const liveBtn = visibleBtn(scene.querySelector(".live-lesson-card"));
+  if (liveBtn) {
     const card = liveBtn.closest(".live-lesson-card");
     const n = Number(liveBtn.dataset.n || card?.dataset.rowN);
     return { btn: liveBtn, row: card, n };
   }
 
-  // 3. Otherwise find the first visible agenda row (exclude completed-lessons when collapsed!)
   const rows = [...scene.querySelectorAll(".agenda-row[data-row-n]:not(.is-window-row)")];
+  const openRows = [];
   for (const row of rows) {
     const completed = row.closest(".completed-lessons");
     if (completed && completed.dataset.open !== "true") continue;
-    const btn = row.querySelector(".lesson-suggest-btn, .lesson-swap-btn");
-    if (btn && btn.offsetParent !== null && btn.getBoundingClientRect().height > 0) {
-      const n = Number(btn.dataset.n || row.dataset.rowN);
-      return { btn, row, n };
-    }
+    const btn = visibleBtn(row);
+    if (!btn) continue;
+    const n = Number(btn.dataset.n || row.dataset.rowN);
+    const slot = slotsFor(state.selected).find((item) => item.n === n);
+    const pack = { btn, row, n };
+    if (tourLessonStillOpen(slot, state.selected)) return pack;
+    openRows.push(pack);
   }
+  if (openRows.length) return openRows[0];
 
   return null;
 }
@@ -3376,13 +3404,19 @@ function triggerTourRoulette(clickedDate) {
 function updateBasicsTourSpotlight() {
   const host = document.getElementById("basics-tour");
   if (!host || basicsTourStep < 0) return;
+  if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
+    expandCompletedLessonsForTour();
+  }
   const step = BASICS_TOUR[basicsTourStep];
   const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
-  if (!target) return;
-  const { left, top, width, height, spotRadius } = computeTourGeometry(target);
-
   const spotlight = host.querySelector(".sched-tour-spotlight");
+  if (!target) {
+    if (spotlight) spotlight.style.visibility = "hidden";
+    return;
+  }
+  const { left, top, width, height, spotRadius } = computeTourGeometry(target);
   if (spotlight) {
+    spotlight.style.visibility = "visible";
     spotlight.style.setProperty("--tour-radius", `${spotRadius}px`);
     spotlight.style.borderRadius = `${spotRadius}px`;
     spotlight.style.left = `${left}px`;
@@ -3548,13 +3582,17 @@ function ensureTourDayWithLessons() {
     candidates.push(addDays(nextMon, i));
   }
 
+  const ranked = [];
   for (const cand of candidates) {
     if (cand.getDay() === 0) continue;
-    const slots = slotsFor(cand);
-    if (!slots.some(s => !s.window && !s.empty && s.subject)) continue;
+    if (!slotsFor(cand).some((s) => !s.window && !s.empty && s.subject)) continue;
+    ranked.push({ cand, open: dayHasOpenTourLesson(cand) });
+  }
+  ranked.sort((a, b) => Number(b.open) - Number(a.open));
+  for (const { cand } of ranked) {
     selectDate(cand, null, { silent: true, preview: true, animated: false });
     render();
-    if (expandCompletedLessonsForTour() && getTourSwapTarget()) return true;
+    expandCompletedLessonsForTour();
     if (getTourSwapTarget()) return true;
   }
   return Boolean(getTourSwapTarget());
@@ -4792,8 +4830,10 @@ function suggestSend(dIso, n, patch) {
       basicsTourSwapOverride = null;
     }
     render();
+    expandCompletedLessonsForTour();
     closeSuggestSheet(() => {
       updateBasicsTourSpotlight();
+      requestAnimationFrame(() => updateBasicsTourSpotlight());
     });
     return;
   }
