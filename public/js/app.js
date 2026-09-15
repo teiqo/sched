@@ -1147,23 +1147,9 @@ function setScene(html, direction) {
 
 let swipeCascadeGen = 0;
 
-function cancelSwipePairCascade() {
-  swipeCascadeGen += 1;
-  const target = $("#day-scene");
-  if (!target) return;
-  if (!target.classList.contains("is-entering")) return;
-  /* Only clear swipe-driven enters (no data-direction scene FLIP). */
-  if (target.getAttribute("data-direction")) return;
-  target.classList.remove("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-}
-
 /* Arm cascade on the live day WHILE the swipe carousel still covers #stage,
    so the first painted frame after teardown is already mid-enter — no blink,
-   no second transition, no teleport. */
+   no teleport. Never cancel this from a new gesture. */
 function armSwipePairCascade() {
   const target = $("#day-scene");
   if (!target) return;
@@ -2375,11 +2361,7 @@ function bindEvents() {
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
     contentKey: () => sceneRevision,
-    onActiveChange: active => {
-      daySwipeActive = active;
-      /* Next fling wins: drop any in-flight pair cascade immediately. */
-      if (active) cancelSwipePairCascade();
-    },
+    onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
       /* 1) Update live HTML under the covering carousel
          2) Arm CSS pair cascade before the stage is shown
