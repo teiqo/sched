@@ -33,7 +33,9 @@ export function bindDaySwipe({
   const cascadeDur = 400;
   const cascadeStagger = 70;
   const cascadeBaseDelay = 45;
+  const chainMs = 340;
   let handoff = null;
+  let lastCommitAt = 0;
 
   const stopPanelCascade = (panel, { snap = false } = {}) => {
     panel?.querySelectorAll?.("[data-swipe-cascade]").forEach((el) => {
@@ -67,6 +69,11 @@ export function bindDaySwipe({
   const startIncomingCascade = (direction) => {
     if (!carousel || reduced() || !direction) {
       clearIncomingCascade();
+      return;
+    }
+    /* Rapid flings: skip pair cascade so commits stay instant and don’t fight. */
+    if (performance.now() - lastCommitAt < chainMs) {
+      clearIncomingCascade({ snap: true });
       return;
     }
     const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
@@ -293,18 +300,23 @@ export function bindDaySwipe({
   const flushHandoff = () => {
     if (!handoff) return false;
     const target = handoff.target;
+    const already = handoff.committed;
     handoff = null;
     clearTimeout(settleTimer);
     settleTimer = null;
+    /* Commit before teardown so the live scene never flashes the previous day. */
+    if (target && !already) {
+      lastCommitAt = performance.now();
+      onCommit(target);
+    }
     resetVisuals();
-    if (target) onCommit(target);
     onFinish?.();
     prewarm();
     return true;
   };
 
   const complete = (allowCommit = true) => {
-    /* Next swipe / tap during cascade-hold: commit pending day and free the gesture. */
+    /* Next swipe / tap during cascade-hold: free the gesture without a back-teleport. */
     if (handoff) {
       flushHandoff();
       if (!gesture && !settling && !active) return;
@@ -315,14 +327,18 @@ export function bindDaySwipe({
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
 
-    /* Finish remaining staggered pairs on the same panel (no live-scene replay = no blink).
-       A new touchstart flushes this hold immediately so fast flings stay usable. */
-    if (target && !reduced()) {
+    const chaining = performance.now() - lastCommitAt < chainMs;
+
+    /* Calm swipe: keep the panel up until stagger finishes (interruptible).
+       Fast chain: commit under the carousel immediately, no cascade hold. */
+    if (target && !reduced() && !chaining) {
       const anims = incomingCascadeAnims().filter((a) => a.playState !== "finished");
       if (anims.length) {
         gesture = null;
         settling = null;
-        handoff = { target };
+        lastCommitAt = performance.now();
+        onCommit(target);
+        handoff = { target, committed: true };
         const token = target;
         const once = () => {
           if (!handoff || handoff.target !== token) return;
@@ -337,8 +353,11 @@ export function bindDaySwipe({
       }
     }
 
+    if (target) {
+      lastCommitAt = performance.now();
+      onCommit(target);
+    }
     resetVisuals();
-    if (target) onCommit(target);
     onFinish?.();
     prewarm();
   };

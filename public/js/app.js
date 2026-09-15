@@ -2335,9 +2335,13 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      // Pair cascade runs on the incoming carousel panel during the gesture only.
+      /* Must update live HTML even while the carousel is still up — otherwise
+         teardown flashes the previous day for a frame (fast-fling teleport). */
       daySwipeRenderPending = false;
+      const held = daySwipeActive;
+      daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
+      daySwipeActive = held;
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
