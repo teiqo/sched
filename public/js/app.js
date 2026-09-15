@@ -1148,33 +1148,6 @@ function setScene(html, direction) {
 
 
 
-let swipeCascadeGen = 0;
-
-/* Arm real CSS cascade on live day under the covering carousel at commit.
-   If the user flings again before panel handoff ends, resetVisuals reveals
-   this live day mid-cascade — it must KEEP playing (not cleared, not paused). */
-function armSwipePairCascade() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  swipeCascadeGen += 1;
-  const gen = swipeCascadeGen;
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    if (gen !== swipeCascadeGen) return;
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2366,14 +2339,12 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      /* Sync live HTML + arm cascade under cover. Panel may still be animating;
-         a fast next fling reveals live mid-cascade instead of killing it. */
+      /* Static live only. One cascade: incoming panel during the swipe. */
       daySwipeRenderPending = false;
       const held = daySwipeActive;
       daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
       daySwipeActive = held;
-      armSwipePairCascade();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
