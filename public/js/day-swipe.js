@@ -36,37 +36,54 @@ export function bindDaySwipe({
   /* Finishing cascade panels stay under #scene until animationend — independent
      of the active gesture. Never cancel their CSS animations. Never reparent an
      animating subtree (that would restart keyframes). */
-  const watchPanelCascadeEnd = (panel) => {
-    if (!panel || panel.dataset.cascadeWatch === "1") return;
-    panel.dataset.cascadeWatch = "1";
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      panel.removeEventListener("animationend", onAnimEnd);
-      /* Drop covering layer while is-entering still matches :has(...), so live
-         never paints one frame under an empty finish shell. Do not strip
-         is-entering first. No cancel()/finish()/currentTime, no handoff hide. */
-      const layer = panel.closest(".sched-cascade-finish");
-      if (layer) {
+  const watchPanelCascadeEnd = (panel, { startCap = false } = {}) => {
+    if (!panel) return;
+
+    if (panel.dataset.cascadeWatch !== "1") {
+      panel.dataset.cascadeWatch = "1";
+      let done = false;
+      let capTimer = null;
+
+      const finish = () => {
+        if (done) return;
+        const layer = panel.closest(".sched-cascade-finish");
+        /* Pre-park animationend/timeout must NOT strip is-entering. That
+           uncovered live for one frame on fast swipes (Sun→Mon week jump,
+           tomorrow→today reverse). No handoff hide, no cancel()/finish(). */
+        if (!layer) return;
+        done = true;
+        if (capTimer !== null) {
+          clearTimeout(capTimer);
+          capTimer = null;
+        }
+        panel.removeEventListener("animationend", onAnimEnd);
         const others = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
           .filter((node) => node !== panel);
+        /* Remove cover while is-entering still matches :has(...). */
         if (!others.length) layer.remove();
         else panel.classList.remove("is-entering");
-      } else {
-        panel.classList.remove("is-entering");
-      }
-    };
-    const onAnimEnd = (event) => {
-      if (!panel.contains(event.target)) return;
-      const running = typeof panel.getAnimations === "function"
-        ? panel.getAnimations({ subtree: true }).filter((a) => a.playState === "running")
-        : [];
-      if (!running.length) finish();
-    };
-    panel.addEventListener("animationend", onAnimEnd);
-    /* Desktop setScene clears is-entering around 1200ms; match that hard cap. */
-    setTimeout(finish, 1300);
+      };
+
+      const onAnimEnd = (event) => {
+        if (!panel.contains(event.target)) return;
+        if (!panel.closest(".sched-cascade-finish")) return;
+        const running = typeof panel.getAnimations === "function"
+          ? panel.getAnimations({ subtree: true }).filter(
+              (a) => a.playState === "running" || a.playState === "pending",
+            )
+          : [];
+        if (!running.length) finish();
+      };
+
+      panel.addEventListener("animationend", onAnimEnd);
+      panel._schedCascadeStartCap = () => {
+        if (done || capTimer !== null) return;
+        /* Hard cap starts only after park — arm must not schedule tear-down. */
+        capTimer = setTimeout(finish, 1300);
+      };
+    }
+
+    if (startCap) panel._schedCascadeStartCap?.();
   };
 
   /* Arm once per concrete panel instance. No remove+reflow, no WAAPI. */
@@ -115,7 +132,7 @@ export function bindDaySwipe({
 
     entering.forEach((panel) => {
       panel.classList.remove("is-swipe-left", "is-swipe-right", "is-swipe-current");
-      watchPanelCascadeEnd(panel);
+      watchPanelCascadeEnd(panel, { startCap: true });
     });
   };
 
