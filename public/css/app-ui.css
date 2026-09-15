@@ -1679,7 +1679,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: none;
+    transform: translateZ(0);
   }
 }
 @keyframes t-stagger-line-in {
@@ -1689,7 +1689,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: none;
+    transform: translateZ(0);
   }
 }
 @keyframes sched-completed-row-in {
@@ -1699,7 +1699,7 @@ html.sched-page #root::-webkit-scrollbar,
   }
   100% {
     opacity: 1;
-    transform: none;
+    transform: translateZ(0);
   }
 }
 @keyframes sched-live-card-in {
