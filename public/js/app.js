@@ -1,7 +1,7 @@
 import { sendBotEvent, updateBotSubscription, verifyAuthWithBot, botRequest, BotApiError } from "./push.js";
 import { planPairSwap, planPairInsert } from "./pair-moves.js";
 import { bindPairDrag } from "./pair-drag.js";
-import { bindDaySwipe } from "./day-swipe.js?v=2026-09-15.swipe-cascade-once";
+import { bindDaySwipe } from "./day-swipe.js";
 import { isVacancy, lessonType, isSlotVisible } from "./lesson-types.js";
 import { TelegramLogin } from "./telegram-auth.js";
 import { authButtonHtml } from "./telegram-auth-ui.js";
@@ -1050,9 +1050,7 @@ function setScene(html, direction) {
       window.clearTimeout(sceneOutTimer);
       sceneOutTimer = null;
     }
-    /* No animation.cancel()/finish() here — swipe finish layers and any
-       in-flight CSS cascades must not be reset. Swipe commits use motion-lite
-       and only replace live HTML under the covering panel. */
+    old.getAnimations().forEach((a) => a.cancel());
     old.classList.remove("is-leaving", "is-entering");
     old.removeAttribute("data-direction");
     old.style.cssText = "";
@@ -2352,7 +2350,7 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      /* Cascade already armed on the parked panel instance — never re-arm live. */
+      // The neighbour has already slid into place: do not play a second entrance.
       holdMotionLite();
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });
