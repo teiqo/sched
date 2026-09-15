@@ -101,6 +101,10 @@ export function bindDaySwipe({
       return;
     }
 
+    /* Detach the controller ref only. Keep the same track + transform in the
+       DOM so the incoming panel stays where the settle left it. Removing
+       siblings or clearing transform reflows the flex track and aborts the
+       in-flight t-row-in cascade (pairs 3+ look cut off). */
     const layer = carousel;
     carousel = null;
     carouselDate = null;
@@ -108,19 +112,21 @@ export function bindDaySwipe({
     carouselWidth = 0;
 
     [...layer.children].forEach((child) => {
-      if (!child.classList.contains("is-entering")) child.remove();
+      if (child.classList.contains("is-entering")) return;
+      child.style.visibility = "hidden";
+      child.style.pointerEvents = "none";
+      child.setAttribute("aria-hidden", "true");
     });
 
-    /* In-place class swap — must remain a direct child of #scene. */
-    layer.className = "sched-cascade-finish";
+    layer.classList.add("sched-cascade-finish");
+    layer.classList.remove("is-active", "is-settling", "is-warmed");
     layer.setAttribute("aria-hidden", "true");
     layer.inert = true;
-    layer.style.removeProperty("transform");
+    layer.style.pointerEvents = "none";
     layer.style.removeProperty("transition-duration");
-    layer.style.removeProperty("--blocked-reveal");
+    /* Keep inline transform — do not removeProperty("transform"). */
 
     entering.forEach((panel) => {
-      panel.classList.remove("is-swipe-left", "is-swipe-right", "is-swipe-current");
       watchPanelCascadeEnd(panel);
     });
   };

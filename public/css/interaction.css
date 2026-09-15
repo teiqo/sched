@@ -1031,25 +1031,21 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   position: relative;
 }
 .sched-cascade-finish {
+  /* Still a 3-panel flex track with its settle transform — only parked. */
   position: absolute;
   z-index: 5;
   top: 0;
   left: 0;
-  display: block;
   width: 100%;
   min-height: 100%;
   opacity: 1;
   pointer-events: none;
-  transform: none !important;
   transition: none !important;
   will-change: auto;
-  contain: layout paint style;
 }
-.sched-cascade-finish .sched-swipe-panel.is-entering {
-  width: 100%;
-  min-width: 100%;
-  max-width: 100%;
-  flex: 0 0 100%;
+.sched-cascade-finish.sched-swipe-carousel {
+  /* Keep carousel display/flex from base rules; do not switch to block. */
+  z-index: 5;
 }
 .sched-swipe-carousel {
   z-index: 6;
