@@ -691,9 +691,12 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 :root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
   animation-play-state: paused !important;
 }
-/* Pair cascade on the live day must keep playing while the next swipe covers it. */
+/* Panel + live share one cascade clock; must keep playing under is-day-swiping
+   (global pause would freeze the panel and look like a forced cut on handoff). */
 :root.is-day-swiping #day-scene.is-entering,
-:root.is-day-swiping #day-scene.is-entering * {
+:root.is-day-swiping #day-scene.is-entering *,
+:root.is-day-swiping .sched-swipe-panel.is-entering,
+:root.is-day-swiping .sched-swipe-panel.is-entering * {
   animation-play-state: running !important;
 }
 /* Переходы внутри едущих слоёв не нужны, но подчёркивание дня в полоске
