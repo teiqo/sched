@@ -28,41 +28,6 @@ export function bindDaySwipe({
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
 
 
-  /* Cascade only on the incoming carousel panel (real CSS is-entering).
-     Live scene stays static after commit — never re-arms, so a new swipe
-     does not look like the animation “starting over”. */
-  let handoff = null;
-
-  const clearPanelEntering = (panel) => {
-    panel?.classList?.remove("is-entering");
-  };
-
-  const clearAllEntering = () => {
-    carousel?.querySelectorAll(".sched-swipe-panel.is-entering").forEach(clearPanelEntering);
-  };
-
-  const incomingCascadeAnims = () => {
-    const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-    if (!panel || typeof panel.getAnimations !== "function") return [];
-    return panel.getAnimations({ subtree: true }).filter((a) => a.playState !== "finished");
-  };
-
-  const startIncomingCascade = (direction) => {
-    if (!carousel || reduced() || !direction) return;
-    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
-    carousel.querySelectorAll(".sched-swipe-panel").forEach((panel) => {
-      const hit = panel.classList.contains(wanted) && !panel.classList.contains("is-blocked");
-      if (!hit) {
-        clearPanelEntering(panel);
-        return;
-      }
-      if (panel.classList.contains("is-entering")) return;
-      panel.classList.remove("is-entering");
-      void panel.offsetWidth;
-      panel.classList.add("is-entering");
-    });
-  };
-
   const setActive = value => {
     if (active === value) return;
     active = value;
@@ -199,8 +164,6 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      clearAllEntering();
-      handoff = null;
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -210,53 +173,12 @@ export function bindDaySwipe({
     setActive(false);
   };
 
-  const flushHandoff = () => {
-    if (!handoff) return false;
-    handoff = null;
-    clearTimeout(settleTimer);
-    settleTimer = null;
-    resetVisuals();
-    onFinish?.();
-    prewarm();
-    return true;
-  };
-
   const complete = (allowCommit = true) => {
-    /* Next swipe during hold: live day already committed — just free the gesture.
-       Do not arm a new live cascade (that restarted the animation). */
-    if (handoff) {
-      flushHandoff();
-      if (!gesture && !settling && !active) return;
-    }
-
     if (!gesture && !settling && !active) return;
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-
     if (target) onCommit(target);
-
-    /* Hold until panel CSS stagger finishes so pair 3/4 don’t pop; interruptible. */
-    if (target && !reduced()) {
-      const panel = carousel?.querySelector(".sched-swipe-panel.is-entering");
-      if (panel) {
-        const anims = incomingCascadeAnims();
-        gesture = null;
-        settling = null;
-        handoff = { target };
-        const token = target;
-        const once = () => {
-          if (!handoff || handoff.target !== token) return;
-          flushHandoff();
-        };
-        if (anims.length) {
-          Promise.all(anims.map((a) => a.finished.catch(() => {}))).then(once);
-        }
-        settleTimer = setTimeout(once, anims.length ? 1200 : 850);
-        return;
-      }
-    }
-
     resetVisuals();
     onFinish?.();
     prewarm();
@@ -315,11 +237,7 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
-    if (direction && g.cascadeDir !== direction) {
-      g.cascadeDir = direction;
-      startIncomingCascade(direction);
-    }
+    const direction = dx < 0 ? 1 : -1;
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
