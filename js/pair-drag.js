@@ -286,8 +286,6 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
   const onTouchCancel = () => finish(false);
   const editorMode = () => document.documentElement.dataset.editorMode === 'true';
   const sourceFor = target => {
-    /* Зажатие кнопки замены не должно включать перенос пары */
-    if (target.closest('.lesson-swap-btn')) return null;
     const row = target.closest('.agenda-row[data-row-n], .live-lesson-card[data-row-n]');
     if (!row || row.classList.contains('is-cancelled')) return null;
     /* В редакторе ручка — кнопка замены, у обычного пользователя — кнопка предложки.
@@ -295,7 +293,7 @@ export function bindPairDrag({ scene, slotsForDate, renderRow, onSwap, onReorder
     const selector = editorMode() ? '.lesson-swap-btn[data-act="swap"]' : '.lesson-suggest-btn[data-act="suggest"]';
     const handle = target.closest(selector);
     if (!handle && target.closest('button, a, input, textarea, select')) return null;
-    const button = row.querySelector(selector) || row.querySelector('.lesson-suggest-btn[data-act="suggest"], .lesson-swap-btn[data-act="swap"]');
+    const button = row.querySelector(selector);
     return button ? { row, handle: Boolean(handle), date: button.dataset.date, n: Number(button.dataset.n) } : null;
   };
   scene.addEventListener('pointerdown', e => {
