@@ -3099,9 +3099,6 @@ function getTourSwapTarget() {
         const card = btn.closest(".live-lesson-card, .agenda-row") || row;
         return { btn, row: card, n: targetN };
       }
-      if (row && row.getBoundingClientRect().height > 0) {
-        return { btn: row, row, n: targetN };
-      }
     }
   }
 
@@ -3164,9 +3161,11 @@ function computeTourGeometry(target) {
     height = size;
     spotRadius = Math.round(size / 2);
   } else if (basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR) {
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const size = Math.round(Math.max(rect.width, rect.height) + 10);
+    const icon = visualTarget.querySelector?.("svg") || visualTarget;
+    const iconRect = icon.getBoundingClientRect();
+    const cx = iconRect.left + iconRect.width / 2;
+    const cy = iconRect.top + iconRect.height / 2;
+    const size = 36;
     left = Math.round(cx - size / 2);
     top = Math.round(cy - size / 2);
     width = size;
@@ -3416,6 +3415,7 @@ function updateBasicsTourSpotlight() {
   }
   const { left, top, width, height, spotRadius } = computeTourGeometry(target);
   if (spotlight) {
+    spotlight.classList.toggle("is-tight", basicsTourStep === TOUR_STEP_SWAP || basicsTourStep === TOUR_STEP_ADD_PAIR);
     spotlight.style.visibility = "visible";
     spotlight.style.setProperty("--tour-radius", `${spotRadius}px`);
     spotlight.style.borderRadius = `${spotRadius}px`;
@@ -4665,7 +4665,7 @@ function closeSheetAnimated(elOrId, onComplete, immediate = false) {
     if (onComplete) onComplete();
   };
   backdrop.addEventListener("transitionend", finish, { once: true });
-  setTimeout(finish, 420);
+  setTimeout(finish, 450);
 }
 
 function bindSheetKeyboard(backdrop, sheet) {
@@ -4879,7 +4879,12 @@ function openSuggestSheet(dIso, n) {
   document.body.appendChild(backdrop);
   const sheet = backdrop.firstElementChild;
   bindSheetKeyboard(backdrop, sheet);
-  window.requestAnimationFrame(() => backdrop.classList.add("is-open"));
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      backdrop.classList.add("is-open");
+      updateBasicsTourSpotlight();
+    });
+  });
 
   const head = title => `<div class="sched-replace-head"><strong id="suggest-title">${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span></div>`;
   const option = (mark, title, hint, attrs) => `<button class="sched-move-target" type="button" ${attrs}>
