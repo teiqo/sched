@@ -2,10 +2,10 @@
 $Host.UI.RawUI.WindowTitle = "Обновление бота sched (AlwaysData)"
 
 # Можно переопределить перед запуском:
-#   $env:SCHED_SSH = "gan13don@ssh-gan13don.alwaysdata.net"
+#   $env:SCHED_SSH = "sched@ssh-sched.alwaysdata.net"
 #   $env:SCHED_REMOTE_BOT = "~/www/schedbot/bot"
 #   $env:SCHED_REMOTE_VENV = "~/www/schedbot/.venv/bin/python"
-$SshTarget = if ($env:SCHED_SSH) { $env:SCHED_SSH } else { "gan13don@ssh-gan13don.alwaysdata.net" }
+$SshTarget = if ($env:SCHED_SSH) { $env:SCHED_SSH } else { "sched@ssh-sched.alwaysdata.net" }
 $RemoteBot = if ($env:SCHED_REMOTE_BOT) { $env:SCHED_REMOTE_BOT } else { "~/www/schedbot/bot" }
 $RemotePython = if ($env:SCHED_REMOTE_VENV) { $env:SCHED_REMOTE_VENV } else { "~/www/schedbot/.venv/bin/python" }
 $RepoRaw = "https://raw.githubusercontent.com/teiqo/sched/main/bot"
@@ -48,8 +48,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "========================================================" -ForegroundColor Green
     Write-Host "  Готово! Файлы бота обновлены на сервере." -ForegroundColor Green
-    Write-Host "  Перезапусти сайт: AlwaysData -> Web -> Sites (аккаунт gan13don)" -ForegroundColor Green
-    Write-Host "  Проверка: https://sched.alwaysdata.net/sched-bot/ (файлы на gan13don)" -ForegroundColor Green
+    Write-Host "  Перезапусти сайт: AlwaysData -> Web -> Sites (аккаунт sched)" -ForegroundColor Green
+    Write-Host "  Проверка: https://sched.alwaysdata.net/sched-bot/" -ForegroundColor Green
     Write-Host "========================================================" -ForegroundColor Green
     Write-Host ""
 } else {
