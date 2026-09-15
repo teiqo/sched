@@ -1,7 +1,7 @@
 import { sendBotEvent, updateBotSubscription, verifyAuthWithBot, botRequest, BotApiError } from "./push.js";
 import { planPairSwap, planPairInsert } from "./pair-moves.js";
 import { bindPairDrag } from "./pair-drag.js";
-import { bindDaySwipe } from "./day-swipe.js";
+import { bindDaySwipe } from "./day-swipe.js?v=2026-09-15.swipe-cascade-once";
 import { isVacancy, lessonType, isSlotVisible } from "./lesson-types.js";
 import { TelegramLogin } from "./telegram-auth.js";
 import { authButtonHtml } from "./telegram-auth-ui.js";
@@ -2341,7 +2341,7 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      // The neighbour has already slid into place: do not play a second entrance.
+      /* Cascade already armed on the parked panel instance — never re-arm live. */
       holdMotionLite();
       daySwipeRenderPending = false;
       selectDate(d, null, { fromSwipe: true });

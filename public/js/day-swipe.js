@@ -2,7 +2,13 @@
    The previous implementation moved the live schedule and a separately-created
    preview. On iOS Safari those two layers could be painted on different frames.
    This carousel prepares left/current/right panels ahead of the gesture and
-   moves one compositor layer only. */
+   moves one compositor layer only.
+
+   Pair cascade (phone): arm CSS is-entering EXACTLY ONCE on each incoming panel
+   DOM instance when that day appears during the swipe. On commit, park that same
+   animating panel in a finish layer (no cancel/reflow/re-arm). Next swipe builds
+   a new carousel and never touches already-running cascades. Live #day-scene is
+   never armed — one animation source only. */
 export function bindDaySwipe({
   scene, stage, strip, selection, canStart, getDate, minDate, addDays,
   renderDay, onCommit, onActiveChange, onFinish, contentKey,
@@ -26,6 +32,87 @@ export function bindDaySwipe({
   const selectedIndex = () => Number(strip.dataset.selectedIndex) || 0;
   const selectionOffset = progress =>
     Math.max(0, Math.min(6, selectedIndex() + progress)) * 100;
+
+  /* Finishing cascade panels stay under #scene until animationend — independent
+     of the active gesture. Never cancel their CSS animations. Never reparent an
+     animating subtree (that would restart keyframes). */
+  const watchPanelCascadeEnd = (panel) => {
+    if (!panel || panel.dataset.cascadeWatch === "1") return;
+    panel.dataset.cascadeWatch = "1";
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      panel.removeEventListener("animationend", onAnimEnd);
+      /* Class removal after the cascade: fill:both already at rest; static CSS
+         keeps pairs visible (rule 11). No cancel()/finish()/currentTime. */
+      panel.classList.remove("is-entering");
+      const layer = panel.closest(".sched-cascade-finish");
+      if (layer && !layer.querySelector(".sched-swipe-panel.is-entering")) {
+        layer.remove();
+      }
+    };
+    const onAnimEnd = (event) => {
+      if (!panel.contains(event.target)) return;
+      const running = typeof panel.getAnimations === "function"
+        ? panel.getAnimations({ subtree: true }).filter((a) => a.playState === "running")
+        : [];
+      if (!running.length) finish();
+    };
+    panel.addEventListener("animationend", onAnimEnd);
+    /* Desktop setScene clears is-entering around 1200ms; match that hard cap. */
+    setTimeout(finish, 1300);
+  };
+
+  /* Arm once per concrete panel instance. No remove+reflow, no WAAPI. */
+  const armIncomingCascade = (direction) => {
+    if (!carousel || reduced() || !direction) return;
+    const wanted = direction > 0 ? "is-swipe-right" : "is-swipe-left";
+    const panel = carousel.querySelector(`.sched-swipe-panel.${wanted}`);
+    if (!panel || panel.classList.contains("is-blocked")) return;
+    if (panel.dataset.cascadeArmed === "1") return;
+    panel.dataset.cascadeArmed = "1";
+    panel.classList.add("is-entering");
+    watchPanelCascadeEnd(panel);
+  };
+
+  /* Promote in place: reclassify the same carousel shell, drop non-entering
+     siblings, keep is-entering panel where it is (no appendChild reparent). */
+  const parkEnteringCascades = () => {
+    if (!carousel) return;
+    const entering = [...carousel.querySelectorAll(".sched-swipe-panel.is-entering")];
+    if (!entering.length) {
+      carousel.remove();
+      carousel = null;
+      carouselDate = null;
+      carouselKey = null;
+      carouselWidth = 0;
+      return;
+    }
+
+    const layer = carousel;
+    carousel = null;
+    carouselDate = null;
+    carouselKey = null;
+    carouselWidth = 0;
+
+    [...layer.children].forEach((child) => {
+      if (!child.classList.contains("is-entering")) child.remove();
+    });
+
+    /* In-place class swap — must remain a direct child of #scene. */
+    layer.className = "sched-cascade-finish";
+    layer.setAttribute("aria-hidden", "true");
+    layer.inert = true;
+    layer.style.removeProperty("transform");
+    layer.style.removeProperty("transition-duration");
+    layer.style.removeProperty("--blocked-reveal");
+
+    entering.forEach((panel) => {
+      panel.classList.remove("is-swipe-left", "is-swipe-right", "is-swipe-current");
+      watchPanelCascadeEnd(panel);
+    });
+  };
 
   const setActive = value => {
     if (active === value) return;
@@ -68,6 +155,7 @@ export function bindDaySwipe({
   };
 
   const removeCarousel = () => {
+    /* Only the idle/active track — never finish-layer panels mid-cascade. */
     carousel?.remove();
     carousel = null;
     carouselDate = null;
@@ -153,7 +241,7 @@ export function bindDaySwipe({
     frameHandle = null;
   };
 
-  const resetVisuals = () => {
+  const resetVisuals = ({ park = false } = {}) => {
     clearTimeout(settleTimer);
     settleTimer = null;
     stopFrame();
@@ -163,11 +251,20 @@ export function bindDaySwipe({
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
     if (carousel) {
-      carousel.classList.remove("is-active", "is-settling");
-      carousel.classList.add("is-warmed");
-      carousel.style.removeProperty("transition-duration");
-      carousel.style.removeProperty("--blocked-reveal");
-      carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
+      if (park) {
+        parkEnteringCascades();
+      } else {
+        /* Abandoned peek: drop is-entering class only (no getAnimations cancel).
+           Panel instance is gone on next rebuild; armed flag dies with it. */
+        carousel.querySelectorAll(".sched-swipe-panel.is-entering").forEach((panel) => {
+          panel.classList.remove("is-entering");
+        });
+        carousel.classList.remove("is-active", "is-settling");
+        carousel.classList.add("is-warmed");
+        carousel.style.removeProperty("transition-duration");
+        carousel.style.removeProperty("--blocked-reveal");
+        carousel.style.transform = `translate3d(${-carouselWidth}px, 0, 0)`;
+      }
     }
     setActive(false);
   };
@@ -177,10 +274,27 @@ export function bindDaySwipe({
     const pending = settling;
     const target = allowCommit && pending?.target &&
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
-    resetVisuals();
-    if (target) onCommit(target);
+
+    if (target) {
+      /* Park first so the same panel keeps cascading while live updates under it. */
+      clearTimeout(settleTimer);
+      settleTimer = null;
+      stopFrame();
+      gesture = null;
+      settling = null;
+      scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
+      strip.classList.remove("is-swipe-linked", "is-swipe-settling");
+      selection.style.removeProperty("transform");
+      parkEnteringCascades();
+      setActive(false);
+      onCommit(target);
+      onFinish?.();
+      prewarm();
+      return;
+    }
+
+    resetVisuals({ park: false });
     onFinish?.();
-    // The selected date may have changed synchronously in onCommit.
     prewarm();
   };
 
@@ -209,6 +323,7 @@ export function bindDaySwipe({
       visual: 0,
       paintTime: 0,
       blocked: false,
+      cascadeDir: 0,
     };
   }, { passive: true });
 
@@ -237,10 +352,19 @@ export function bindDaySwipe({
     if (g.axis !== "x") return;
     if (event.cancelable) event.preventDefault();
 
-    const direction = dx < 0 ? 1 : -1;
+    const direction = dx < 0 ? 1 : dx > 0 ? -1 : 0;
     g.blocked = direction < 0 && addDays(g.date, -1) < minDate();
     const limited = Math.sign(dx) * Math.min(Math.abs(dx), g.width);
     g.target = g.blocked ? limited * 0.42 : limited;
+
+    /* Cascade starts exactly once per new day instance when it appears during
+       the swipe — not after settle. Reversing arms the other panel once; never
+       restarts an already-armed panel. */
+    if (direction && !g.blocked && g.cascadeDir !== direction) {
+      g.cascadeDir = direction;
+      armIncomingCascade(direction);
+    }
+
     requestPaint();
   }, { passive: false });
 
@@ -260,6 +384,10 @@ export function bindDaySwipe({
     const currentTrackX = -g.width + visible;
     const distance = Math.abs(destination - currentTrackX);
     const duration = reduced() ? 0 : Math.round(Math.min(300, Math.max(160, 125 + distance * 0.38)));
+
+    /* Ensure the committed incoming day is armed if the fling was so fast that
+       touchmove barely reported a direction (still once-only via dataset). */
+    if (commit && direction) armIncomingCascade(direction);
 
     carousel.style.transform = `translate3d(${currentTrackX.toFixed(2)}px, 0, 0)`;
     carousel.getBoundingClientRect();

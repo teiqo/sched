@@ -691,6 +691,14 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 :root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
   animation-play-state: paused !important;
 }
+/* Incoming panel cascade must keep playing under is-day-swiping (global pause
+   would freeze pairs and look like a cut). Live #day-scene is never armed. */
+:root.is-day-swiping .sched-swipe-panel.is-entering,
+:root.is-day-swiping .sched-swipe-panel.is-entering *,
+:root.is-day-swiping .sched-cascade-finish .sched-swipe-panel.is-entering,
+:root.is-day-swiping .sched-cascade-finish .sched-swipe-panel.is-entering * {
+  animation-play-state: running !important;
+}
 /* Переходы внутри едущих слоёв не нужны, но подчёркивание дня в полоске
    продолжает доводиться своим переходом — его не трогаем. */
 :root.is-day-swiping :is(#stage, .sched-swipe-peek) * {
@@ -944,6 +952,90 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 .sched-days-scene.is-carousel-swiping #day-scene {
   visibility: hidden !important;
 }
+/* Keep live covered while a parked panel is still cascading. */
+.sched-days-scene:has(.sched-cascade-finish .sched-swipe-panel.is-entering) #stage,
+.sched-days-scene:has(.sched-cascade-finish .sched-swipe-panel.is-entering) #day-scene {
+  visibility: hidden !important;
+}
+
+/* Phone day-swipe: same pair cascade as desktop (#stage .sched-active-day-scene.is-entering).
+   Only animation* is set — never opacity/transform !important (that kills keyframes).
+   editor-mode already spares .sched-swipe-panel.is-entering children. */
+.sched-swipe-panel.is-entering :is(.live-host, .live-lesson-card),
+.sched-cascade-finish .sched-swipe-panel.is-entering :is(.live-host, .live-lesson-card) {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
+  animation-delay: 35ms !important;
+}
+.sched-swipe-panel.is-entering .agenda-list .agenda-row,
+.sched-cascade-finish .sched-swipe-panel.is-entering .agenda-list .agenda-row {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 70ms) * var(--row-i, 0)) !important;
+}
+.sched-swipe-panel.is-entering .agenda-list .agenda-break,
+.sched-cascade-finish .sched-swipe-panel.is-entering .agenda-list .agenda-break {
+  animation: sched-break-fade-in var(--duration-fast, 0.35s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
+  animation-delay: calc(45ms + var(--duration-stagger, 70ms) * var(--row-i, 0)) !important;
+}
+.sched-swipe-panel.is-entering .completed-lessons,
+.sched-cascade-finish .sched-swipe-panel.is-entering .completed-lessons {
+  animation: t-row-in var(--duration-fast, 0.4s) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both !important;
+  animation-delay: 25ms !important;
+}
+.sched-swipe-panel.is-entering .completed-lessons:not(.is-expanding) .agenda-row,
+.sched-cascade-finish .sched-swipe-panel.is-entering .completed-lessons:not(.is-expanding) .agenda-row {
+  animation: none !important;
+}
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block,
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block {
+  animation: sched-future-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(1),
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(1) { animation-delay: 50ms !important; }
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(2),
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(2) { animation-delay: 110ms !important; }
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(3),
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(3) { animation-delay: 170ms !important; }
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(4),
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(4) { animation-delay: 230ms !important; }
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(5),
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(5) { animation-delay: 290ms !important; }
+.sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 6),
+.sched-cascade-finish .sched-swipe-panel.is-entering .sched-future-days > .sched-day-block:nth-of-type(n + 6) { animation-delay: 350ms !important; }
+.sched-swipe-panel.is-entering .agenda-break-chip,
+.sched-cascade-finish .sched-swipe-panel.is-entering .agenda-break-chip {
+  transform: translate3d(-50%, -50%, 0) !important;
+}
+
+/* Parked mid-cascade days from prior swipes — cover live until cascade ends.
+   Former carousel reclassified in place (no reparent → no animation restart). */
+.sched-days-scene {
+  position: relative;
+}
+.sched-cascade-finish {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  min-height: 100%;
+  opacity: 1;
+  pointer-events: none;
+  transform: none !important;
+  transition: none !important;
+  will-change: auto;
+  contain: layout paint style;
+}
+.sched-cascade-finish .sched-swipe-panel.is-entering {
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  flex: 0 0 100%;
+}
+.sched-swipe-carousel {
+  z-index: 6;
+}
+
 .sched-swipe-panel.is-blocked {
   min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
   display: grid;
