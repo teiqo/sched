@@ -1144,6 +1144,48 @@ function setScene(html, direction) {
 
 
 
+
+let swipeCascadeGen = 0;
+
+function cancelSwipePairCascade() {
+  swipeCascadeGen += 1;
+  const target = $("#day-scene");
+  if (!target) return;
+  if (!target.classList.contains("is-entering")) return;
+  /* Only clear swipe-driven enters (no data-direction scene FLIP). */
+  if (target.getAttribute("data-direction")) return;
+  target.classList.remove("is-entering");
+  if (sceneTimer !== null) {
+    window.clearTimeout(sceneTimer);
+    sceneTimer = null;
+  }
+}
+
+/* Arm cascade on the live day WHILE the swipe carousel still covers #stage,
+   so the first painted frame after teardown is already mid-enter — no blink,
+   no second transition, no teleport. */
+function armSwipePairCascade() {
+  const target = $("#day-scene");
+  if (!target) return;
+  if (state.perfMode) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  swipeCascadeGen += 1;
+  const gen = swipeCascadeGen;
+  target.classList.remove("is-entering", "is-leaving");
+  target.removeAttribute("data-direction");
+  void target.offsetWidth;
+  target.classList.add("is-entering");
+  if (sceneTimer !== null) {
+    window.clearTimeout(sceneTimer);
+    sceneTimer = null;
+  }
+  sceneTimer = window.setTimeout(() => {
+    if (gen !== swipeCascadeGen) return;
+    target.classList.remove("is-entering");
+    sceneTimer = null;
+  }, 1200);
+}
+
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2333,15 +2375,21 @@ function bindEvents() {
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
     contentKey: () => sceneRevision,
-    onActiveChange: active => { daySwipeActive = active; },
+    onActiveChange: active => {
+      daySwipeActive = active;
+      /* Next fling wins: drop any in-flight pair cascade immediately. */
+      if (active) cancelSwipePairCascade();
+    },
     onCommit: d => {
-      /* Must update live HTML even while the carousel is still up — otherwise
-         teardown flashes the previous day for a frame (fast-fling teleport). */
+      /* 1) Update live HTML under the covering carousel
+         2) Arm CSS pair cascade before the stage is shown
+         3) day-swipe then tears the carousel down — first paint is the cascade */
       daySwipeRenderPending = false;
       const held = daySwipeActive;
       daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
       daySwipeActive = held;
+      armSwipePairCascade();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
