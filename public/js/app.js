@@ -1146,33 +1146,6 @@ function setScene(html, direction) {
 
 
 
-let swipeCascadeGen = 0;
-
-/* Arm the real desktop CSS cascade on #day-scene while the carousel still covers
-   the stage. First painted frame after reveal is already cascading — no blink.
-   Never cancel this when the user starts another swipe; the carousel just covers it. */
-function armSwipePairCascade() {
-  const target = $("#day-scene");
-  if (!target) return;
-  if (state.perfMode) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  swipeCascadeGen += 1;
-  const gen = swipeCascadeGen;
-  target.classList.remove("is-entering", "is-leaving");
-  target.removeAttribute("data-direction");
-  void target.offsetWidth;
-  target.classList.add("is-entering");
-  if (sceneTimer !== null) {
-    window.clearTimeout(sceneTimer);
-    sceneTimer = null;
-  }
-  sceneTimer = window.setTimeout(() => {
-    if (gen !== swipeCascadeGen) return;
-    target.classList.remove("is-entering");
-    sceneTimer = null;
-  }, 1200);
-}
-
 function renderStrip() {
   const strip = $("#strip");
   const nextArrow = $("#next-week");
@@ -2364,14 +2337,14 @@ function bindEvents() {
     contentKey: () => sceneRevision,
     onActiveChange: active => { daySwipeActive = active; },
     onCommit: d => {
-      /* Sync live day under the carousel, arm real CSS cascade, then reveal.
-         Next swipe must not cancel is-entering — only cover it. */
+      /* Sync live HTML under the carousel only — NO live is-entering.
+         Cascade already played on the incoming panel; restarting here felt like
+         the animation “starting over” on every swipe. */
       daySwipeRenderPending = false;
       const held = daySwipeActive;
       daySwipeActive = false;
       selectDate(d, null, { fromSwipe: true });
       daySwipeActive = held;
-      armSwipePairCascade();
     },
     onFinish: () => {
       if (daySwipeRenderPending) {
