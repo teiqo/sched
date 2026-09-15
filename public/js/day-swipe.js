@@ -40,44 +40,28 @@ export function bindDaySwipe({
     if (!panel || panel.dataset.cascadeWatch === "1") return;
     panel.dataset.cascadeWatch = "1";
     let done = false;
-
-    const cascadeWaitMs = () => {
-      let maxI = 0;
-      let counted = 0;
-      panel.querySelectorAll(".agenda-row, .live-lesson-card, .completed-lessons, .agenda-break").forEach((el) => {
-        counted += 1;
-        const attr = el.getAttribute("style") || "";
-        const match = /--row-i\s*:\s*([0-9.]+)/.exec(attr);
-        if (match) maxI = Math.max(maxI, Number(match[1]));
-        else maxI = Math.max(maxI, counted - 1);
-      });
-      /* Full PC stagger budget from the moment we PARK (cascade already
-         running from arm). Floor 1400ms so slow swipes never under-wait. */
-      return Math.max(1400, 45 + 70 * maxI + 400 + 200);
-    };
-
     const finish = () => {
       if (done) return;
-      /* Only tear down after park. If we somehow fire early, keep waiting. */
-      const layer = panel.closest(".sched-cascade-finish");
-      if (!layer) {
-        setTimeout(finish, 250);
-        return;
-      }
       done = true;
-      const root = panel.closest(".sched-days-scene") || scene;
-      const still = [...layer.querySelectorAll(".sched-swipe-panel.is-entering")]
-        .filter((node) => node !== panel);
-      if (!still.length) {
-        root.classList.add("is-swipe-handoff");
+      panel.removeEventListener("animationend", onAnimEnd);
+      /* Class removal after the cascade: fill:both already at rest; static CSS
+         keeps pairs visible (rule 11). No cancel()/finish()/currentTime. */
+      panel.classList.remove("is-entering");
+      const layer = panel.closest(".sched-cascade-finish");
+      if (layer && !layer.querySelector(".sched-swipe-panel.is-entering")) {
         layer.remove();
-        requestAnimationFrame(() => root.classList.remove("is-swipe-handoff"));
-      } else {
-        panel.classList.remove("is-entering");
       }
     };
-
-    setTimeout(finish, cascadeWaitMs());
+    const onAnimEnd = (event) => {
+      if (!panel.contains(event.target)) return;
+      const running = typeof panel.getAnimations === "function"
+        ? panel.getAnimations({ subtree: true }).filter((a) => a.playState === "running")
+        : [];
+      if (!running.length) finish();
+    };
+    panel.addEventListener("animationend", onAnimEnd);
+    /* Desktop setScene clears is-entering around 1200ms; match that hard cap. */
+    setTimeout(finish, 1300);
   };
 
   /* Arm once per concrete panel instance. No remove+reflow, no WAAPI. */
@@ -89,9 +73,7 @@ export function bindDaySwipe({
     if (panel.dataset.cascadeArmed === "1") return;
     panel.dataset.cascadeArmed = "1";
     panel.classList.add("is-entering");
-    /* Do NOT start the finish timer here — a slow gesture outlives the
-       stagger budget and watch used to strip is-entering pre-park, so
-       pairs 3+ lost t-row-in and popped in. Timer starts in park only. */
+    watchPanelCascadeEnd(panel);
   };
 
   /* Promote in place: reclassify the same carousel shell, drop non-entering
@@ -108,10 +90,6 @@ export function bindDaySwipe({
       return;
     }
 
-    /* Detach the controller ref only. Keep the same track + transform in the
-       DOM so the incoming panel stays where the settle left it. Removing
-       siblings or clearing transform reflows the flex track and aborts the
-       in-flight t-row-in cascade (pairs 3+ look cut off). */
     const layer = carousel;
     carousel = null;
     carouselDate = null;
@@ -119,21 +97,19 @@ export function bindDaySwipe({
     carouselWidth = 0;
 
     [...layer.children].forEach((child) => {
-      if (child.classList.contains("is-entering")) return;
-      child.style.visibility = "hidden";
-      child.style.pointerEvents = "none";
-      child.setAttribute("aria-hidden", "true");
+      if (!child.classList.contains("is-entering")) child.remove();
     });
 
-    layer.classList.add("sched-cascade-finish");
-    layer.classList.remove("is-active", "is-settling", "is-warmed");
+    /* In-place class swap — must remain a direct child of #scene. */
+    layer.className = "sched-cascade-finish";
     layer.setAttribute("aria-hidden", "true");
     layer.inert = true;
-    layer.style.pointerEvents = "none";
+    layer.style.removeProperty("transform");
     layer.style.removeProperty("transition-duration");
-    /* Keep inline transform — do not removeProperty("transform"). */
+    layer.style.removeProperty("--blocked-reveal");
 
     entering.forEach((panel) => {
+      panel.classList.remove("is-swipe-left", "is-swipe-right", "is-swipe-current");
       watchPanelCascadeEnd(panel);
     });
   };
@@ -300,9 +276,7 @@ export function bindDaySwipe({
       dateKey(getDate()) === dateKey(pending.date) ? pending.target : null;
 
     if (target) {
-      /* Commit live UNDER the still-covering carousel first, then park the
-         cascading panel. Parking/removing before onCommit flashed the previous
-         day for a frame whenever the finish layer dropped. */
+      /* Park first so the same panel keeps cascading while live updates under it. */
       clearTimeout(settleTimer);
       settleTimer = null;
       stopFrame();
@@ -311,11 +285,9 @@ export function bindDaySwipe({
       scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
       strip.classList.remove("is-swipe-linked", "is-swipe-settling");
       selection.style.removeProperty("transform");
-      scene.classList.add("is-swipe-handoff");
+      parkEnteringCascades();
       setActive(false);
       onCommit(target);
-      parkEnteringCascades();
-      scene.classList.remove("is-swipe-handoff");
       onFinish?.();
       prewarm();
       return;
