@@ -19,6 +19,10 @@ const LOCAL_PREVIEW =
 const LOCAL_TG_KEY = "sched:local-telegram-demo:v1";
 const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const compactHeaderQuery = window.matchMedia("(max-width: 430px)");
+const CAT_EMOJIS = { angel: "🐱", sad: "😿", wave: "🐾", cool: "😼", ok: "😸" };
+const ASCII_CAT = ` /\\_/\\\n(=^･ω･^=)`;
+const ASCII_CAT_COMPACT = "(=^･ω･^=)";
+
 /* Базовая тема, акцент и градиентный акцент+ выбранного цвета. */
 const PALETTES = ["default", "accent", "accent-plus"];
 const DEFAULT_ACCENT = "#0A84FF";
@@ -277,8 +281,23 @@ function isSummer(d) {
   return m === 5 || m === 6 || m === 7;
 }
 
+function dayOffKey(dIso) {
+  return (state.group || DEFAULT_GROUP) + "|" + dIso + ":dayoff";
+}
+
+function isCustomDayOff(d) {
+  if (!d) return false;
+  const dIso = typeof d === "string" ? d : iso(d);
+  if (!dIso) return false;
+  const map = activeSwapMap();
+  const entry = map[dayOffKey(dIso)];
+  return Boolean(entry && !entry.deleted);
+}
+
 function isDayOff(d) {
-  return d.getDay() === 0 || isSummer(d);
+  const dt = typeof d === "string" ? dateFromIso(d) : d;
+  if (!dt) return false;
+  return dt.getDay() === 0 || isSummer(dt) || isCustomDayOff(dt);
 }
 
 function slotsForBase(d) {
@@ -646,15 +665,62 @@ function withBreaksHtml(slots, live, dIso, lastLessonN = null) {
 
 function emptyDayHtml(d) {
   if (!state.group) return `<div class="sched-empty-day sched-choose-group">${ICON_EMPTY}<strong>группа не выбрана</strong><span>выбери свою группу, чтобы увидеть пары</span><button type="button" data-act="choose-group">выбрать группу</button></div>`;
+  const dIso = iso(d);
+  const customOff = isCustomDayOff(d);
+  const sunday = d.getDay() === 0;
   const summer = isSummer(d);
-  const off = isDayOff(d);
-  const title = summer ? "каникулы" : off ? "выходной" : "пар нет";
+
+  if (customOff) {
+    const today = sameDay(d, startOfDay(currentDate()));
+    const note = today ? "сегодня отменили занятия" : "в этот день отменили занятия";
+    const role = myRole();
+    const canManage = role === "owner" || role === "editor";
+    return `<div class="sched-empty-day is-custom-day-off">
+      <pre class="sched-cat-ascii" aria-hidden="true">${ASCII_CAT}</pre>
+      <strong>выходной</strong>
+      <span>${note}</span>
+      ${canManage ? `<button class="sched-cat-restore-btn" type="button" data-act="toggle-day-off" data-date="${dIso}">вернуть занятия</button>` : ""}
+    </div>`;
+  }
+
+  if (sunday) {
+    return `<div class="sched-empty-day is-sunday-off">
+      <pre class="sched-cat-ascii" aria-hidden="true">${ASCII_CAT}</pre>
+      <strong>выходной</strong>
+      <span>воскресенье — занятий нет</span>
+    </div>`;
+  }
+
+  const title = summer ? "каникулы" : "пар нет";
   const note = summer
     ? "лето — занятий нет"
-    : off
-      ? "воскресенье — занятий нет"
-      : `в этот день у ${groupName()} пар нет (${parityLabel(parityOf(d))} неделя)`;
+    : `в этот день у ${groupName()} пар нет (${parityLabel(parityOf(d))} неделя)`;
   return `<div class="sched-empty-day">${ICON_EMPTY}<strong>${title}</strong><span>${note}</span></div>`;
+}
+
+function dayActionsHtml(dIso) {
+  const d = dateFromIso(dIso);
+  const isSunday = d && d.getDay() === 0;
+  const isSummerDay = d && isSummer(d);
+  const role = myRole();
+  const canManage = (role === "owner" || role === "editor") && !isSunday && !isSummerDay;
+  const customOff = isCustomDayOff(dIso);
+  let out = "";
+  if (canManage) {
+    if (customOff) {
+      out += `<button class="sched-day-off-btn is-active" type="button" data-act="toggle-day-off" data-date="${dIso}"
+        aria-label="отменить выходной и вернуть пары" title="отменить выходной и вернуть пары">
+        <span class="sched-day-off-label">вернуть пары</span>
+      </button>`;
+    } else {
+      out += `<button class="sched-day-off-btn" type="button" data-act="toggle-day-off" data-date="${dIso}"
+        aria-label="сделать день выходным" title="сделать этот день выходным (отменить занятия)">
+        <span class="sched-day-off-label">сделать выходным</span>
+      </button>`;
+    }
+  }
+  out += dayRevertHtml(dIso);
+  return out;
 }
 
 function headingHtml(d, sub, primary = false) {
@@ -668,7 +734,7 @@ function headingHtml(d, sub, primary = false) {
       <h2 class="t-stagger-line t-stagger-line--1">${title}</h2>
       <span class="t-stagger-line t-stagger-line--2">${sub}${rel ? ` · ${rel}` : ""}</span>
     </div>
-    <div class="sched-day-actions">${dayRevertHtml(iso(d))}</div>
+    <div class="sched-day-actions">${dayActionsHtml(iso(d))}</div>
   </div>`;
 }
 
@@ -776,15 +842,18 @@ function dayHtml(d, withLive, future) {
   const live = withLive ? liveState(d) : null;
   const count = lessons.length;
   const today = sameDay(d, startOfDay(currentDate()));
-  const sub = count
-    ? `${count} ${plural(count, "пара", "пары", "пар")} · ${parityLabel(parityOf(d))} неделя`
-    : `${parityLabel(parityOf(d))} неделя`;
+  const customOff = isCustomDayOff(d);
+  const sub = customOff
+    ? (today ? "выходной · сегодня отменили занятия" : "выходной · занятия отменены")
+    : count
+      ? `${count} ${plural(count, "пара", "пары", "пар")} · ${parityLabel(parityOf(d))} неделя`
+      : `${parityLabel(parityOf(d))} неделя`;
   const isSunday = d.getDay() === 0;
-  const lastLessonN = (!isSunday && lessons.length) ? lessons[lessons.length - 1].n : null;
+  const lastLessonN = (!isSunday && !customOff && lessons.length) ? lessons[lessons.length - 1].n : null;
 
   let body;
   if (!count && (!state.windows || !rows.length)) {
-    body = emptyDayHtml(d) + (!isSunday ? addPairButtonHtml(dIso) : "");
+    body = emptyDayHtml(d) + (!isSunday && !customOff ? addPairButtonHtml(dIso) : "");
   } else if (!today || !withLive || future) {
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso, lastLessonN)}</div>` : "";
   } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
@@ -816,26 +885,40 @@ function weekHtml() {
     const lessons = all.filter((s) => !s.window);
     const rows = state.editorMode || state.windows ? all : lessons;
     const isSunday = d.getDay() === 0;
-    const lastLessonN = (!isSunday && lessons.length) ? lessons[lessons.length - 1].n : null;
-    days.push(`<div class="sched-day-block" data-day="${iso(d)}">
+    const customOff = isCustomDayOff(d);
+    const lastLessonN = (!isSunday && !customOff && lessons.length) ? lessons[lessons.length - 1].n : null;
+    days.push(`<div class="sched-day-block${customOff ? " is-day-off-block" : ""}" data-day="${iso(d)}">
       <div class="sched-day-heading">
         <div class="sched-day-heading-copy">
           <h2>${dayEntry(d).name}, ${d.getDate()} ${MONTHS[d.getMonth()]}</h2>
           <span>${
-            lessons.length
-              ? `${lessons.length} ${plural(lessons.length, "пара", "пары", "пар")}`
-              : "пар нет"
+            customOff
+              ? "выходной · отменили занятия"
+              : lessons.length
+                ? `${lessons.length} ${plural(lessons.length, "пара", "пары", "пар")}`
+                : "пар нет"
           }</span>
         </div>
         ${sameDay(d, startOfDay(currentDate())) ? '<span class="sched-week-badge">сегодня</span>' : ""}
-        <div class="sched-day-actions"></div>
+        <div class="sched-day-actions">${dayActionsHtml(iso(d))}</div>
       </div>
       ${
         lessons.length || (state.windows && rows.length)
           ? `<div class="agenda-list">${withBreaksHtml(rows, null, iso(d), lastLessonN)}</div>`
-          : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>${
-              isSummer(d) ? "каникулы" : isSunday ? "выходной" : "пар нет"
-            }</strong>${!isSunday ? addPairButtonHtml(iso(d)) : ""}</div>`
+          : customOff
+            ? `<div class="sched-empty-day compact is-custom-day-off">
+                <pre class="sched-cat-ascii is-compact" aria-hidden="true">${ASCII_CAT_COMPACT}</pre>
+                <strong>выходной</strong>
+                <span>отменили занятия</span>
+              </div>`
+            : isSunday
+              ? `<div class="sched-empty-day compact is-sunday-off">
+                  <pre class="sched-cat-ascii is-compact" aria-hidden="true">${ASCII_CAT_COMPACT}</pre>
+                  <strong>выходной</strong>
+                </div>`
+              : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>${
+                  isSummer(d) ? "каникулы" : "пар нет"
+                }</strong>${addPairButtonHtml(iso(d))}</div>`
       }
     </div>`);
   }
@@ -4171,7 +4254,9 @@ function bindExtra() {
       return;
     }
     const button = event.target.closest('[data-act="reset-day"]');
-    if (button) { event.preventDefault(); resetDaySwaps(button.dataset.date); }
+    if (button) { event.preventDefault(); resetDaySwaps(button.dataset.date); return; }
+    const dayOffBtn = event.target.closest('[data-act="toggle-day-off"]');
+    if (dayOffBtn) { event.preventDefault(); toggleDayOff(dayOffBtn.dataset.date); return; }
   });
 
   $("#aux-view").addEventListener("click", (e) => {
@@ -4732,7 +4817,8 @@ function revertSwapOperation(dIso, n, label = "возвращено как бы�
 
 function applyDayChanges(dIso, changes, label = "замена") {
   const keys = Object.keys(changes).filter(n => Number.isInteger(Number(n)) && Number(n) >= 1 && Number(n) <= 6);
-  if (!keys.length) return false;
+  const hasDayOff = "dayoff" in changes;
+  if (!keys.length && !hasDayOff) return false;
   if (state.editorMode && editorSession) {
     editorSession.history.push(cloneSwapMap(editorSession.draft));
     const updatedAt = Date.now();
@@ -4742,6 +4828,12 @@ function applyDayChanges(dIso, changes, label = "замена") {
       if (value === null) delete editorSession.draft[key];
       else editorSession.draft[key] = { ...value, updatedAt };
     });
+    if (hasDayOff) {
+      const key = dayOffKey(dIso);
+      const value = changes.dayoff;
+      if (value === null) delete editorSession.draft[key];
+      else editorSession.draft[key] = { ...value, updatedAt };
+    }
     return true;
   }
   const map = loadSwaps();
@@ -4755,6 +4847,17 @@ function applyDayChanges(dIso, changes, label = "замена") {
     const entry = { ...(value || { deleted: true }), updatedAt };
     if (keys.length > 1) { entry.operationId = operationId; entry.operationSize = keys.length; }
     map[key] = entry; entries[key] = entry;
+  }
+  if (hasDayOff) {
+    const key = dayOffKey(dIso);
+    const value = changes.dayoff;
+    if (value === null && !sharedSwapsEnabled()) {
+      delete map[key];
+    } else {
+      const entry = { ...(value || { deleted: true }), updatedAt };
+      map[key] = entry;
+      entries[key] = entry;
+    }
   }
   saveSwaps();
   if (Object.keys(entries).length) {
@@ -5437,6 +5540,7 @@ function openAddPairSheet(dIso) {
 
 /* Базовое расписание лежит в slotsForBase, а здесь накладываются замены. */
 function slotsFor(d) {
+  if (isCustomDayOff(d)) return [];
   const list = slotsForBase(d).slice();
   const map = activeSwapMap();
   const dIso = iso(d);
@@ -5532,10 +5636,38 @@ async function resetDaySwaps(dIso) {
   const prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   const changes = {};
   for (const [key, value] of Object.entries(activeSwapMap())) {
-    if (key.startsWith(prefix) && value && !value.deleted) changes[Number(key.slice(prefix.length))] = null;
+    if (key.startsWith(prefix) && value && !value.deleted) {
+      const suffix = key.slice(prefix.length);
+      if (suffix === "dayoff") {
+        changes.dayoff = null;
+      } else {
+        const n = Number(suffix);
+        if (Number.isInteger(n)) changes[n] = null;
+      }
+    }
   }
   if (!applyDayChanges(dIso, changes, "возвращено исходное расписание дня")) return;
   render(); toast("возвращены исходные пары только этого дня");
+}
+
+function toggleDayOff(dIso) {
+  if (!dIso) return false;
+  const role = myRole();
+  if (role !== "owner" && role !== "editor") {
+    toast("только владелец и редакторы могут делать день выходным");
+    return false;
+  }
+  const isOff = isCustomDayOff(dIso);
+  const changes = {
+    dayoff: isOff ? null : { dayOff: true, reason: "отменили занятия" },
+  };
+  const label = isOff ? "день снова рабочий" : "день сделан выходным";
+  const ok = applyDayChanges(dIso, changes, label);
+  if (ok) {
+    render();
+    toast(isOff ? "занятия возвращены" : "день сделан выходным (=^･ω･^=)");
+  }
+  return ok;
 }
 
 async function resetAllSwaps() {
@@ -6491,9 +6623,11 @@ function startTelegramLogin() {
 }
 
 function myRole() {
-  if (LOCAL_PREVIEW) return tgSession?.isLocalDemo ? "owner" : "anon";
+  if (LOCAL_PREVIEW) return (!tgSession || tgSession.isLocalDemo) ? "owner" : (tgSession.role || "anon");
   if (!tgSession || !tgSessionVerified) return "anon";
   if (tgSession.role === "owner" || tgSession.role === "editor") return tgSession.role;
+  if (TELEGRAM_OWNER_ID && String(tgSession.id) === TELEGRAM_OWNER_ID) return "owner";
+  if (TELEGRAM_ADMIN_IDS.length && TELEGRAM_ADMIN_IDS.includes(String(tgSession.id))) return "editor";
   return tgRoles.editors?.[String(tgSession.id)] ? "editor" : "user";
 }
 
@@ -6745,7 +6879,21 @@ function notifyCloudEvent(path, body) {
   const group = parts[0] || ""; // Только маршрутизация, в сообщение не выводится.
   const when = (parts[1] || "").split(":");
   const dIso = when[0] || "";
-  const n = Number(when[1]) || 0;
+  const suffix = when[1] || "";
+  if (suffix === "dayoff") {
+    const isDeleted = Boolean(body.deleted);
+    const action = type === "pending"
+      ? (isDeleted ? "предложили отменить выходной" : "предложили сделать день выходным")
+      : (isDeleted ? "выходной отменён" : "день объявлен выходным");
+    const quote = isDeleted
+      ? "<blockquote><b>занятия возвращены в расписание</b></blockquote>"
+      : "<blockquote><b>занятия отменены</b></blockquote>";
+    const text = `🐱 <b>${botHtml(botDate(dIso))}</b> ${action}\n\n${quote}`;
+    const table = isDeleted ? buildDayTablePayload(dIso) : null;
+    queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group, table }).catch(reportPushError);
+    return;
+  }
+  const n = Number(suffix) || 0;
   let original = null;
   try { original = slotsForBase(dateFromIso(dIso)).find(slot => slot.n === n) || null; } catch (_) {}
   const origLesson = original && !original.window && !original.empty && original.subject ? original : null;
@@ -6809,6 +6957,8 @@ if (typeof window !== "undefined") {
   window.closeSwapSheet = closeSwapSheet;
   window.closeSuggestSheet = closeSuggestSheet;
   window.encodeSwapKey = encodeSwapKey;
+  window.isCustomDayOff = isCustomDayOff;
+  window.toggleDayOff = toggleDayOff;
 }
 
 /* Единая точка записи: PUT с телом или DELETE (body === null). true = база приняла. */
@@ -7031,8 +7181,18 @@ async function publishSwapBatch(entries, label = "изменены пары") {
             ? (pending ? "предложили перенести пары" : "перенесли пары")
             : (pending ? "предложили изменить пары" : "изменили пары");
 
+      const dayOffItem = visibleList.find(([k]) => k.endsWith(":dayoff"));
       let text;
-      if (allDeleted) {
+      if (dayOffItem) {
+        const isDeleted = Boolean(dayOffItem[1].deleted);
+        const action = pending
+          ? (isDeleted ? "предложили отменить выходной" : "предложили сделать день выходным")
+          : (isDeleted ? "выходной отменён" : "день объявлен выходным");
+        const quote = isDeleted
+          ? "<blockquote><b>занятия возвращены в расписание</b></blockquote>"
+          : "<blockquote><b>занятия отменены</b></blockquote>";
+        text = `🐱 <b>${botHtml(botDate(date))}</b> ${action}\n\n${quote}`;
+      } else if (allDeleted) {
         const pairNums = visibleList.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
         const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
         text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))}</b> ${action} <b>(${pairsLabel})</b>`;
