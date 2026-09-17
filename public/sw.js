@@ -1,12 +1,13 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-15-v125-sched-rename-declutter";
+const CACHE = CACHE_PREFIX + "2026-09-18-v127-dayoff-sync";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./js/compat.js",
   "./js/config.js",
+  "./js/dates.js",
   "./js/app.js",
   "./js/schedule.js",
   "./js/push.js",

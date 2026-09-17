@@ -281,17 +281,38 @@ function isSummer(d) {
   return m === 5 || m === 6 || m === 7;
 }
 
-function dayOffKey(dIso) {
-  return (state.group || DEFAULT_GROUP) + "|" + dIso + ":dayoff";
+function dayOffKey(dIso, groupOverride) {
+  const g = groupOverride !== undefined ? groupOverride : (state.group || DEFAULT_GROUP);
+  return g + "|" + dIso + ":dayoff";
 }
 
-function isCustomDayOff(d) {
+function isCustomDayOff(d, groupOverride) {
   if (!d) return false;
   const dIso = typeof d === "string" ? d : iso(d);
   if (!dIso) return false;
   const map = activeSwapMap();
-  const entry = map[dayOffKey(dIso)];
-  return Boolean(entry && !entry.deleted);
+  if (!map || typeof map !== "object") return false;
+
+  const targetGroup = groupOverride !== undefined ? groupOverride : (state.group || DEFAULT_GROUP);
+  const directKey = targetGroup + "|" + dIso + ":dayoff";
+  const directEntry = map[directKey];
+  if (directEntry && !directEntry.deleted) return true;
+
+  const curGroup = String(targetGroup).trim().toLowerCase();
+  const suffix = "|" + dIso + ":dayoff";
+  let fallbackFound = false;
+  for (const k in map) {
+    if (k.endsWith(suffix)) {
+      const entry = map[k];
+      if (!entry || entry.deleted) continue;
+      const g = k.slice(0, -suffix.length).trim().toLowerCase();
+      if (!g || g === "*" || g === "all" || (curGroup && g === curGroup)) {
+        return true;
+      }
+      if (!curGroup) fallbackFound = true;
+    }
+  }
+  return fallbackFound;
 }
 
 function isDayOff(d) {
@@ -4858,6 +4879,23 @@ function applyDayChanges(dIso, changes, label = "замена") {
       map[key] = entry;
       entries[key] = entry;
     }
+    if (value === null) {
+      const suffix = "|" + dIso + ":dayoff";
+      const curGroup = (state.group || DEFAULT_GROUP).trim().toLowerCase();
+      for (const k in map) {
+        if (k.endsWith(suffix) && k !== key) {
+          const g = k.slice(0, -suffix.length).trim().toLowerCase();
+          if (!g || g === curGroup) {
+            if (!sharedSwapsEnabled()) delete map[k];
+            else {
+              const entry = { deleted: true, updatedAt };
+              map[k] = entry;
+              entries[k] = entry;
+            }
+          }
+        }
+      }
+    }
   }
   saveSwaps();
   if (Object.keys(entries).length) {
@@ -7967,6 +8005,12 @@ async function refreshTgSubscription() {
       for (const key of Object.keys(p)) if (typeof result.preferences[key] === 'boolean') p[key] = result.preferences[key];
       saveNotifPrefs();
     }
+    if (!state.group && result.group) {
+      state.group = result.group;
+      state.draftGroup = result.group;
+      save();
+      render();
+    }
     updateSubscriptionUi();
   } catch (error) { recordError('subscription-status', error.message); }
 }
@@ -8048,6 +8092,9 @@ function updateBellButton() {
 
 /* Текстовое описание записи замены для ленты. */
 function describeSwapForNotif(key, entry) {
+  if (key && key.endsWith(":dayoff")) {
+    return entry.deleted ? "отмена выходного (пары возвращены)" : "день объявлен выходным";
+  }
   var m = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
   var n = m ? m[2] : "";
   var what = "замена";
@@ -8063,7 +8110,12 @@ function describeSwapForNotif(key, entry) {
    Для чужой группы базовое расписание недоступно — возвращаем null
    и такую запись не фильтруем. */
 function daySwapSignature(group, dIso, map) {
-  if (group && group !== (state.group || DEFAULT_GROUP)) return null;
+  var curGroup = (state.group || DEFAULT_GROUP).trim().toLowerCase();
+  if (group && group.trim().toLowerCase() !== curGroup && group !== "*" && group !== "all") return null;
+  var prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
+  if (map && map[prefix + "dayoff"] && !map[prefix + "dayoff"].deleted) {
+    return "dayoff:" + (map[prefix + "dayoff"].updatedAt || 1);
+  }
   var base = [];
   try {
     base = slotsForBase(dateFromIso(dIso)) || [];
@@ -8071,7 +8123,6 @@ function daySwapSignature(group, dIso, map) {
     base = [];
   }
   if (!base.length) return null;
-  var prefix = (state.group || DEFAULT_GROUP) + "|" + dIso + ":";
   return base
     .map(function (slot) {
       var sw = map ? map[prefix + slot.n] : null;
@@ -8114,7 +8165,7 @@ function pushDayNotif(list, kind, prefixText) {
   if (!frags.length) return;
   var tones = {};
   list.forEach(function (item) {
-    var t = item.entry.deleted ? "reset" : item.entry.cancelled ? "cancel" : item.entry.moved ? "move" : "swap";
+    var t = item.entry.dayOff ? (item.entry.deleted ? "reset" : "cancel") : item.entry.deleted ? "reset" : item.entry.cancelled ? "cancel" : item.entry.moved ? "move" : "swap";
     tones[t] = true;
   });
   var toneKeys = Object.keys(tones);
@@ -8143,7 +8194,7 @@ function notifyAboutRemoteSwaps(remote) {
     firstRun = true;
   }
   var myId = tgSession ? String(tgSession.id) : null;
-  var gprefix = (state.group || DEFAULT_GROUP) + "|";
+  var curGroup = (state.group || DEFAULT_GROUP).trim().toLowerCase();
   var changed = false;
   var byDay = {};
   for (var key in remote) {
@@ -8155,9 +8206,11 @@ function notifyAboutRemoteSwaps(remote) {
     if (t <= prev) continue;
     seen[key] = t;
     changed = true;
-    if (firstRun || key.indexOf(gprefix) !== 0) continue;
+    if (firstRun) continue;
+    var g = key.split("|")[0].trim().toLowerCase();
+    if (g && curGroup && g !== curGroup && g !== "*" && g !== "all") continue;
     if (myId && String(entry.by || "") === myId) continue;
-    var dm = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
+    var dm = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+|dayoff)$/);
     if (!dm) continue;
     (byDay[dm[1]] = byDay[dm[1]] || []).push({ key: key, entry: entry });
   }
@@ -8304,6 +8357,26 @@ var NOTIF_ICONS = {
 /* Структурированный фрагмент дня для карточки уведомления/заявки.
    У отмены/сброса в облаке нет полей пары — берём её из базового расписания. */
 function buildNotifFrag(key, entry) {
+  if (key && key.endsWith(":dayoff")) {
+    const parts = key.split("|");
+    const dIso = (parts[1] || "").split(":")[0];
+    const isDeleted = Boolean(entry.deleted);
+    return {
+      d: dIso,
+      n: 0,
+      subject: isDeleted ? "занятия возвращены" : "отменили занятия",
+      teacher: "",
+      room: "",
+      cancelled: !isDeleted,
+      deleted: isDeleted,
+      moved: false,
+      self: false,
+      window: false,
+      before: null,
+      after: { subject: isDeleted ? "занятия возвращены" : "отменили занятия" },
+      dayOff: true,
+    };
+  }
   const m = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
   if (!m) return null;
   const dIso = m[1];
@@ -9299,11 +9372,11 @@ async function toggleMaintenanceMode(targetState) {
 
 (function startSharedSwaps() {
   if (!sharedSwapsEnabled()) return;
-  window.setTimeout(pullSharedSwaps, 1200);
+  window.setTimeout(pullSharedSwaps, 150);
   sharedSync.poll = window.setInterval(() => {
     pullSharedSwaps();
     refreshMaintenanceStatus();
-  }, 45000);
+  }, 30000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       pullSharedSwaps();
