@@ -289,7 +289,7 @@ body.is-tour-active .sched-tour-spotlight {
 
 body.is-tour-active .sched-tour-copy,
 #basics-tour .sched-tour-copy {
-  z-index: 10001 !important;
+  z-index: 10005 !important;
   opacity: 1 !important;
   filter: none !important;
   mix-blend-mode: normal !important;
@@ -301,9 +301,9 @@ body.is-tour-active .sched-tour-copy,
     inset 0 0 0 1px color-mix(in srgb, var(--sched-blue) 22%, var(--sched-separator)) !important;
 }
 
-/* No page veil from sheet backdrops during the tour. */
+/* Tour sheets stay above the 9999px dimming shadow so the sheet content is not dimmed. */
 body.is-tour-active .sched-replace-backdrop {
-  z-index: 5200 !important;
+  z-index: 10002 !important;
   background: transparent !important;
   opacity: 1 !important;
   filter: none !important;
@@ -314,12 +314,19 @@ body.is-tour-active .sched-replace-backdrop::before {
   background: transparent !important;
 }
 body.is-tour-active .sched-replace-sheet {
-  z-index: 5300 !important;
+  z-index: 10003 !important;
   opacity: 1 !important;
   filter: none !important;
   mix-blend-mode: normal !important;
   pointer-events: auto !important;
   box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45) !important;
+}
+
+.sched-tour-spotlight.is-sheet-mode > svg {
+  opacity: 0 !important;
+}
+.sched-tour-spotlight.is-sheet-mode {
+  background: transparent !important;
 }
 
 body.is-tour-roulette-active .sched-tour-spotlight,

@@ -19,9 +19,9 @@ const LOCAL_PREVIEW =
 const LOCAL_TG_KEY = "sched:local-telegram-demo:v1";
 const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const compactHeaderQuery = window.matchMedia("(max-width: 430px)");
-const CAT_EMOJIS = { angel: "🐱", sad: "😿", wave: "🐾", cool: "😼", ok: "😸" };
-const ASCII_CAT = ` /\\_/\\\n(=^･ω･^=)`;
-const ASCII_CAT_COMPACT = "(=^･ω･^=)";
+const CAT_EMOJIS = { angel: "", sad: "", wave: "", cool: "", ok: "" };
+const ASCII_CAT = "^-^";
+const ASCII_CAT_COMPACT = "^-^";
 
 /* Базовая тема, акцент и градиентный акцент+ выбранного цвета. */
 const PALETTES = ["default", "accent", "accent-plus"];
@@ -694,13 +694,10 @@ function emptyDayHtml(d) {
   if (customOff) {
     const today = sameDay(d, startOfDay(currentDate()));
     const note = today ? "сегодня отменили занятия" : "в этот день отменили занятия";
-    const role = myRole();
-    const canManage = role === "owner" || role === "editor";
     return `<div class="sched-empty-day is-custom-day-off">
       <pre class="sched-cat-ascii" aria-hidden="true">${ASCII_CAT}</pre>
       <strong>выходной</strong>
       <span>${note}</span>
-      ${canManage ? `<button class="sched-cat-restore-btn" type="button" data-act="toggle-day-off" data-date="${dIso}">вернуть занятия</button>` : ""}
     </div>`;
   }
 
@@ -720,28 +717,24 @@ function emptyDayHtml(d) {
 }
 
 function dayActionsHtml(dIso) {
+  return dayRevertHtml(dIso);
+}
+
+function dayFooterHtml(dIso) {
+  if (!dIso) return "";
   const d = dateFromIso(dIso);
   const isSunday = d && d.getDay() === 0;
   const isSummerDay = d && isSummer(d);
   const role = myRole();
   const canManage = (role === "owner" || role === "editor") && !isSunday && !isSummerDay;
   const customOff = isCustomDayOff(dIso);
-  let out = "";
-  if (canManage) {
-    if (customOff) {
-      out += `<button class="sched-day-off-btn is-active" type="button" data-act="toggle-day-off" data-date="${dIso}"
-        aria-label="отменить выходной и вернуть пары" title="отменить выходной и вернуть пары">
-        <span class="sched-day-off-label">вернуть пары</span>
-      </button>`;
-    } else {
-      out += `<button class="sched-day-off-btn" type="button" data-act="toggle-day-off" data-date="${dIso}"
-        aria-label="сделать день выходным" title="сделать этот день выходным (отменить занятия)">
-        <span class="sched-day-off-label">сделать выходным</span>
-      </button>`;
-    }
-  }
-  out += dayRevertHtml(dIso);
-  return out;
+  if (!canManage || customOff) return "";
+  return `<div class="sched-day-footer">
+    <button class="sched-day-off-btn" type="button" data-act="toggle-day-off" data-date="${dIso}"
+      aria-label="сделать день выходным" title="сделать этот день выходным (отменить занятия)">
+      <span class="sched-day-off-label">сделать выходным</span>
+    </button>
+  </div>`;
 }
 
 function headingHtml(d, sub, primary = false) {
@@ -893,7 +886,7 @@ function dayHtml(d, withLive, future) {
     body = `${earlierHtml}${liveHost}`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}${dayFooterHtml(dIso)}</div>`;
 }
 
 function weekHtml() {
@@ -940,7 +933,7 @@ function weekHtml() {
               : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>${
                   isSummer(d) ? "каникулы" : "пар нет"
                 }</strong>${addPairButtonHtml(iso(d))}</div>`
-      }
+      }${dayFooterHtml(iso(d))}
     </div>`);
   }
   return `<div class="sched-day-block">
@@ -3573,10 +3566,9 @@ function positionBasicsTourChrome(options = {}) {
   const step = BASICS_TOUR[basicsTourStep];
   const spotlight = host.querySelector(".sched-tour-spotlight");
   const copy = host.querySelector(".sched-tour-copy");
-  // While the add-pair sheet is open, hide the orphan spotlight — the sheet is the demo focus.
-  if (basicsTourStep === TOUR_STEP_ADD_PAIR && document.getElementById("add-pair-backdrop")) {
-    if (spotlight) spotlight.style.visibility = "hidden";
-    return;
+  const sheetOpen = Boolean(document.querySelector(".sched-replace-backdrop:not(.is-closing)"));
+  if (spotlight) {
+    spotlight.classList.toggle("is-sheet-mode", sheetOpen);
   }
   const target = getTourTarget(basicsTourStep) || (step && document.querySelector(step.selector));
   if (!target) {
@@ -5703,7 +5695,7 @@ function toggleDayOff(dIso) {
   const ok = applyDayChanges(dIso, changes, label);
   if (ok) {
     render();
-    toast(isOff ? "занятия возвращены" : "день сделан выходным (=^･ω･^=)");
+    toast(isOff ? "занятия возвращены" : "день сделан выходным (^-^)");
   }
   return ok;
 }
@@ -6926,7 +6918,7 @@ function notifyCloudEvent(path, body) {
     const quote = isDeleted
       ? "<blockquote><b>занятия возвращены в расписание</b></blockquote>"
       : "<blockquote><b>занятия отменены</b></blockquote>";
-    const text = `🐱 <b>${botHtml(botDate(dIso))}</b> ${action}\n\n${quote}`;
+    const text = `<b>${botHtml(botDate(dIso))}</b> ${action}\n\n${quote}`;
     const table = isDeleted ? buildDayTablePayload(dIso) : null;
     queueBotEvent({ type, format: "html", event_id: path + ":" + stamp, text, group, table }).catch(reportPushError);
     return;
@@ -7229,11 +7221,11 @@ async function publishSwapBatch(entries, label = "изменены пары") {
         const quote = isDeleted
           ? "<blockquote><b>занятия возвращены в расписание</b></blockquote>"
           : "<blockquote><b>занятия отменены</b></blockquote>";
-        text = `🐱 <b>${botHtml(botDate(date))}</b> ${action}\n\n${quote}`;
+        text = `<b>${botHtml(botDate(date))}</b> ${action}\n\n${quote}`;
       } else if (allDeleted) {
         const pairNums = visibleList.map(([k]) => Number(k.split(":").at(-1)) || 0).filter(Boolean);
         const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-        text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))}</b> ${action} <b>(${pairsLabel})</b>`;
+        text = `<b>${botHtml(botDate(date))}</b> ${action} <b>(${pairsLabel})</b>`;
       } else {
         const rows = visibleList.map(([k, value]) => {
           const n = Number(k.split(":").at(-1)) || 0;
@@ -7256,8 +7248,7 @@ async function publishSwapBatch(entries, label = "изменены пары") {
           }
           return `<b>${n} пара</b>\n${desc}`;
         }).join("\n\n");
-        const batchEmoji = allCancelled ? CAT_EMOJIS.sad : allMoved ? CAT_EMOJIS.wave : CAT_EMOJIS.cool;
-        text = `${batchEmoji} <b>${botHtml(botDate(date))}</b> ${action}\n\n${rows}`;
+        text = `<b>${botHtml(botDate(date))}</b> ${action}\n\n${rows}`;
       }
 
       const table = buildDayTablePayload(date);
@@ -7352,7 +7343,7 @@ async function approvePending(enc) {
         return Number(when.split(":")[1]) || 0;
       }).filter(Boolean);
       const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
-      text = `${CAT_EMOJIS.angel} <b>${botHtml(botDate(date))}</b> откатили изменения <b>(${pairsLabel})</b>`;
+      text = `<b>${botHtml(botDate(date))}</b> откатили изменения <b>(${pairsLabel})</b>`;
     } else {
       const rows = visibleEntries.map(([k, value]) => {
         const when = decodeSwapKey(k).split("|")[1] || "";
@@ -7376,7 +7367,7 @@ async function approvePending(enc) {
         }
         return `<b>${n} пара</b>\n${desc}`;
       }).join("\n\n");
-      text = `${CAT_EMOJIS.ok} <b>${botHtml(botDate(date))}</b> опубликовали изменения\n\n${rows}`;
+      text = `<b>${botHtml(botDate(date))}</b> опубликовали изменения\n\n${rows}`;
     }
     const table = buildDayTablePayload(date);
     queueBotEvent({ type: "swap", format: "html", group,

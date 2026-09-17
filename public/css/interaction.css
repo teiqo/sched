@@ -10,9 +10,17 @@
 :root .sched-day-heading-copy { flex: 1; min-width: 0; }
 :root .sched-day-heading h2 { white-space: normal; overflow-wrap: break-word; }
 :root .sched-day-actions { display: flex; flex: none; align-items: center; gap: 6px; margin-top: 3px; }
+:root .sched-day-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
 :root .sched-day-off-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  height: 28px; min-height: 28px; padding: 0 11px;
+  height: 28px; min-height: 28px; padding: 0 13px;
   border: 1px solid var(--sched-separator); border-radius: 999px;
   background: var(--sched-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   color: var(--sched-secondary); font: inherit; font-size: 12px; font-weight: 500;
@@ -23,27 +31,12 @@
 }
 :root .sched-day-off-btn:hover { background: var(--sched-fill); color: var(--sched-text); }
 :root .sched-day-off-btn:active { transform: scale(0.96); }
-:root .sched-day-off-btn.is-active {
-  background: rgba(255, 59, 48, 0.08); border-color: rgba(255, 59, 48, 0.32); color: #ff3b30;
-}
-:root .sched-day-off-btn.is-active:hover {
-  background: rgba(255, 59, 48, 0.14); color: #ff3b30;
-}
 :root .sched-cat-ascii {
-  display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 16px; line-height: 1.25; white-space: pre; color: var(--sched-secondary);
-  margin: 0 0 8px; text-align: center; user-select: none; letter-spacing: 0.02em;
+  display: block; font-family: inherit;
+  font-size: 24px; font-weight: 700; line-height: 1.2; white-space: pre; color: var(--sched-secondary);
+  margin: 0 0 8px; text-align: center; user-select: none; letter-spacing: 0.04em;
 }
-:root .sched-cat-ascii.is-compact { font-size: 13px; margin: 0 0 4px; }
-:root .sched-cat-restore-btn {
-  margin-top: 12px; min-height: 32px; padding: 0 16px; border-radius: 999px;
-  border: 1px solid var(--sched-separator); background: var(--sched-surface, #ffffff);
-  color: var(--sched-text); font: inherit; font-size: 13px; font-weight: 500;
-  cursor: pointer; transition: background 0.15s ease, transform 0.12s ease;
-  user-select: none; -webkit-tap-highlight-color: transparent;
-}
-:root .sched-cat-restore-btn:hover { background: var(--sched-fill); }
-:root .sched-cat-restore-btn:active { transform: scale(0.96); }
+:root .sched-cat-ascii.is-compact { font-size: 18px; margin: 0 0 4px; }
 /* The existing "today" link occupies the far-right end of the primary heading. */
 :root .sched-day-heading.has-today-action .sched-day-actions { margin-right: 88px; }
 :root .agenda-row:not(.is-bell-pair):not(.is-bell-break) { grid-template-columns: 94px minmax(0, 1fr); column-gap: 12px; }

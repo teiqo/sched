@@ -1,4 +1,4 @@
-export const BUILD = '1.4.2 · 2026-09-18.dayoff-sync';
+export const BUILD = '1.4.3 · 2026-09-18.tour-dim-and-dayoff';
 export const MAX_REPORT_FILE_SIZE = 20 * 1024 * 1024;
 const recent = [];
 export function redact(text) {
