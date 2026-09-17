@@ -120,7 +120,7 @@ def _ensure_quote_subj_bold(q: str) -> str:
 
 
 ACTIONS_PATTERN = re.compile(
-    r"\b(предложили\s+добавить|предложили\s+отменить\s+выходной|предложили\s+отменить|предложили\s+перенести|предложили\s+заменить|предложили\s+откатить\s+изменения|предложили\s+сделать\s+день\s+выходным|день\s+объявлен\s+выходным|выходной\s+отмен[её]н|добавили|отменили|заменили|перенесли|сделали\s+окном|откатили\s+изменения|опубликовали\s+изменения)\b",
+    r"\b(предложили\s+добавить|предложили\s+отменить\s+выходной|предложили\s+отменить|предложили\s+перенести|предложили\s+поменять\s+аудитори[юи]|предложили\s+заменить|предложили\s+откатить\s+изменения|предложили\s+сделать\s+день\s+выходным|день\s+объявлен\s+выходным|выходной\s+отмен[её]н|добавили|отменили|поменяли\s+аудитори[юи]|заменили|перенесли|сделали\s+окном|откатили\s+изменения|опубликовали\s+изменения)\b",
     re.IGNORECASE,
 )
 
@@ -1278,6 +1278,24 @@ async def run(cfg, store, tg, auth):
         except NotImplementedError:
             pass
     worker = asyncio.create_task(app.worker())
+
+    async def _reload_sentinel():
+        sentinel = Path(__file__).resolve()
+        try:
+            last_mtime = sentinel.stat().st_mtime
+        except Exception:
+            return
+        while not stop.is_set():
+            await asyncio.sleep(5)
+            try:
+                if sentinel.stat().st_mtime > last_mtime:
+                    LOG.info("код %s изменён, перезапускаемся...", sentinel.name)
+                    stop.set()
+                    break
+            except Exception:
+                pass
+
+    reload_task = asyncio.create_task(_reload_sentinel())
     try:
         await asyncio.to_thread(tg.call, "setWebhook", {
             "url": cfg.public_url + "/telegram",
@@ -1289,8 +1307,9 @@ async def run(cfg, store, tg, auth):
         LOG.info("SCHED_ALLOWED_ORIGINS: %s", ", ".join(sorted(cfg.origins)))
         await stop.wait()
     finally:
+        reload_task.cancel()
         worker.cancel()
-        await asyncio.gather(worker, return_exceptions=True)
+        await asyncio.gather(worker, reload_task, return_exceptions=True)
         await asyncio.to_thread(server.shutdown)
         server.server_close()
 

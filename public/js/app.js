@@ -6933,13 +6933,27 @@ function notifyCloudEvent(path, body) {
   try { original = slotsForBase(dateFromIso(dIso)).find(slot => slot.n === n) || null; } catch (_) {}
   const origLesson = original && !original.window && !original.empty && original.subject ? original : null;
 
+  const isRoomChange = origLesson &&
+    (origLesson.subject || "").trim().toLowerCase() === (body.subject || "").trim().toLowerCase() &&
+    (body.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+    (origLesson.teacher || "").trim().toLowerCase() === (body.teacher || "").trim().toLowerCase();
+
   let verb;
   if (type === "pending") {
-    verb = body.cancelled ? "предложили отменить" : body.moved ? "предложили перенести" : body.deleted ? "предложили откатить изменения" : (!origLesson ? "предложили добавить" : "предложили заменить");
+    verb = body.cancelled
+      ? "предложили отменить"
+      : body.moved
+        ? "предложили перенести"
+        : body.deleted
+          ? "предложили откатить изменения"
+          : isRoomChange
+            ? "предложили поменять аудиторию"
+            : (!origLesson ? "предложили добавить" : "предложили заменить");
   } else if (body.makeWindow) verb = "сделали окном";
   else if (body.deleted) verb = "откатили изменения";
   else if (body.cancelled) verb = "отменили";
   else if (body.moved) verb = "перенесли";
+  else if (isRoomChange) verb = "поменяли аудиторию";
   else verb = !origLesson ? "добавили" : "заменили";
 
   let text;
@@ -6967,6 +6981,16 @@ function notifyCloudEvent(path, body) {
     const moveFromStr = body.movedFrom ? ` (с ${body.movedFrom} пары)` : "";
     const action = type === "pending" ? "предложили перенести" : "перенесли";
     text = `<b>${botHtml(botDate(dIso))}</b> ${action} <b>${n} пару${moveFromStr}</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
+  } else if (isRoomChange) {
+    const newMeta = formatLessonMeta(body.teacher, body.room);
+    if (origLesson && origLesson.room) {
+      const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+      const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true });
+      const newQuote = formatLessonQuote(body.subject || "пара", newMeta, { prefix: "стало:" });
+      text = `<b>${botHtml(botDate(dIso))}</b> ${verb} <b>(${n} пара)</b>\n\n${oldQuote}\n\n${newQuote}`;
+    } else {
+      text = `<b>${botHtml(botDate(dIso))}</b> ${verb} <b>(${n} пара)</b>\n\n${formatLessonQuote(body.subject || "пара", newMeta)}`;
+    }
   } else {
     // Замена или добавление пары
     const newMeta = formatLessonMeta(body.teacher, body.room);
@@ -7208,13 +7232,26 @@ async function publishSwapBatch(entries, label = "изменены пары") {
       const allDeleted = visibleList.every(([_, v]) => v.deleted);
       const allCancelled = visibleList.every(([_, v]) => v.cancelled);
       const allMoved = visibleList.every(([_, v]) => v.moved);
+      const allRoomChanged = visibleList.every(([k, v]) => {
+        if (v.deleted || v.cancelled || v.moved) return false;
+        const n = Number(k.split(":").at(-1)) || 0;
+        let orig = null;
+        try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+        const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
+        return origLesson &&
+          (origLesson.subject || "").trim().toLowerCase() === (v.subject || "").trim().toLowerCase() &&
+          (v.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+          (origLesson.teacher || "").trim().toLowerCase() === (v.teacher || "").trim().toLowerCase();
+      });
       const action = allDeleted
         ? (pending ? "предложили откатить изменения" : "откатили изменения")
         : allCancelled
           ? (pending ? "предложили отменить пары" : "отменили пары")
           : allMoved
             ? (pending ? "предложили перенести пары" : "перенесли пары")
-            : (pending ? "предложили изменить пары" : "изменили пары");
+            : allRoomChanged
+              ? (pending ? "предложили поменять аудитории" : "поменяли аудитории")
+              : (pending ? "предложили изменить пары" : "изменили пары");
 
       const dayOffItem = visibleList.find(([k]) => k.endsWith(":dayoff"));
       let text;
@@ -7248,8 +7285,20 @@ async function publishSwapBatch(entries, label = "изменены пары") {
               desc = "<blockquote>отменена</blockquote>";
             }
           } else {
-            const valMeta = formatLessonMeta(value.teacher, value.room);
-            desc = formatLessonQuote(value.subject, valMeta);
+            const isRoom = origLesson &&
+              (origLesson.subject || "").trim().toLowerCase() === (value.subject || "").trim().toLowerCase() &&
+              (value.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+              (origLesson.teacher || "").trim().toLowerCase() === (value.teacher || "").trim().toLowerCase();
+            if (isRoom && origLesson.room) {
+              const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+              const valMeta = formatLessonMeta(value.teacher, value.room);
+              const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true });
+              const newQuote = formatLessonQuote(value.subject, valMeta, { prefix: "стало:" });
+              desc = `${oldQuote}\n\n${newQuote}`;
+            } else {
+              const valMeta = formatLessonMeta(value.teacher, value.room);
+              desc = formatLessonQuote(value.subject, valMeta);
+            }
           }
           return `<b>${n} пара</b>\n${desc}`;
         }).join("\n\n");
@@ -7349,7 +7398,70 @@ async function approvePending(enc) {
       }).filter(Boolean);
       const pairsLabel = pairNums.length === 1 ? `${pairNums[0]} пара` : `${pairNums.join(", ")} пары`;
       text = `<b>${botHtml(botDate(date))}</b> откатили изменения <b>(${pairsLabel})</b>`;
+    } else if (visibleEntries.length === 1) {
+      const [k, value] = visibleEntries[0];
+      const when = decodeSwapKey(k).split("|")[1] || "";
+      const n = Number(when.split(":")[1]) || 0;
+      let orig = null;
+      try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+      const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
+      const isRoomChange = origLesson &&
+        (origLesson.subject || "").trim().toLowerCase() === (value.subject || "").trim().toLowerCase() &&
+        (value.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+        (origLesson.teacher || "").trim().toLowerCase() === (value.teacher || "").trim().toLowerCase();
+
+      if (isRoomChange) {
+        const newMeta = formatLessonMeta(value.teacher, value.room);
+        if (origLesson && origLesson.room) {
+          const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+          const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true });
+          const newQuote = formatLessonQuote(value.subject || "пара", newMeta, { prefix: "стало:" });
+          text = `<b>${botHtml(botDate(date))}</b> поменяли аудиторию <b>(${n} пара)</b>\n\n${oldQuote}\n\n${newQuote}`;
+        } else {
+          text = `<b>${botHtml(botDate(date))}</b> поменяли аудиторию <b>(${n} пара)</b>\n\n${formatLessonQuote(value.subject || "пара", newMeta)}`;
+        }
+      } else if (value.cancelled) {
+        if (origLesson) {
+          const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+          text = `<b>${botHtml(botDate(date))}</b> отменили <b>${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { strike: true })}`;
+        } else {
+          text = `<b>${botHtml(botDate(date))}</b> отменили <b>${n} пару</b>`;
+        }
+      } else if (value.makeWindow) {
+        if (origLesson) {
+          const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+          text = `<b>${botHtml(botDate(date))}</b> сделали окном <b>${n} пару</b>\n\n${formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true })}`;
+        } else {
+          text = `<b>${botHtml(botDate(date))}</b> сделали окном <b>${n} пару</b>`;
+        }
+      } else if (value.moved) {
+        const newMeta = formatLessonMeta(value.teacher, value.room);
+        const moveFromStr = value.movedFrom ? ` (с ${value.movedFrom} пары)` : "";
+        text = `<b>${botHtml(botDate(date))}</b> перенесли <b>${n} пару${moveFromStr}</b>\n\n${formatLessonQuote(value.subject || "пара", newMeta)}`;
+      } else {
+        const newMeta = formatLessonMeta(value.teacher, value.room);
+        if (origLesson && origLesson.subject !== value.subject) {
+          const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+          const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "вместо:", strike: true });
+          const newQuote = formatLessonQuote(value.subject || "пара", newMeta, { prefix: "стало:" });
+          text = `<b>${botHtml(botDate(date))}</b> заменили <b>${n} пару</b>\n\n${oldQuote}\n\n${newQuote}`;
+        } else {
+          text = `<b>${botHtml(botDate(date))}</b> ${!origLesson ? "добавили" : "заменили"} <b>${n} пару</b>\n\n${formatLessonQuote(value.subject || "пара", newMeta)}`;
+        }
+      }
     } else {
+      const allRoomChanged = visibleEntries.every(([k, v]) => {
+        if (v.deleted || v.cancelled || v.moved) return false;
+        const when = decodeSwapKey(k).split("|")[1] || "";
+        const n = Number(when.split(":")[1]) || 0;
+        let orig = null;
+        try { orig = slotsForBase(dateFromIso(date)).find(slot => slot.n === n) || null; } catch (_) {}
+        const origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
+        return origLesson &&
+          (origLesson.subject || "").trim().toLowerCase() === (v.subject || "").trim().toLowerCase() &&
+          (v.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+          (origLesson.teacher || "").trim().toLowerCase() === (v.teacher || "").trim().toLowerCase();
+      });
       const rows = visibleEntries.map(([k, value]) => {
         const when = decodeSwapKey(k).split("|")[1] || "";
         const n = Number(when.split(":")[1]) || 0;
@@ -7367,12 +7479,25 @@ async function approvePending(enc) {
             desc = "<blockquote>отменена</blockquote>";
           }
         } else {
-          const valMeta = formatLessonMeta(value.teacher, value.room);
-          desc = formatLessonQuote(value.subject, valMeta);
+          const isRoom = origLesson &&
+            (origLesson.subject || "").trim().toLowerCase() === (value.subject || "").trim().toLowerCase() &&
+            (value.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+            (origLesson.teacher || "").trim().toLowerCase() === (value.teacher || "").trim().toLowerCase();
+          if (isRoom && origLesson.room) {
+            const origMeta = formatLessonMeta(origLesson.teacher, origLesson.room);
+            const valMeta = formatLessonMeta(value.teacher, value.room);
+            const oldQuote = formatLessonQuote(origLesson.subject, origMeta, { prefix: "было:", strike: true });
+            const newQuote = formatLessonQuote(value.subject, valMeta, { prefix: "стало:" });
+            desc = `${oldQuote}\n\n${newQuote}`;
+          } else {
+            const valMeta = formatLessonMeta(value.teacher, value.room);
+            desc = formatLessonQuote(value.subject, valMeta);
+          }
         }
         return `<b>${n} пара</b>\n${desc}`;
       }).join("\n\n");
-      text = `<b>${botHtml(botDate(date))}</b> опубликовали изменения\n\n${rows}`;
+      const action = allRoomChanged ? "поменяли аудитории" : "опубликовали изменения";
+      text = `<b>${botHtml(botDate(date))}</b> ${action}\n\n${rows}`;
     }
     const table = buildDayTablePayload(date);
     queueBotEvent({ type: "swap", format: "html", group,
@@ -8092,11 +8217,23 @@ function describeSwapForNotif(key, entry) {
     return entry.deleted ? "отмена выходного (пары возвращены)" : "день объявлен выходным";
   }
   var m = key.match(/\|(\d{4}-\d{2}-\d{2}):(\d+)$/);
-  var n = m ? m[2] : "";
+  var n = m ? Number(m[2]) : 0;
+  var dIso = m ? m[1] : "";
   var what = "замена";
   if (entry.deleted) what = "сброс замены";
   else if (entry.cancelled) what = "отмена пары";
   else if (entry.moved) what = entry.makeWindow ? "окно после переноса" : "перенос";
+  else if (dIso && n) {
+    var orig = null;
+    try { orig = slotsForBase(dateFromIso(dIso)).find(function (slot) { return slot.n === n; }) || null; } catch (_) {}
+    var origLesson = orig && !orig.window && !orig.empty && orig.subject ? orig : null;
+    if (origLesson &&
+        (origLesson.subject || "").trim().toLowerCase() === (entry.subject || "").trim().toLowerCase() &&
+        (entry.room || "").trim().toLowerCase() !== (origLesson.room || "").trim().toLowerCase() &&
+        (origLesson.teacher || "").trim().toLowerCase() === (entry.teacher || "").trim().toLowerCase()) {
+      what = "поменяли аудиторию";
+    }
+  }
   /* Номер, предмет, преподаватель и аудитория уже показаны в мини-карточке. */
   return what;
 }
