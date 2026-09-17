@@ -1,6 +1,6 @@
 const SCOPE = new URL(self.registration.scope).pathname;
 const CACHE_PREFIX = "sched:" + SCOPE + ":";
-const CACHE = CACHE_PREFIX + "2026-09-18-v129-tour-dim-and-dayoff";
+const CACHE = CACHE_PREFIX + "2026-09-18-v130-dayoff-in-swap";
 const ASSETS = [
   "./",
   "./index.html",

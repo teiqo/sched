@@ -720,23 +720,6 @@ function dayActionsHtml(dIso) {
   return dayRevertHtml(dIso);
 }
 
-function dayFooterHtml(dIso) {
-  if (!dIso) return "";
-  const d = dateFromIso(dIso);
-  const isSunday = d && d.getDay() === 0;
-  const isSummerDay = d && isSummer(d);
-  const role = myRole();
-  const canManage = (role === "owner" || role === "editor") && !isSunday && !isSummerDay;
-  const customOff = isCustomDayOff(dIso);
-  if (!canManage || customOff) return "";
-  return `<div class="sched-day-footer">
-    <button class="sched-day-off-btn" type="button" data-act="toggle-day-off" data-date="${dIso}"
-      aria-label="сделать день выходным" title="сделать этот день выходным (отменить занятия)">
-      <span class="sched-day-off-label">сделать выходным</span>
-    </button>
-  </div>`;
-}
-
 function headingHtml(d, sub, primary = false) {
   const today = sameDay(d, startOfDay(currentDate()));
   const title = today
@@ -886,7 +869,7 @@ function dayHtml(d, withLive, future) {
     body = `${earlierHtml}${liveHost}`;
   }
 
-  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}${dayFooterHtml(dIso)}</div>`;
+  return `<div class="sched-day-block${future ? " is-future" : ""}" data-day="${dIso}">${headingHtml(d, sub, withLive && !future)}${body}</div>`;
 }
 
 function weekHtml() {
@@ -933,7 +916,7 @@ function weekHtml() {
               : `<div class="sched-empty-day compact">${ICON_EMPTY}<strong>${
                   isSummer(d) ? "каникулы" : "пар нет"
                 }</strong>${addPairButtonHtml(iso(d))}</div>`
-      }${dayFooterHtml(iso(d))}
+      }
     </div>`);
   }
   return `<div class="sched-day-block">
@@ -5255,9 +5238,15 @@ function openSuggestSheet(dIso, n) {
       }
       return item;
     });
+    const isSunday = d && d.getDay() === 0;
+    const isSummerDay = d && isSummer(d);
+    const role = myRole();
+    const canManage = (role === "owner" || role === "editor") && !isSunday && !isSummerDay && !isTour;
+
     sheet.innerHTML = head("что изменилось?") +
       '<div class="sched-move-targets">' +
       list.map(item => option(item.mark, item.title, item.hint, `data-suggest-pick="${item.id}"`)).join("") +
+      (canManage ? option("🏖", "сделать день выходным", "отменить все пары в этот день", 'data-suggest-pick="day-off"') : "") +
       (hasSwap ? option("↺", "вернуть как было", "убрать это изменение из расписания", 'data-suggest-pick="revert"') : "") +
       "</div>" +
       '<div class="sched-replace-actions"><button type="button" data-suggest-close>отмена</button></div>' +
@@ -5379,6 +5368,11 @@ function openSuggestSheet(dIso, n) {
       else if (id === "revert") {
         suggestSend(dIso, n, null);
         toast("расписание возвращено");
+      }
+      else if (id === "day-off") {
+        closeSuggestSheet(() => {
+          toggleDayOff(dIso);
+        });
       }
       /* Перенос — это та же шторка, что у редактора: список мест в дне. */
       /* «время сдвинули» — сразу та же доска с окнами, что в редакторе.
@@ -5793,6 +5787,10 @@ function openSwapSheet(dIso, n) {
   closeSuggestSheet(null, true);
   closeMoveSheet(null, true);
   const d = dateFromIso(dIso);
+  const isSunday = d && d.getDay() === 0;
+  const isSummerDay = d && isSummer(d);
+  const role = myRole();
+  const canManage = (role === "owner" || role === "editor") && !isSunday && !isSummerDay;
   const slot = slotsFor(d).find((s) => s.n === n) || null;
   const baseSlot = slotsForBase(d).find((s) => s.n === n) || null;
   const isBaseWindow = !baseSlot || baseSlot.window || baseSlot.empty || !baseSlot.subject;
@@ -5868,6 +5866,7 @@ function openSwapSheet(dIso, n) {
     "</button>" +
     /* В окне отменять нечего — пары там нет. */
     (isWindowSlot ? "" : '<button type="button" data-swap="cancel-lesson">' + (sw.cancelled && !sw.hidden ? "убрать совсем" : "отменить пару") + '</button>') +
+    (canManage ? '<button type="button" data-swap="day-off">сделать выходным</button>' : "") +
     '<button type="button" data-swap="reset">вернуть как было</button>' +
     '<button type="button" data-swap="close">закрыть</button>' +
     "</div>" +
@@ -5938,6 +5937,12 @@ function openSwapSheet(dIso, n) {
     if (act === "move") { openMoveSheet(dIso, n); return; }
     if (act === "close") {
       closeSwapSheet();
+      return;
+    }
+    if (act === "day-off") {
+      closeSwapSheet(() => {
+        toggleDayOff(dIso);
+      });
       return;
     }
     if (act === "reset") {
