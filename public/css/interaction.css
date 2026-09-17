@@ -9,13 +9,14 @@
 :root .sched-day-heading { align-items: flex-start; gap: 8px; }
 :root .sched-day-heading-copy { flex: 1; min-width: 0; }
 :root .sched-day-heading h2 { white-space: normal; overflow-wrap: break-word; }
-:root .sched-day-actions { display: flex; flex: none; align-items: center; gap: 6px; margin-top: -4px; }
+:root .sched-day-actions { display: flex; flex: none; align-items: center; gap: 6px; margin-top: 3px; }
 :root .sched-day-off-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-height: 28px; padding: 3px 10px;
+  height: 28px; min-height: 28px; padding: 0 11px;
   border: 1px solid var(--sched-separator); border-radius: 999px;
   background: var(--sched-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   color: var(--sched-secondary); font: inherit; font-size: 12px; font-weight: 500;
+  line-height: 1;
   cursor: pointer; user-select: none;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   -webkit-tap-highlight-color: transparent;
@@ -123,6 +124,8 @@ body.is-dragging-pair #scene { overflow-anchor: none; }
 .sched-login-error { margin: 0; font-size: 14px; line-height: 1.45; color: var(--sched-danger, #cc3939); overflow-wrap: anywhere; }
 .sched-telegram-connect { display: block; min-height: 44px; padding: 8px 0; font-size: 14px; color: var(--sched-blue); text-decoration: underline; }
 .sched-choose-group button { min-height: 44px; margin-top: 8px; padding: 10px 18px; border: 0; border-radius: 10px; background: #1673c7; color: white; font: 600 14px/1.5 Inter, system-ui, sans-serif; cursor: pointer; }
+.sched-empty-day.sched-choose-group ~ .sched-add-pair-btn,
+.sched-empty-day.sched-choose-group .sched-add-pair-btn { display: none !important; }
 #report-backdrop {
   display: flex; align-items: center; justify-content: center; box-sizing: border-box;
   padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
@@ -342,7 +345,7 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 }
 
 /* Align the day reset action with the “today” action baseline. */
-:root .sched-day-heading.has-today-action .sched-day-actions { margin-top: 2px; }
+:root .sched-day-heading.has-today-action .sched-day-actions { margin-top: 3px; }
 
 /* One compositor layer per scene keeps touch swipes smooth instead of promoting every text node. */
 #scene:is(.is-swiping,.is-swipe-return,.is-swipe-commit) #stage,
@@ -1371,7 +1374,7 @@ body.is-dragging-pair .sched-pick-bar ~ .sched-drag-status { display: none; }
 :root :is(.agenda-row, .live-lesson-card).is-drag-float::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -1px;
   z-index: 3;
   box-sizing: border-box;
   border: 2px dashed var(--sched-blue);

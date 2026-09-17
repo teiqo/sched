@@ -826,7 +826,7 @@ function renderSlotRuns(slots, live, dIso, lastLessonN = null) {
 }
 
 function addPairButtonHtml(dIso) {
-  if (!dIso) return "";
+  if (!dIso || !state.group) return "";
   const dt = dateFromIso(dIso);
   if (dt && dt.getDay() === 0) return "";
   return `<button class="sched-add-pair-btn" type="button" data-act="add-pair" data-date="${dIso}" aria-label="добавить пару" title="добавить пару">
@@ -853,7 +853,7 @@ function dayHtml(d, withLive, future) {
 
   let body;
   if (!count && (!state.windows || !rows.length)) {
-    body = emptyDayHtml(d) + (!isSunday && !customOff ? addPairButtonHtml(dIso) : "");
+    body = emptyDayHtml(d) + (!isSunday && !customOff && state.group ? addPairButtonHtml(dIso) : "");
   } else if (!today || !withLive || future) {
     body = rows.length ? `<div class="agenda-list">${withBreaksHtml(rows, live, dIso, lastLessonN)}</div>` : "";
   } else if (live && (live.kind === "current" || live.kind === "next" || live.kind === "break")) {
@@ -4072,7 +4072,7 @@ function renderBasicsTour() {
   const isFirstRender = !spotlight || !copy;
 
   if (isFirstRender) {
-    host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${left}px;top:${top}px;width:${width}px;height:${height}px;border-radius:${spotRadius}px"><svg aria-hidden="true"><rect pathLength="100" /></svg></div>
+    host.innerHTML = `<div class="sched-tour-spotlight" style="--tour-radius:${spotRadius}px;left:${left}px;top:${top}px;width:${width}px;height:${height}px;border-radius:${spotRadius}px"><svg aria-hidden="true"><rect /></svg></div>
     <div class="sched-tour-copy" style="left:${copyLeft}px;top:${copyTop}px;width:${copyWidth}px">
       <div class="sched-tour-copy-inner">
         <span class="sched-tour-step-counter">шаг ${basicsTourStep + 1} из ${BASICS_TOUR.length}</span>
