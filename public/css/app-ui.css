@@ -4729,9 +4729,9 @@ a.sched-settings-row,
    ==================================================================== */
 
 /* ---------- 1. Шапка при открытых настройках — без серой подложки ---------- */
-.sched-app.is-settings-open .sched-title-row,
-.sched-app.is-settings-open .sched-header,
-.sched-app.is-settings-open .date-strip {
+.sched-app:is(.is-settings-open, .is-settings-closing) .sched-title-row,
+.sched-app:is(.is-settings-open, .is-settings-closing) .sched-header,
+.sched-app:is(.is-settings-open, .is-settings-closing) .date-strip {
   background: transparent !important;
 }
 /* Мягкая тень поповера вместо жёсткой */
@@ -4881,37 +4881,47 @@ a.sched-settings-row,
    Строки, окна и текстовые элементы в покое и при смене дня удерживаем на GPU-слое
    (translateZ(0) + backface-visibility: hidden), устраняя подёргивание текста во всех режимах. */
 #stage .agenda-row,
+.sched-swipe-panel .agenda-row,
 #stage .agenda-row-time,
+.sched-swipe-panel .agenda-row-time,
 #stage .agenda-row-content,
+.sched-swipe-panel .agenda-row-content,
 #stage .agenda-row strong,
+.sched-swipe-panel .agenda-row strong,
 #stage .agenda-row span,
+.sched-swipe-panel .agenda-row span,
 #stage .agenda-row small,
+.sched-swipe-panel .agenda-row small,
 #stage .agenda-row .agenda-row-sub,
+.sched-swipe-panel .agenda-row .agenda-row-sub,
 #stage .agenda-row .lesson-room,
-#stage .live-lesson-card,
-#stage .live-card-glass,
-#stage .live-card-status,
-#stage .live-card-timing,
-#stage .live-card-range,
-#stage #live-left,
-#stage #live-passed,
-#stage #live-clock,
-#stage .live-card-progress,
+.sched-swipe-panel .lesson-room,
 #stage .agenda-row.is-window-row,
+.sched-swipe-panel .agenda-row.is-window-row,
 #stage .agenda-row.is-window-row strong,
+.sched-swipe-panel .agenda-row.is-window-row strong,
 #stage .sched-day-block,
+.sched-swipe-panel .sched-day-block,
 #stage .sched-day-heading,
+.sched-swipe-panel .sched-day-heading,
 #stage .t-stagger-line,
+.sched-swipe-panel .t-stagger-line,
 #stage .sched-day-heading-copy,
+.sched-swipe-panel .sched-day-heading-copy,
 #stage .sched-day-heading-copy > *,
+.sched-swipe-panel .sched-day-heading-copy > *,
 :root[data-sched-schedule-view="light"] #stage .agenda-row,
+:root[data-sched-schedule-view="light"] .sched-swipe-panel .agenda-row,
 :root[data-sched-schedule-view="light"] #stage .agenda-row-time,
+:root[data-sched-schedule-view="light"] .sched-swipe-panel .agenda-row-time,
 :root[data-sched-schedule-view="light"] #stage .agenda-row-content,
-:root[data-sched-schedule-view="light"] #stage .live-lesson-card,
-:root[data-sched-schedule-view="light"] #stage .live-card-glass,
+:root[data-sched-schedule-view="light"] .sched-swipe-panel .agenda-row-content,
 :root[data-sched-schedule-view="light"] #stage .sched-day-heading,
+:root[data-sched-schedule-view="light"] .sched-swipe-panel .sched-day-heading,
 :root[data-sched-schedule-view="light"] #stage .lesson-room,
+:root[data-sched-schedule-view="light"] .sched-swipe-panel .lesson-room,
 :root[data-sched-schedule-view="light"] #stage .agenda-list,
+:root[data-sched-schedule-view="light"] .sched-swipe-panel .agenda-list,
 :root[data-perf] #stage .agenda-row {
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;
@@ -5916,9 +5926,6 @@ a.sched-settings-row,
   min-height: calc(var(--sched-viewport-height, 100dvh) - 236px);
 }
 
-.sched-days-scene:is(.is-swiping, .is-swipe-commit) .live-card-particles i {
-  animation-play-state: paused !important;
-}
 
 .sched-swipe-peek {
   position: absolute;

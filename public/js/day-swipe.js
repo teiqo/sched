@@ -50,6 +50,22 @@ export function bindDaySwipe({
     });
   };
 
+  const syncParticles = (fromContainer, toContainer) => {
+    if (!fromContainer || !toContainer) return;
+    const fromList = fromContainer.querySelectorAll(".live-card-particles i");
+    const toList = toContainer.querySelectorAll(".live-card-particles i");
+    if (!fromList.length || !toList.length) return;
+    fromList.forEach((el, i) => {
+      const target = toList[i];
+      if (!target) return;
+      const a1 = el.getAnimations?.()[0];
+      const a2 = target.getAnimations?.()[0];
+      if (a1 && a2 && a1.currentTime != null && Number.isFinite(a1.currentTime)) {
+        try { a2.currentTime = a1.currentTime; } catch (_) {}
+      }
+    });
+  };
+
   const dayPanel = (date, position, blocked = false) => {
     const panel = document.createElement("div");
     // Namespaced state: generic .is-current is used by live-lesson styles and
@@ -97,6 +113,7 @@ export function bindDaySwipe({
       dayPanel(addDays(date, 1), "right"),
     );
     scene.appendChild(track);
+    syncParticles(stage, track.querySelector(".is-swipe-current"));
     carousel = track;
     carouselDate = new Date(date);
     carouselKey = currentKey();
@@ -162,7 +179,9 @@ export function bindDaySwipe({
     scene.classList.remove("is-swiping", "is-swipe-commit", "is-swipe-return");
     strip.classList.remove("is-swipe-linked", "is-swipe-settling");
     selection.style.removeProperty("transform");
+    scene.style.removeProperty("min-height");
     if (carousel) {
+      syncParticles(carousel.querySelector(".is-swipe-current"), stage);
       carousel.classList.remove("is-active", "is-settling");
       carousel.classList.add("is-warmed");
       carousel.style.removeProperty("transition-duration");
@@ -197,6 +216,7 @@ export function bindDaySwipe({
        жест признан горизонтальным: обычное нажатие, скролл или удержание
        пары в редакторе больше не подменяют живой день его копией. */
     const track = ensureCarousel(date);
+    syncParticles(stage, track.querySelector(".is-swipe-current"));
     track.classList.remove("is-settling");
     track.classList.add("is-warmed");
     gesture = {
@@ -227,6 +247,11 @@ export function bindDaySwipe({
         track.classList.remove("is-warmed", "is-settling");
         track.classList.add("is-active");
         g.width = carouselWidth || g.width;
+        syncParticles(stage, track.querySelector(".is-swipe-current"));
+        const maxH = Math.max(...[...track.children].map(p => p.scrollHeight || 0));
+        if (maxH > 0 && maxH > scene.offsetHeight) {
+          scene.style.minHeight = `${maxH}px`;
+        }
         setActive(true);
         scene.classList.add("is-swiping");
         strip.classList.add("is-swipe-linked");

@@ -95,19 +95,19 @@
     </style>
     <title>sched — расписание занятий</title>
     <link rel="stylesheet" href="css/base.css" />
-    <link rel="stylesheet" href="css/layout.css?v=2026-09-18.room-change-wording" />
+    <link rel="stylesheet" href="css/layout.css?v=2026-09-22.v133-polish" />
     <link rel="stylesheet" href="css/components.css" />
-    <link rel="stylesheet" href="css/transitions.css?v=2026-09-18.room-change-wording" />
+    <link rel="stylesheet" href="css/transitions.css?v=2026-09-22.v133-polish" />
     <link rel="stylesheet" href="css/palettes.css" />
-    <link rel="stylesheet" href="css/app-ui.css?v=2026-09-18.room-change-wording" />
-    <link rel="stylesheet" href="css/interaction.css?v=2026-09-18.room-change-wording" />
-    <link rel="stylesheet" href="css/editor-mode.css?v=2026-09-18.room-change-wording" />
-    <link rel="stylesheet" href="css/onboarding-tour.css?v=2026-09-18.room-change-wording" />
+    <link rel="stylesheet" href="css/app-ui.css?v=2026-09-22.v133-polish" />
+    <link rel="stylesheet" href="css/interaction.css?v=2026-09-22.v133-polish" />
+    <link rel="stylesheet" href="css/editor-mode.css?v=2026-09-22.v133-polish" />
+    <link rel="stylesheet" href="css/onboarding-tour.css?v=2026-09-22.v133-polish" />
     <link rel="stylesheet" href="css/break-gray.css" />
     <link rel="manifest" href="manifest.webmanifest" />
     <!-- Публичный конфиг пуст в репозитории и создаётся из GitHub variables во время сборки. -->
     <script src="js/config.js"></script>
-    <script type="module" src="js/app.js?v=2026-09-18.room-change-wording"></script>
+    <script type="module" src="js/app.js?v=2026-09-22.v133-polish"></script>
     <script>
       /* страховка от «бесконечной загрузки»: если модуль не поднялся (битый файл
          в кэше service worker, обрыв сети), один раз чистим кэш и перезагружаемся. */
@@ -895,31 +895,6 @@
               <div class="sched-active-day-scene" id="day-scene"></div>
             </div>
           </div>
-          <footer class="sched-schedule-footer" id="schedule-footer" aria-label="обновление расписания">
-            <button class="sched-stamp-button" id="go-updates" type="button" aria-label="история обновлений">
-              <span class="sched-data-stamp" id="data-stamp" role="status" hidden></span>
-            </button>
-            <button
-                class="sched-refresh-btn"
-                id="refresh-btn"
-                type="button"
-                aria-label="обновить данные"
-                title="обновить данные"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M23 4v6h-6" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-              </button>
-          </footer>
         </main>
 
         <div class="bells-view" id="aux-view" hidden></div>

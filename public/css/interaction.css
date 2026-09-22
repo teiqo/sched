@@ -145,7 +145,7 @@ body.is-dragging-pair #scene { overflow-anchor: none; }
 #swap-backdrop .sched-replace-actions button { min-height: 44px; }
 #swap-backdrop #swap-teacher:disabled { opacity: 1; color: var(--sched-secondary); }
 :root .lesson-swap-btn { color: var(--sched-secondary); }
-:root .sched-schedule-footer #refresh-btn { border-radius: 50% !important; }
+:root .sched-schedule-footer :is(#refresh-btn, .sched-refresh-btn, .refresh-btn) { border-radius: 50% !important; }
 
 /* Nested spans used to multiply 0.65 opacity three times inside a notification. */
 :root .sched-tg-row-text .sched-notif-frag,
@@ -681,7 +681,6 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   .agenda-list,
   .agenda-break,
   .agenda-break-chip,
-  .live-lesson-card,
   .completed-lessons,
   .sched-day-block,
   .sched-empty-day
@@ -692,21 +691,24 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   box-shadow: none !important;
 }
 
-/* Любая работающая анимация (частицы живой пары, пульсации, шиммеры) держит
-   главный поток занятым весь жест. */
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-date-controls) *,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::before,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) *::after {
+/* Любая работающая анимация (пульсации, шиммеры) держит
+   главный поток занятым весь жест; частицы живой пары продолжают летать. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-date-controls) *:not(.live-card-particles):not(.live-card-particles *),
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *:not(.live-card-particles):not(.live-card-particles *)::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek) *:not(.live-card-particles):not(.live-card-particles *)::after {
   animation-play-state: paused !important;
+}
+:root.is-day-swiping .live-card-particles,
+:root.is-day-swiping .live-card-particles i,
+:root.is-day-swiping .live-card-status span > i:after {
+  display: block !important;
+  visibility: visible !important;
+  animation-play-state: running !important;
 }
 /* Переходы внутри едущих слоёв не нужны, но подчёркивание дня в полоске
    продолжает доводиться своим переходом — его не трогаем. */
-:root.is-day-swiping :is(#stage, .sched-swipe-peek) * {
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *:not(.live-card-progress *):not(#selection) {
   transition: none !important;
-}
-:root.is-day-swiping .live-card-particles,
-:root.is-day-swiping .live-card-particles i {
-  display: none !important;
 }
 
 /* Два композитных слоя на весь жест: сам день и превью соседнего дня. */
@@ -718,8 +720,9 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-/* Дочерние элементы наоборот не должны получать собственные слои. */
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) * {
+/* Дочерние элементы наоборот не должны получать собственные слои,
+   кроме частиц и живой пары — иначе срывается аппаратная анимация. */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *:not(.live-card-particles):not(.live-card-particles *):not(.live-card-glass):not(.live-lesson-card) {
   will-change: auto !important;
 }
 
@@ -746,9 +749,9 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
    вместе с ним едет контент — и это невозможно вынести на композитор.
    На время жеста размытие снимается целиком, фоны становятся непрозрачными.
    ========================================================================== */
-:root.is-day-swiping *,
-:root.is-day-swiping *::before,
-:root.is-day-swiping *::after {
+:root.is-day-swiping *:not(.live-card-glass):not(.live-lesson-card),
+:root.is-day-swiping *:not(.live-card-glass):not(.live-lesson-card)::before,
+:root.is-day-swiping *:not(.live-card-glass):not(.live-lesson-card)::after {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -760,25 +763,12 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 :root.is-day-swiping .sched-dock-refresh { background: var(--sched-raised) !important; }
 :root.is-day-swiping .sched-dock::before { background: var(--sched-bg) !important; }
 
-/* Маски и широкие градиентные подсветки внутри едущего слоя тоже считаются
-   на каждом кадре (особенно псевдоэлемент шириной 100vw у живой пары). */
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *::before,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *::after {
+/* Маски внутри едущего слоя */
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *:not(.live-card-glass):not(.live-card-backglow):not(.live-lesson-card),
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *:not(.live-card-glass):not(.live-card-backglow):not(.live-lesson-card)::before,
+:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) *:not(.live-card-glass):not(.live-card-backglow):not(.live-lesson-card)::after {
   mask-image: none !important;
   -webkit-mask-image: none !important;
-}
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-backglow,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-glass::before,
-:root.is-day-swiping :is(#stage, .sched-swipe-peek, .sched-swipe-carousel, .sched-swipe-panel) .live-card-glass::after {
-  display: none !important;
-}
-/* Стеклянная карточка текущей пары — главный источник перерисовки внутри
-   самой сцены: на время жеста это обычная плоская карточка. */
-:root.is-day-swiping .live-card-glass {
-  background: var(--sched-surface) !important;
-  box-shadow: none !important;
-  filter: none !important;
 }
 
 
@@ -935,16 +925,35 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
   max-width: calc(100% / 3);
   flex: 0 0 calc(100% / 3);
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   background: var(--sched-bg);
   min-height: 100%;
-  contain: layout paint style;
+  display: flex;
+  flex-direction: column;
+  contain: layout style;
   pointer-events: none;
   -webkit-tap-highlight-color: transparent;
 }
 .sched-swipe-panel > .sched-day-block {
   width: 100%;
   box-sizing: border-box;
+  flex: 1 0 auto;
+}
+.sched-swipe-panel > .sched-future-days {
+  width: 100%;
+  box-sizing: border-box;
+}
+.sched-swipe-panel > .sched-schedule-footer {
+  margin-top: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Во время свайпа карусель не должна обрезаться 720-пиксельным контейнером:
+   буквы на краю не срезаются, соседние дни выезжают плавно. Внешний html/body
+   уже держит overflow-x: hidden на краях экрана. */
+:root.is-day-swiping :is(.sched-schedule-view, .sched-app.is-schedule-tab),
+.sched-days-scene.is-carousel-swiping {
+  overflow-x: visible !important;
 }
 /* Живая сцена сохраняет геометрию в потоке, но скрывается целиком,
    чтобы будущие дни и фоновые карточки акцентных тем не подсвечивались сзади. */
@@ -1221,9 +1230,9 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 /* У круглой кнопки обновления есть ::after для расширения зоны нажатия, но fixes.css
    ставит ей position: static — и этот ::after с inset: -2px привязывался не к кнопке,
    а к далёкому родителю и накрывал полэкрана кликабельным слоем. */
-:root .sched-schedule-footer #refresh-btn { position: relative !important; }
-:root .sched-refresh-btn::after,
-:root .sched-schedule-footer #refresh-btn::after {
+:root .sched-schedule-footer :is(#refresh-btn, .sched-refresh-btn, .refresh-btn) { position: relative !important; }
+:root :is(#refresh-btn, .sched-refresh-btn, .refresh-btn)::after,
+:root .sched-schedule-footer :is(#refresh-btn, .sched-refresh-btn, .refresh-btn)::after {
   inset: -2px !important;
   pointer-events: none !important;
 }

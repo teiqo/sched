@@ -488,6 +488,35 @@ function liveState(d) {
   return { kind: "done", slot: list[list.length - 1], left: 0, progress: 1, now };
 }
 
+function areLessonsDoneToday(d) {
+  if (!state.group) return false;
+  const now = currentDate();
+  if (!sameDay(d, startOfDay(now))) return false;
+  const live = liveState(d);
+  if (live && live.kind === "done") return true;
+  const allLessons = slotsFor(d).filter((s) => !s.window && !s.hidden);
+  const cur = nowMins(now);
+  if (allLessons.length) {
+    const lastEnd = Math.max(...allLessons.map((s) => mins(s.to)));
+    if (cur >= lastEnd) return true;
+  } else if (d.getDay() !== 0 && d.getDay() !== 6) {
+    if (cur >= 14 * 60 + 5) return true;
+  }
+  return false;
+}
+
+function getNextStudyDay(d) {
+  const day = d.getDay();
+  if (day === 5) {
+    const sat = addDays(d, 1);
+    if (lessonsFor(sat).length > 0) return sat;
+    return addDays(d, 3);
+  }
+  if (day === 6) return addDays(d, 2);
+  if (day === 0) return addDays(d, 1);
+  return addDays(d, 1);
+}
+
 /* ---------- разметка ---------- */
 
 function clockText(now) {
@@ -1293,7 +1322,7 @@ function render(direction) {
   renderStrip();
   renderTab();
   if (state.tab === "schedule") {
-    setScene(dayHtml(state.selected, true) + futureDaysHtml(), quietMotion ? null : direction);
+    setScene(renderDayContent(state.selected, true), quietMotion ? null : direction);
     liveKey = liveSignature();
   }
   quietMotion = false;
@@ -1321,12 +1350,13 @@ function liveSignature() {
   const live = liveState(state.selected);
   const now = currentDate();
   let done = 0;
+  const isDoneToday = areLessonsDoneToday(state.selected);
   if (sameDay(state.selected, startOfDay(now))) {
     const cur = nowMins(now);
     done = lessonsFor(state.selected).filter((s) => mins(s.to) <= cur).length;
   }
-  if (!live) return `none:${done}`;
-  return `${live.kind}:${live.slot ? live.slot.n : "-"}:${done}`;
+  if (!live) return `none:${done}:${isDoneToday ? 1 : 0}`;
+  return `${live.kind}:${live.slot ? live.slot.n : "-"}:${done}:${isDoneToday ? 1 : 0}`;
 }
 
 function tick() {
@@ -1528,7 +1558,11 @@ function load() {
 function openSettings() {
   state.settingsOpen = true;
   $("#settings").classList.add("is-open");
-  $("#app").classList.add("is-settings-open");
+  const app = $("#app");
+  if (app) {
+    app.classList.remove("is-settings-closing");
+    app.classList.add("is-settings-open");
+  }
   const pop = $("#settings-popover");
   pop.classList.remove("is-closing");
   pop.classList.add("is-open");
@@ -1542,9 +1576,16 @@ function closeSettings() {
   pop.classList.remove("is-open");
   pop.classList.add("is-closing");
   $("#settings").classList.remove("is-open");
-  $("#app").classList.remove("is-settings-open");
+  const app = $("#app");
+  if (app) {
+    app.classList.remove("is-settings-open");
+    app.classList.add("is-settings-closing");
+  }
   $("#settings-trigger").setAttribute("aria-expanded", "false");
-  window.setTimeout(() => pop.classList.remove("is-closing"), 220);
+  window.setTimeout(() => {
+    pop.classList.remove("is-closing");
+    if (app) app.classList.remove("is-settings-closing");
+  }, 220);
 }
 
 /* ---------- действия ---------- */
@@ -1565,13 +1606,13 @@ function selectDate(d, direction, options) {
         scrubPendingRender = false;
         quietMotion = true;
         setScene(
-          dayHtml(state.selected, true) + futureDaysHtml(),
+          renderDayContent(state.selected, true),
           options.animated ? scrubDir : null,
         );
         quietMotion = false;
         liveKey = liveSignature();
       } else {
-        setScene(dayHtml(state.selected, true) + futureDaysHtml(), scrubDir);
+        setScene(renderDayContent(state.selected, true), scrubDir);
         liveKey = liveSignature();
       }
     }
@@ -2369,7 +2410,7 @@ function bindEvents() {
     scene, stage: $("#stage"), strip: $("#strip"), selection: $("#selection"),
     canStart: () => state.tab === "schedule" && !pairDragActive && !scrub && !state.settingsOpen && !state.profileOpen,
     getDate: () => state.selected, minDate: minAllowedDate, addDays,
-    renderDay: d => dayHtml(d, true) + futureDaysHtml(d),
+    renderDay: d => renderDayContent(d, true),
     /* Копии соседних дней готовятся заранее. Ключ меняется на каждой
        перерисовке, поэтому панель никогда не показывает устаревший день
        (например, расписание без открытого редактора). */
@@ -2488,7 +2529,8 @@ function dotsHtml(d) {
 function futureDaysHtml(forDate = state.selected) {
   const dateRef = startOfDay(forDate);
   const isWeekend = dateRef.getDay() === 6 || dateRef.getDay() === 0;
-  if (state.scope !== "week" && !isWeekend) return "";
+  const todayDone = areLessonsDoneToday(dateRef);
+  if (state.scope !== "week" && !isWeekend && !todayDone) return "";
   const ws = weekStart(dateRef);
   const days = [];
   if (state.scope === "week") {
@@ -2497,9 +2539,12 @@ function futureDaysHtml(forDate = state.selected) {
       if (d <= dateRef) continue;
       days.push(d);
     }
+  } else if (todayDone) {
+    const nextDay = getNextStudyDay(dateRef);
+    if (nextDay) days.push(nextDay);
   }
   /* На субботе и воскресенье показываем понедельник следующей недели как обычный день */
-  if (isWeekend || !days.length) {
+  if (isWeekend || (!days.length && state.scope === "week")) {
     const nextMon = addDays(ws, 7);
     if (!days.some((d) => sameDay(d, nextMon))) {
       days.push(nextMon);
@@ -2543,6 +2588,7 @@ function cachedFutureDay(d) {
     state.showVacancies,
     state.showSelfStudy,
     state.parityMode,
+    Boolean(state.editorMode),
     iso(startOfDay(currentDate())),
     JSON.stringify(activeSwapMap()),
   ].join("|");
@@ -8716,25 +8762,54 @@ function fmtStamp(isoValue) {
 /* true, пока идёт ручное обновление — штамп под расписанием показывает «обновляем…». */
 var dataRefreshing = false;
 
-function renderDataStamp() {
-  const el = $("#data-stamp");
-  if (!el) return;
+function formatDataStampText() {
   const offline = typeof navigator !== "undefined" && !navigator.onLine;
-  if (dataRefreshing) {
-    el.textContent = "обновляем…";
-    el.hidden = false;
-    return;
-  }
+  if (dataRefreshing) return "обновляем…";
   const stamp = scheduleCheckedAt || scheduleUpdatedAt;
   const when = stamp ? fmtStamp(stamp) : "";
-  if (!when) {
-    /* Данных ещё нет: показываем, что приложение их ищет (или «офлайн»). */
-    el.textContent = offline ? "офлайн" : "ищем данные…";
+  if (!when) return offline ? "офлайн" : "ищем данные…";
+  return offline ? "офлайн · " + when : "обновлено " + when;
+}
+
+function scheduleFooterHtml() {
+  const text = escapeHtml(formatDataStampText());
+  return `<footer class="sched-schedule-footer" id="schedule-footer" aria-label="обновление расписания">
+    <button class="sched-stamp-button" id="go-updates" type="button" aria-label="история обновлений">
+      <span class="sched-data-stamp" id="data-stamp" role="status">${text}</span>
+    </button>
+    <button
+      class="sched-refresh-btn"
+      id="refresh-btn"
+      type="button"
+      aria-label="обновить данные"
+      title="обновить данные"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M23 4v6h-6" />
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+      </svg>
+    </button>
+  </footer>`;
+}
+
+function renderDayContent(d = state.selected, withLive = true) {
+  return dayHtml(d, withLive) + futureDaysHtml(d) + scheduleFooterHtml();
+}
+
+function renderDataStamp() {
+  const text = formatDataStampText();
+  document.querySelectorAll("#data-stamp, .sched-data-stamp").forEach((el) => {
+    el.textContent = text;
     el.hidden = false;
-    return;
-  }
-  el.hidden = false;
-  el.textContent = offline ? "офлайн · " + when : "обновлено " + when;
+  });
 }
 
 function fmtDateTime(isoValue) {
@@ -8827,9 +8902,11 @@ function manualRefresh(btn) {
   playBrandIntro();
   if (refreshInFlight) return;
   refreshInFlight = true;
-  btn.disabled = true;
-  const icon = btn.querySelector(".sched-settings-icon svg") || btn.querySelector("svg");
-  if (icon) icon.classList.add("is-spinning");
+  document.querySelectorAll("#refresh-btn, .sched-refresh-btn").forEach((b) => {
+    b.disabled = true;
+    const icon = b.querySelector(".sched-settings-icon svg") || b.querySelector("svg");
+    if (icon) icon.classList.add("is-spinning");
+  });
   /* Штамп под расписанием на время обновления показывает «обновляем…». */
   dataRefreshing = true;
   renderDataStamp();
@@ -8844,8 +8921,11 @@ function manualRefresh(btn) {
     .catch(() => toast("не удалось обновить — проверь интернет"))
     .finally(() => {
       refreshInFlight = false;
-      btn.disabled = false;
-      if (icon) icon.classList.remove("is-spinning");
+      document.querySelectorAll("#refresh-btn, .sched-refresh-btn").forEach((b) => {
+        b.disabled = false;
+        const icon = b.querySelector(".sched-settings-icon svg") || b.querySelector("svg");
+        if (icon) icon.classList.remove("is-spinning");
+      });
       /* Возвращаем штампу свежее время данных. */
       dataRefreshing = false;
       renderDataStamp();
@@ -9424,12 +9504,22 @@ async function toggleMaintenanceMode(targetState) {
 }
 
 (function initUpdates() {
-  const btn = document.getElementById("go-updates");
-  if (btn) btn.addEventListener("click", openUpdatesSheet);
+  document.addEventListener("click", (e) => {
+    const updateBtn = e.target.closest("#go-updates, .sched-stamp-button");
+    if (updateBtn) {
+      e.preventDefault();
+      openUpdatesSheet();
+      return;
+    }
+    const refBtn = e.target.closest("#refresh-btn, .sched-refresh-btn");
+    if (refBtn && refBtn.closest(".sched-schedule-footer")) {
+      e.preventDefault();
+      manualRefresh(refBtn);
+      return;
+    }
+  });
   const bugBtn = document.getElementById("go-bug");
   if (bugBtn) bugBtn.addEventListener("click", openReportSheet);
-  const headRefreshBtn = document.getElementById("refresh-btn");
-  if (headRefreshBtn) headRefreshBtn.addEventListener("click", () => manualRefresh(headRefreshBtn));
   const brand = document.getElementById("brand");
   if (brand) {
     brand.addEventListener("click", playBrandIntro);

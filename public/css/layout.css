@@ -124,7 +124,7 @@ html.sched-page.sched-freshness-open #root {
   opacity: 1;
   pointer-events: auto;
 }
-.sched-app.is-settings-open .sched-header {
+.sched-app:is(.is-settings-open, .is-settings-closing) .sched-header {
   z-index: 50;
 }
 :is(
@@ -1192,6 +1192,23 @@ button.sched-settings-row > svg {
 .sched-active-day-scene {
   position: relative;
   backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: inherit;
+}
+.sched-active-day-scene > .sched-day-block {
+  flex: 1 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+.sched-active-day-scene > .sched-future-days {
+  width: 100%;
+  box-sizing: border-box;
+}
+.sched-active-day-scene > .sched-schedule-footer {
+  margin-top: auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 .sched-days-scene {
   touch-action: pan-y;
@@ -1610,6 +1627,8 @@ button.sched-settings-row > svg {
   background: color-mix(in srgb, var(--sched-live) 70%, #ffffff);
   opacity: 0.18;
   animation: live-particle-drift 11s var(--sched-motion-ease) infinite;
+  transition: none !important;
+  will-change: transform, opacity;
 }
 .live-card-particles i:nth-child(1) {
   top: 22%;
@@ -4423,9 +4442,6 @@ svg.is-spinning {
 }
 :root[data-sched-schedule-view="light"] .sched-schedule-view .sched-day-heading-copy > span {
   font-size: 12px;
-}
-:root[data-sched-schedule-scope="day"] .sched-schedule-view .sched-future-days {
-  display: none;
 }
 :root[data-sched-schedule-view="light"] .sched-schedule-view .agenda-list {
   overflow: visible;
@@ -8148,7 +8164,7 @@ svg.is-spinning {
 .sched-stamp-button:active .sched-data-stamp {
   opacity: 0.6;
 }
-:root .sched-schedule-footer #refresh-btn {
+:root .sched-schedule-footer :is(#refresh-btn, .sched-refresh-btn, .refresh-btn) {
   grid-column: 3;
   justify-self: start;
   position: static;
@@ -8171,8 +8187,8 @@ svg.is-spinning {
   color: var(--sched-blue);
   box-sizing: border-box !important;
 }
-#refresh-btn:disabled { cursor: wait; opacity: .55; }
-.sched-day-revert:focus-visible, .sched-stamp-button:focus-visible, #refresh-btn:focus-visible,
+:is(#refresh-btn, .sched-refresh-btn, .refresh-btn):disabled { cursor: wait; opacity: .55; }
+.sched-day-revert:focus-visible, .sched-stamp-button:focus-visible, :is(#refresh-btn, .sched-refresh-btn, .refresh-btn):focus-visible,
 .lesson-swap-btn:focus-visible, .sched-move-sheet button:focus-visible, .sched-auth-status button:focus-visible,
 .sched-bot-link:focus-visible, .sched-bot-login input:focus-visible {
   outline: 2px solid var(--sched-blue);
