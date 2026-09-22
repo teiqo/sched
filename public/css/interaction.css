@@ -308,12 +308,26 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 .sched-replace-meta-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(100px,.55fr); gap: 10px; align-items: end; }
 @media (max-width: 360px) { .sched-replace-meta-grid { grid-template-columns: 1fr; } }
 
-/* Avatar stays prominent but is slightly smaller than the header actions. */
-#settings-trigger.is-avatar { width: 40px !important; min-width: 40px !important; height: 40px !important; padding: 0 !important; }
+/* Avatar matches header action sizing exactly with no bloated outer rings. */
+#settings-trigger.is-avatar {
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  border: 1.5px solid var(--sched-accent, var(--sched-blue, #2e9bff)) !important;
+  box-shadow: none !important;
+}
 #settings-trigger.is-avatar .sched-trigger-avatar {
-  width: 100% !important; height: 100% !important; margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
   border: 0 !important;
-  box-shadow: 0 0 0 1.5px var(--sched-header-bg,var(--sched-surface)), 0 0 0 3px var(--sched-accent,var(--sched-blue)) !important;
+  box-shadow: none !important;
 }
 
 /* Align the day reset action with the “today” action baseline. */
@@ -937,23 +951,36 @@ body.is-dragging-pair .sched-schedule-footer { visibility: hidden; }
 .sched-swipe-panel > .sched-day-block {
   width: 100%;
   box-sizing: border-box;
-  flex: 1 0 auto;
+  flex: 0 0 auto;
 }
 .sched-swipe-panel > .sched-future-days {
   width: 100%;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
 .sched-swipe-panel > .sched-schedule-footer {
   margin-top: auto;
   width: 100%;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
 /* Во время свайпа карусель не должна обрезаться 720-пиксельным контейнером:
    буквы на краю не срезаются, соседние дни выезжают плавно. Внешний html/body
-   уже держит overflow-x: hidden на краях экрана. */
-:root.is-day-swiping :is(.sched-schedule-view, .sched-app.is-schedule-tab),
-.sched-days-scene.is-carousel-swiping {
-  overflow-x: visible !important;
+   уже держит overflow-x: hidden на краях экрана.
+   На десктопе (>720px) контейнер центрирован — соседние дни не должны торчать
+   в пустых полях за пределами колонки. */
+@media (max-width: 720px) {
+  :root.is-day-swiping :is(.sched-schedule-view, .sched-app.is-schedule-tab),
+  .sched-days-scene.is-carousel-swiping {
+    overflow-x: visible !important;
+  }
+}
+@media (min-width: 721px) {
+  :root.is-day-swiping :is(.sched-schedule-view, .sched-app.is-schedule-tab),
+  .sched-days-scene.is-carousel-swiping,
+  #scene.is-carousel-swiping {
+    overflow-x: clip !important;
+  }
 }
 /* Живая сцена сохраняет геометрию в потоке, но скрывается целиком,
    чтобы будущие дни и фоновые карточки акцентных тем не подсвечивались сзади. */

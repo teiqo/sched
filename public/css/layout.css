@@ -1197,18 +1197,20 @@ button.sched-settings-row > svg {
   min-height: inherit;
 }
 .sched-active-day-scene > .sched-day-block {
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
 }
 .sched-active-day-scene > .sched-future-days {
   width: 100%;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
 .sched-active-day-scene > .sched-schedule-footer {
   margin-top: auto;
   width: 100%;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
 .sched-days-scene {
   touch-action: pan-y;

@@ -5579,31 +5579,29 @@ a.sched-settings-row,
 .sched-header-actions .sched-settings-trigger.is-avatar,
 #settings-trigger.is-avatar {
   border-radius: 50% !important;
-  width: 35px !important;
-  min-width: 35px !important;
-  max-width: 35px !important;
-  height: 35px !important;
-  min-height: 35px !important;
-  max-height: 35px !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
   aspect-ratio: 1 / 1 !important;
   flex: 0 0 auto !important;
   flex-shrink: 0 !important;
   box-sizing: border-box !important;
-  overflow: visible !important;
+  overflow: hidden !important;
   padding: 0 !important;
-  border: none !important;
+  border: 1.5px solid var(--sched-accent, #2e9bff) !important;
   background: transparent !important;
-  box-shadow:
-    0 0 0 2px var(--sched-header-bg, var(--sched-surface, #18181b)),
-    0 0 0 4px var(--sched-accent, #2e9bff) !important;
+  box-shadow: none !important;
 }
 .sched-header-actions .sched-settings:has(#settings-trigger.is-avatar) {
-  width: 35px !important;
-  min-width: 35px !important;
-  max-width: 35px !important;
-  height: 35px !important;
-  min-height: 35px !important;
-  max-height: 35px !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
 }
 .sched-header-actions .sched-settings-trigger.is-avatar .sched-trigger-avatar,
 #settings-trigger.is-avatar .sched-trigger-avatar {
@@ -5636,22 +5634,6 @@ a.sched-settings-row,
     border-radius: 50% !important;
     box-sizing: border-box !important;
   }
-  .sched-header-actions .sched-settings-trigger.is-avatar,
-  .sched-header-actions .sched-settings > #settings-trigger.is-avatar,
-  #settings-trigger.is-avatar {
-    width: 34px !important;
-    min-width: 34px !important;
-    max-width: 34px !important;
-    height: 34px !important;
-    min-height: 34px !important;
-    max-height: 34px !important;
-  }
-  .sched-header-actions .sched-settings:has(#settings-trigger.is-avatar) {
-    width: 34px !important;
-    min-width: 34px !important;
-    height: 34px !important;
-    min-height: 34px !important;
-  }
 }
 @media (max-width: 360px) {
   .sched-header-actions {
@@ -5677,7 +5659,18 @@ a.sched-settings-row,
     border-radius: 50% !important;
     box-sizing: border-box !important;
   }
-  .sched-header-actions .sched-settings {
+  .sched-header-actions .sched-settings-trigger.is-avatar,
+  .sched-header-actions .sched-settings > #settings-trigger.is-avatar,
+  #settings-trigger.is-avatar {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+  }
+  .sched-header-actions .sched-settings,
+  .sched-header-actions .sched-settings:has(#settings-trigger.is-avatar) {
     width: 36px !important;
     min-width: 36px !important;
     max-width: 36px !important;

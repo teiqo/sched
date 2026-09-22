@@ -7764,9 +7764,18 @@ function updateSettingsAvatar() {
   img.className = "sched-trigger-avatar sched-avatar-image";
   img.dataset.tgAvatar = "";
   img.alt = "";
+  img.onload = () => {
+    trigger.classList.add("is-avatar");
+  };
+  img.onerror = () => {
+    img.remove();
+    trigger.classList.remove("is-avatar");
+  };
   img.src = url;
+  if (img.complete && img.naturalWidth > 0) {
+    trigger.classList.add("is-avatar");
+  }
   trigger.appendChild(img);
-  trigger.classList.add("is-avatar");
 }
 
 
