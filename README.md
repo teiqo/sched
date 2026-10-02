@@ -117,19 +117,6 @@ python3 -m pip install -r scripts/requirements.txt
 python3 scripts/update_schedule.py
 ```
 
-## безопасность
-
-не добавляй в git:
-
-- `.env`
-- токен бота
-- `NOTIFY_SECRET`
-- service-account json и приватные ключи
-- содержимое `bot/data/`
-- локальные базы, логи и сборку `dist/`
-
-эти файлы уже закрыты правилами в `.gitignore`.
-
 ## лицензия
 
 см. `LICENSE`.
